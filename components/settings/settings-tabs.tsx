@@ -1,0 +1,593 @@
+'use client'
+
+import { useState } from 'react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
+import { Badge } from '@/components/ui/badge'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import {
+  Settings,
+  FileSpreadsheet,
+  Code,
+  Brain,
+  Plus,
+  Pencil,
+  Trash2,
+  Save,
+  X,
+  Check
+} from 'lucide-react'
+import { toast } from 'sonner'
+import {
+  saveColumnMapping,
+  deleteColumnMapping,
+  saveValuePattern,
+  deleteValuePattern,
+  savePreferences
+} from '@/app/actions/settings'
+import { useRouter } from 'next/navigation'
+
+interface ColumnMapping {
+  id: string
+  target_field: string
+  source_patterns: string[]
+  description?: string
+  is_active: boolean
+}
+
+interface ValuePattern {
+  id: string
+  field_name: string
+  pattern: string
+  description?: string
+  transformation?: string
+  is_active: boolean
+}
+
+interface Preferences {
+  id: string
+  preferred_makes: string[]
+  excluded_makes: string[]
+  max_mileage: number
+  min_year: number
+  prefer_deregistered: boolean
+  ai_enabled: boolean
+}
+
+interface SettingsTabsProps {
+  columnMappings: ColumnMapping[]
+  valuePatterns: ValuePattern[]
+  preferences: Preferences | null
+}
+
+export function SettingsTabs({ columnMappings, valuePatterns, preferences }: SettingsTabsProps) {
+  const router = useRouter()
+  const [activeTab, setActiveTab] = useState('general')
+
+  return (
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="max-w-4xl">
+      <TabsList className="grid w-full grid-cols-4">
+        <TabsTrigger value="general" className="gap-2">
+          <Settings className="h-4 w-4" />
+          Allmänt
+        </TabsTrigger>
+        <TabsTrigger value="columns" className="gap-2">
+          <FileSpreadsheet className="h-4 w-4" />
+          Kolumnmappning
+        </TabsTrigger>
+        <TabsTrigger value="patterns" className="gap-2">
+          <Code className="h-4 w-4" />
+          Värdemönster
+        </TabsTrigger>
+        <TabsTrigger value="ai" className="gap-2">
+          <Brain className="h-4 w-4" />
+          AI-inställningar
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="general" className="mt-6">
+        <GeneralSettings preferences={preferences} />
+      </TabsContent>
+
+      <TabsContent value="columns" className="mt-6">
+        <ColumnMappingSettings mappings={columnMappings} />
+      </TabsContent>
+
+      <TabsContent value="patterns" className="mt-6">
+        <ValuePatternSettings patterns={valuePatterns} />
+      </TabsContent>
+
+      <TabsContent value="ai" className="mt-6">
+        <AISettings preferences={preferences} />
+      </TabsContent>
+    </Tabs>
+  )
+}
+
+function GeneralSettings({ preferences }: { preferences: Preferences | null }) {
+  const router = useRouter()
+  const [preferredMakes, setPreferredMakes] = useState(
+    preferences?.preferred_makes?.join(', ') || ''
+  )
+  const [excludedMakes, setExcludedMakes] = useState(
+    preferences?.excluded_makes?.join(', ') || ''
+  )
+  const [maxMileage, setMaxMileage] = useState(preferences?.max_mileage || 200000)
+  const [minYear, setMinYear] = useState(preferences?.min_year || 2010)
+  const [preferDeregistered, setPreferDeregistered] = useState(
+    preferences?.prefer_deregistered || false
+  )
+  const [isSaving, setIsSaving] = useState(false)
+
+  const handleSave = async () => {
+    setIsSaving(true)
+    const result = await savePreferences({
+      preferred_makes: preferredMakes.split(',').map(s => s.trim()).filter(Boolean),
+      excluded_makes: excludedMakes.split(',').map(s => s.trim()).filter(Boolean),
+      max_mileage: maxMileage,
+      min_year: minYear,
+      prefer_deregistered: preferDeregistered,
+      ai_enabled: preferences?.ai_enabled ?? true
+    })
+    setIsSaving(false)
+
+    if (result.success) {
+      toast.success('Inställningar sparade')
+      router.refresh()
+    } else {
+      toast.error('Kunde inte spara inställningar')
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Filterinställningar</CardTitle>
+        <CardDescription>
+          Konfigurera vilka fordon du är intresserad av att köpa
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-2">
+          <Label htmlFor="preferred-makes">Föredragna märken</Label>
+          <Input
+            id="preferred-makes"
+            placeholder="Volvo, BMW, Audi, Mercedes..."
+            value={preferredMakes}
+            onChange={(e) => setPreferredMakes(e.target.value)}
+          />
+          <p className="text-xs text-gray-500">
+            Separera med komma. Dessa märken får högre prioritet.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="excluded-makes">Exkluderade märken</Label>
+          <Input
+            id="excluded-makes"
+            placeholder="Märken du inte köper..."
+            value={excludedMakes}
+            onChange={(e) => setExcludedMakes(e.target.value)}
+          />
+          <p className="text-xs text-gray-500">
+            Dessa märken visas med varning eller filtreras bort.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="max-mileage">Max miltal (km)</Label>
+            <Input
+              id="max-mileage"
+              type="number"
+              value={maxMileage}
+              onChange={(e) => setMaxMileage(parseInt(e.target.value) || 0)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="min-year">Minsta årsmodell</Label>
+            <Input
+              id="min-year"
+              type="number"
+              value={minYear}
+              onChange={(e) => setMinYear(parseInt(e.target.value) || 0)}
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between rounded-lg border p-4">
+          <div className="space-y-0.5">
+            <Label>Prioritera avställda fordon</Label>
+            <p className="text-xs text-gray-500">
+              Visar avställda fordon högre i listan
+            </p>
+          </div>
+          <Switch
+            checked={preferDeregistered}
+            onCheckedChange={setPreferDeregistered}
+          />
+        </div>
+
+        <Button onClick={handleSave} disabled={isSaving} className="gap-2">
+          <Save className="h-4 w-4" />
+          {isSaving ? 'Sparar...' : 'Spara inställningar'}
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ColumnMappingSettings({ mappings }: { mappings: ColumnMapping[] }) {
+  const router = useRouter()
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editData, setEditData] = useState<Partial<ColumnMapping>>({})
+
+  const handleEdit = (mapping: ColumnMapping) => {
+    setEditingId(mapping.id)
+    setEditData({
+      target_field: mapping.target_field,
+      source_patterns: mapping.source_patterns,
+      description: mapping.description,
+      is_active: mapping.is_active
+    })
+  }
+
+  const handleSave = async () => {
+    if (!editingId || !editData.target_field) return
+
+    const result = await saveColumnMapping({
+      id: editingId,
+      target_field: editData.target_field,
+      source_patterns: editData.source_patterns || [],
+      description: editData.description,
+      is_active: editData.is_active ?? true
+    })
+
+    if (result.success) {
+      toast.success('Mappning sparad')
+      setEditingId(null)
+      setEditData({})
+      router.refresh()
+    } else {
+      toast.error('Kunde inte spara')
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Är du säker på att du vill ta bort denna mappning?')) return
+
+    const result = await deleteColumnMapping(id)
+    if (result.success) {
+      toast.success('Mappning borttagen')
+      router.refresh()
+    } else {
+      toast.error('Kunde inte ta bort')
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Kolumnmappningar</CardTitle>
+        <CardDescription>
+          Definiera hur Excel-kolumner ska matchas mot systemfält. Använd regex-mönster.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Fält</TableHead>
+              <TableHead>Sök-mönster (regex)</TableHead>
+              <TableHead className="w-[100px]">Status</TableHead>
+              <TableHead className="w-[100px]">Åtgärder</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {mappings.map((mapping) => (
+              <TableRow key={mapping.id}>
+                <TableCell className="font-medium">
+                  {editingId === mapping.id ? (
+                    <Input
+                      value={editData.target_field || ''}
+                      onChange={(e) => setEditData({ ...editData, target_field: e.target.value })}
+                      className="w-32"
+                    />
+                  ) : (
+                    mapping.target_field
+                  )}
+                </TableCell>
+                <TableCell>
+                  {editingId === mapping.id ? (
+                    <Input
+                      value={editData.source_patterns?.join(', ') || ''}
+                      onChange={(e) => setEditData({
+                        ...editData,
+                        source_patterns: e.target.value.split(',').map(s => s.trim())
+                      })}
+                      placeholder="reg.*nr, regnr, registration..."
+                    />
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {mapping.source_patterns.map((p, i) => (
+                        <Badge key={i} variant="outline" className="font-mono text-xs">
+                          {p}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {editingId === mapping.id ? (
+                    <Switch
+                      checked={editData.is_active ?? true}
+                      onCheckedChange={(checked) => setEditData({ ...editData, is_active: checked })}
+                    />
+                  ) : (
+                    <Badge variant={mapping.is_active ? 'default' : 'secondary'}>
+                      {mapping.is_active ? 'Aktiv' : 'Inaktiv'}
+                    </Badge>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {editingId === mapping.id ? (
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="ghost" onClick={handleSave}>
+                        <Check className="h-4 w-4 text-green-600" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => setEditingId(null)}>
+                        <X className="h-4 w-4 text-gray-400" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="ghost" onClick={() => handleEdit(mapping)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => handleDelete(mapping.id)}>
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </div>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ValuePatternSettings({ patterns }: { patterns: ValuePattern[] }) {
+  const router = useRouter()
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editData, setEditData] = useState<Partial<ValuePattern>>({})
+
+  const handleEdit = (pattern: ValuePattern) => {
+    setEditingId(pattern.id)
+    setEditData({
+      field_name: pattern.field_name,
+      pattern: pattern.pattern,
+      description: pattern.description,
+      is_active: pattern.is_active
+    })
+  }
+
+  const handleSave = async () => {
+    if (!editingId || !editData.field_name || !editData.pattern) return
+
+    const result = await saveValuePattern({
+      id: editingId,
+      field_name: editData.field_name,
+      pattern: editData.pattern,
+      description: editData.description,
+      is_active: editData.is_active ?? true
+    })
+
+    if (result.success) {
+      toast.success('Mönster sparat')
+      setEditingId(null)
+      setEditData({})
+      router.refresh()
+    } else {
+      toast.error('Kunde inte spara')
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Är du säker på att du vill ta bort detta mönster?')) return
+
+    const result = await deleteValuePattern(id)
+    if (result.success) {
+      toast.success('Mönster borttaget')
+      router.refresh()
+    } else {
+      toast.error('Kunde inte ta bort')
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Värdemönster</CardTitle>
+        <CardDescription>
+          Regex-mönster för att extrahera och tolka värden från Excel-data.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Fält</TableHead>
+              <TableHead>Regex-mönster</TableHead>
+              <TableHead>Beskrivning</TableHead>
+              <TableHead className="w-[100px]">Åtgärder</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {patterns.map((pattern) => (
+              <TableRow key={pattern.id}>
+                <TableCell className="font-medium">
+                  {editingId === pattern.id ? (
+                    <Input
+                      value={editData.field_name || ''}
+                      onChange={(e) => setEditData({ ...editData, field_name: e.target.value })}
+                      className="w-32"
+                    />
+                  ) : (
+                    pattern.field_name
+                  )}
+                </TableCell>
+                <TableCell>
+                  {editingId === pattern.id ? (
+                    <Input
+                      value={editData.pattern || ''}
+                      onChange={(e) => setEditData({ ...editData, pattern: e.target.value })}
+                      className="font-mono text-xs"
+                    />
+                  ) : (
+                    <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                      {pattern.pattern}
+                    </code>
+                  )}
+                </TableCell>
+                <TableCell className="text-sm text-gray-500">
+                  {editingId === pattern.id ? (
+                    <Input
+                      value={editData.description || ''}
+                      onChange={(e) => setEditData({ ...editData, description: e.target.value })}
+                    />
+                  ) : (
+                    pattern.description
+                  )}
+                </TableCell>
+                <TableCell>
+                  {editingId === pattern.id ? (
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="ghost" onClick={handleSave}>
+                        <Check className="h-4 w-4 text-green-600" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => setEditingId(null)}>
+                        <X className="h-4 w-4 text-gray-400" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="ghost" onClick={() => handleEdit(pattern)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => handleDelete(pattern.id)}>
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </div>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  )
+}
+
+function AISettings({ preferences }: { preferences: Preferences | null }) {
+  const router = useRouter()
+  const [aiEnabled, setAiEnabled] = useState(preferences?.ai_enabled ?? true)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const handleSave = async () => {
+    setIsSaving(true)
+    const result = await savePreferences({
+      preferred_makes: preferences?.preferred_makes || [],
+      excluded_makes: preferences?.excluded_makes || [],
+      max_mileage: preferences?.max_mileage || 200000,
+      min_year: preferences?.min_year || 2010,
+      prefer_deregistered: preferences?.prefer_deregistered || false,
+      ai_enabled: aiEnabled
+    })
+    setIsSaving(false)
+
+    if (result.success) {
+      toast.success('AI-inställningar sparade')
+      router.refresh()
+    } else {
+      toast.error('Kunde inte spara')
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>AI-funktioner</CardTitle>
+        <CardDescription>
+          Konfigurera hur AI ska hjälpa dig prioritera leads
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="flex items-center justify-between rounded-lg border p-4">
+          <div className="space-y-0.5">
+            <Label>Aktivera AI-prioritering</Label>
+            <p className="text-xs text-gray-500">
+              Låt AI analysera och poängsätta leads baserat på dina preferenser
+            </p>
+          </div>
+          <Switch
+            checked={aiEnabled}
+            onCheckedChange={setAiEnabled}
+          />
+        </div>
+
+        {aiEnabled && (
+          <div className="space-y-4 rounded-lg bg-blue-50 p-4">
+            <h4 className="font-medium text-blue-900">AI kommer att:</h4>
+            <ul className="space-y-2 text-sm text-blue-700">
+              <li className="flex items-center gap-2">
+                <Check className="h-4 w-4" />
+                Prioritera leads baserat på dina föredragna märken
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="h-4 w-4" />
+                Varna för fordon med högt miltal eller uteslutna märken
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="h-4 w-4" />
+                Lära sig från dina samtalsresultat över tid
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="h-4 w-4" />
+                Ge rekommendationer på vem du ska ringa först
+              </li>
+            </ul>
+          </div>
+        )}
+
+        <Button onClick={handleSave} disabled={isSaving} className="gap-2">
+          <Save className="h-4 w-4" />
+          {isSaving ? 'Sparar...' : 'Spara inställningar'}
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
