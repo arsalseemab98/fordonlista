@@ -121,8 +121,8 @@ export default function ImportPage() {
   return (
     <div className="flex flex-col">
       <Header
-        title="Importera Excel"
-        description="Ladda upp och importera fordon från Excel-filer"
+        title="Importera data"
+        description="Ladda upp och importera fordon från Excel- eller CSV-filer"
       />
 
       <div className="flex-1 p-6 space-y-6 max-w-4xl mx-auto w-full">
@@ -178,10 +178,10 @@ export default function ImportPage() {
         {step === 'upload' && (
           <Card>
             <CardHeader>
-              <CardTitle>Välj Excel-fil</CardTitle>
+              <CardTitle>Välj fil</CardTitle>
               <CardDescription>
-                Ladda upp en Excel-fil med fordonsdata. Systemet kommer automatiskt försöka
-                matcha kolumnerna mot rätt fält.
+                Ladda upp en Excel- eller CSV-fil med fordonsdata. Systemet kommer automatiskt
+                försöka matcha kolumnerna mot rätt fält.
               </CardDescription>
             </CardHeader>
             <CardContent>

@@ -93,9 +93,9 @@ export function FileDropzone({ onFileAccepted, isLoading, acceptedFile, onClear 
           <p className="text-lg font-medium text-gray-700">
             {isDragActive
               ? isDragReject
-                ? 'Endast Excel-filer (.xlsx, .xls) tillåtna'
+                ? 'Endast Excel- och CSV-filer tillåtna'
                 : 'Släpp filen här...'
-              : 'Dra och släpp din Excel-fil här'}
+              : 'Dra och släpp din fil här'}
           </p>
           <p className="mt-1 text-sm text-gray-500">
             eller klicka för att bläddra
