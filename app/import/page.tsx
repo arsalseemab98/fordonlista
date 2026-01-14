@@ -88,7 +88,9 @@ export default function ImportPage() {
     const formData = new FormData()
     formData.append('file', file)
 
-    const result = await importVehicles(formData, mappings)
+    // Filter out any undefined mappings
+    const validMappings = mappings.filter(m => m && m.excelColumn !== undefined)
+    const result = await importVehicles(formData, validMappings)
 
     setIsLoading(false)
     setImportResult(result)

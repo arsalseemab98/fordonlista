@@ -93,7 +93,7 @@ export async function importVehicles(
     // Skapa mapping dictionary
     const fieldMap: Record<string, string> = {}
     mappings.forEach(m => {
-      if (m.mappedField) {
+      if (m && m.mappedField && m.excelColumn) {
         fieldMap[m.excelColumn] = m.mappedField
       }
     })
@@ -299,6 +299,10 @@ export async function importVehicles(
 
   } catch (error) {
     console.error('Import error:', error)
+    const errorMessage = error instanceof Error
+      ? `${error.message}${error.stack ? `\n${error.stack}` : ''}`
+      : 'Okänt fel'
+    console.error('Full error details:', errorMessage)
     return {
       success: false,
       message: 'Ett fel uppstod under importen',
