@@ -23,7 +23,9 @@ import {
   Send,
   Clock,
   MapPin,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Calculator,
+  Settings
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { markLetterSent } from '@/app/actions/letters'
@@ -58,9 +60,10 @@ interface LetterListProps {
     sent: number
   }
   currentFilter: string
+  letterCost: number
 }
 
-export function LetterList({ leads, counts, currentFilter }: LetterListProps) {
+export function LetterList({ leads, counts, currentFilter, letterCost }: LetterListProps) {
   const router = useRouter()
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set())
   const [isExporting, setIsExporting] = useState(false)
@@ -199,6 +202,32 @@ export function LetterList({ leads, counts, currentFilter }: LetterListProps) {
           )
         })}
       </div>
+
+      {/* Cost Calculator */}
+      <Card className="bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200">
+        <CardContent className="py-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <Calculator className="h-5 w-5 text-amber-600" />
+              <div>
+                <p className="text-sm font-medium text-amber-900">
+                  Beräknad kostnad
+                </p>
+                <p className="text-2xl font-bold text-amber-700">
+                  {((selectedLeads.size > 0 ? selectedLeads.size : leads.length) * letterCost).toFixed(2)} kr
+                </p>
+              </div>
+            </div>
+            <div className="text-right text-sm text-amber-700">
+              <p>{selectedLeads.size > 0 ? selectedLeads.size : leads.length} brev × {letterCost.toFixed(2)} kr</p>
+              <a href="/settings" className="inline-flex items-center gap-1 text-xs text-amber-600 hover:text-amber-800 mt-1">
+                <Settings className="h-3 w-3" />
+                Ändra brevkostnad
+              </a>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Actions Bar */}
       <Card>

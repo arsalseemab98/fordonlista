@@ -137,6 +137,7 @@ export async function savePreferences(data: {
   min_year: number
   prefer_deregistered: boolean
   ai_enabled: boolean
+  letter_cost?: number
 }) {
   const supabase = await createClient()
 
@@ -175,6 +176,86 @@ export async function savePreferences(data: {
   revalidatePath('/')
   revalidatePath('/leads')
   revalidatePath('/to-call')
+  revalidatePath('/brev')
 
   return { success: true }
+}
+
+// Data import tracking functions
+export async function saveDataImport(data: {
+  data_source?: string
+  date_range_start?: string
+  date_range_end?: string
+  filter_type?: string
+  record_count?: number
+  notes?: string
+}) {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('data_imports')
+    .insert({
+      data_source: data.data_source || 'Bilprospekt',
+      date_range_start: data.date_range_start || null,
+      date_range_end: data.date_range_end || null,
+      filter_type: data.filter_type,
+      record_count: data.record_count || 0,
+      notes: data.notes
+    })
+
+  if (error) {
+    console.error('Error saving data import:', error)
+    return { success: false, error: error.message }
+  }
+
+  revalidatePath('/import')
+  revalidatePath('/settings')
+  return { success: true }
+}
+
+export async function getDataImports() {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('data_imports')
+    .select('*')
+    .order('import_date', { ascending: false })
+    .limit(50)
+
+  if (error) {
+    console.error('Error fetching data imports:', error)
+    return []
+  }
+
+  return data || []
+}
+
+export async function deleteDataImport(id: string) {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('data_imports')
+    .delete()
+    .eq('id', id)
+
+  if (error) {
+    console.error('Error deleting data import:', error)
+    return { success: false, error: error.message }
+  }
+
+  revalidatePath('/import')
+  revalidatePath('/settings')
+  return { success: true }
+}
+
+export async function getLetterCost() {
+  const supabase = await createClient()
+
+  const { data } = await supabase
+    .from('preferences')
+    .select('letter_cost')
+    .limit(1)
+    .single()
+
+  return data?.letter_cost || 12.00
 }

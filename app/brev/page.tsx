@@ -59,20 +59,22 @@ async function getLeadsForLetters(filter: string) {
 
   if (error) {
     console.error('Error fetching leads for letters:', error)
-    return { leads: [], counts: { total: 0, noPhone: 0, notSent: 0, sent: 0 } }
+    return { leads: [], counts: { total: 0, noPhone: 0, notSent: 0, sent: 0 }, letterCost: 12.00 }
   }
 
-  // Get counts
+  // Get counts and preferences in parallel
   const [
     { count: totalCount },
     { count: noPhoneCount },
     { count: notSentCount },
-    { count: sentCount }
+    { count: sentCount },
+    { data: preferences }
   ] = await Promise.all([
     supabase.from('leads').select('*', { count: 'exact', head: true }),
     supabase.from('leads').select('*', { count: 'exact', head: true }).or('phone.is.null,phone.eq.'),
     supabase.from('leads').select('*', { count: 'exact', head: true }).or('letter_sent.is.null,letter_sent.eq.false'),
-    supabase.from('leads').select('*', { count: 'exact', head: true }).eq('letter_sent', true)
+    supabase.from('leads').select('*', { count: 'exact', head: true }).eq('letter_sent', true),
+    supabase.from('preferences').select('letter_cost').limit(1).single()
   ])
 
   return {
@@ -82,14 +84,15 @@ async function getLeadsForLetters(filter: string) {
       noPhone: noPhoneCount || 0,
       notSent: notSentCount || 0,
       sent: sentCount || 0
-    }
+    },
+    letterCost: preferences?.letter_cost || 12.00
   }
 }
 
 export default async function BrevPage({ searchParams }: BrevPageProps) {
   const params = await searchParams
   const filter = params.filter || 'not_sent'
-  const { leads, counts } = await getLeadsForLetters(filter)
+  const { leads, counts, letterCost } = await getLeadsForLetters(filter)
 
   return (
     <div className="flex flex-col">
@@ -103,6 +106,7 @@ export default async function BrevPage({ searchParams }: BrevPageProps) {
           leads={leads}
           counts={counts}
           currentFilter={filter}
+          letterCost={letterCost}
         />
       </div>
     </div>

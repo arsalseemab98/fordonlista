@@ -35,7 +35,8 @@ import {
   Trash2,
   Save,
   X,
-  Check
+  Check,
+  Mail
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -72,6 +73,7 @@ interface Preferences {
   min_year: number
   prefer_deregistered: boolean
   ai_enabled: boolean
+  letter_cost: number
 }
 
 interface SettingsTabsProps {
@@ -137,6 +139,7 @@ function GeneralSettings({ preferences }: { preferences: Preferences | null }) {
   const [preferDeregistered, setPreferDeregistered] = useState(
     preferences?.prefer_deregistered || false
   )
+  const [letterCost, setLetterCost] = useState(preferences?.letter_cost || 12.00)
   const [isSaving, setIsSaving] = useState(false)
 
   const handleSave = async () => {
@@ -147,7 +150,8 @@ function GeneralSettings({ preferences }: { preferences: Preferences | null }) {
       max_mileage: maxMileage,
       min_year: minYear,
       prefer_deregistered: preferDeregistered,
-      ai_enabled: preferences?.ai_enabled ?? true
+      ai_enabled: preferences?.ai_enabled ?? true,
+      letter_cost: letterCost
     })
     setIsSaving(false)
 
@@ -226,6 +230,29 @@ function GeneralSettings({ preferences }: { preferences: Preferences | null }) {
             checked={preferDeregistered}
             onCheckedChange={setPreferDeregistered}
           />
+        </div>
+
+        {/* Letter Cost Setting */}
+        <div className="space-y-2 rounded-lg border p-4 bg-amber-50 border-amber-200">
+          <div className="flex items-center gap-2">
+            <Mail className="h-4 w-4 text-amber-600" />
+            <Label htmlFor="letter-cost" className="text-amber-900">Brevkostnad (SEK)</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Input
+              id="letter-cost"
+              type="number"
+              step="0.50"
+              min="0"
+              value={letterCost}
+              onChange={(e) => setLetterCost(parseFloat(e.target.value) || 0)}
+              className="w-32"
+            />
+            <span className="text-sm text-amber-700">kr per brev</span>
+          </div>
+          <p className="text-xs text-amber-600">
+            Används för att räkna ut total kostnad vid brevutskick. Standardvärde: 12 kr.
+          </p>
         </div>
 
         <Button onClick={handleSave} disabled={isSaving} className="gap-2">
