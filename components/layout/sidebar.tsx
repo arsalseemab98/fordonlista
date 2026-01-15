@@ -13,7 +13,8 @@ import {
   Brain,
   TrendingUp,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Mail
 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -22,6 +23,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard, description: 'Översikt & statistik' },
   { name: 'Att ringa', href: '/to-call', icon: Phone, description: 'Prioriterade leads', badge: true },
+  { name: 'Brevutskick', href: '/brev', icon: Mail, description: 'Exportera för brev' },
   { name: 'Leads', href: '/leads', icon: Users, description: 'Alla kontakter' },
   { name: 'Fordon', href: '/vehicles', icon: Car, description: 'Fordonslista' },
   { name: 'Import', href: '/import', icon: Upload, description: 'Ladda upp Excel' },
