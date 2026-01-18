@@ -142,26 +142,36 @@ export async function POST(request: NextRequest) {
 
     const html = await response.text()
 
-    // Extract new BEARER token from Set-Cookie response header and save it
-    // This auto-refreshes the token for subsequent requests
+    // Extract tokens from Set-Cookie response header and save them
+    // Car.info rotates both BEARER (short-lived, ~2min) and refreshToken (long-lived)
+    // We capture BOTH to stay in sync with how the browser maintains the session
     const setCookieHeader = response.headers.get('set-cookie')
     if (setCookieHeader) {
       const bearerMatch = setCookieHeader.match(/BEARER=([^;]+)/)
+      const refreshMatch = setCookieHeader.match(/refreshToken=([^;]+)/)
+
+      // Build update object with any new tokens
+      const updates: Record<string, string> = {}
       if (bearerMatch && bearerMatch[1]) {
-        const newBearer = bearerMatch[1]
-        // Update token in database asynchronously (don't await to not slow down response)
+        updates.bearer_token = bearerMatch[1]
+      }
+      if (refreshMatch && refreshMatch[1]) {
+        updates.refresh_token = refreshMatch[1]
+      }
+
+      // Update tokens in database asynchronously (don't await to not slow down response)
+      if (Object.keys(updates).length > 0) {
+        updates.updated_at = new Date().toISOString()
         void (async () => {
           try {
             await supabase
               .from('api_tokens')
-              .update({
-                bearer_token: newBearer,
-                updated_at: new Date().toISOString()
-              })
+              .update(updates)
               .eq('service_name', 'car_info')
-            console.log('Auto-refreshed BEARER token')
+            const tokenTypes = Object.keys(updates).filter(k => k !== 'updated_at').join(', ')
+            console.log(`Auto-refreshed tokens: ${tokenTypes}`)
           } catch (err) {
-            console.error('Failed to auto-refresh BEARER token:', err)
+            console.error('Failed to auto-refresh tokens:', err)
           }
         })()
       }
