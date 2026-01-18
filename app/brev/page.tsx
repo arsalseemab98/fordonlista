@@ -2,6 +2,9 @@ import { Header } from '@/components/layout/header'
 import { createClient } from '@/lib/supabase/server'
 import { LetterList } from '@/components/letters/letter-list'
 
+// Revalidate every 30 seconds for better performance
+export const revalidate = 30
+
 interface Lead {
   id: string
   owner_info: string | null
@@ -44,6 +47,7 @@ async function getLeadsForLetters(filter: string) {
         year
       )
     `)
+    .neq('status', 'pending_review')
     .order('created_at', { ascending: false })
 
   // Apply filters
@@ -62,7 +66,7 @@ async function getLeadsForLetters(filter: string) {
     return { leads: [], counts: { total: 0, noPhone: 0, notSent: 0, sent: 0 }, letterCost: 12.00 }
   }
 
-  // Get counts and preferences in parallel
+  // Get counts and preferences in parallel (exclude pending_review from all counts)
   const [
     { count: totalCount },
     { count: noPhoneCount },
@@ -70,10 +74,10 @@ async function getLeadsForLetters(filter: string) {
     { count: sentCount },
     { data: preferences }
   ] = await Promise.all([
-    supabase.from('leads').select('*', { count: 'exact', head: true }),
-    supabase.from('leads').select('*', { count: 'exact', head: true }).or('phone.is.null,phone.eq.'),
-    supabase.from('leads').select('*', { count: 'exact', head: true }).or('letter_sent.is.null,letter_sent.eq.false'),
-    supabase.from('leads').select('*', { count: 'exact', head: true }).eq('letter_sent', true),
+    supabase.from('leads').select('*', { count: 'exact', head: true }).neq('status', 'pending_review'),
+    supabase.from('leads').select('*', { count: 'exact', head: true }).neq('status', 'pending_review').or('phone.is.null,phone.eq.'),
+    supabase.from('leads').select('*', { count: 'exact', head: true }).neq('status', 'pending_review').or('letter_sent.is.null,letter_sent.eq.false'),
+    supabase.from('leads').select('*', { count: 'exact', head: true }).neq('status', 'pending_review').eq('letter_sent', true),
     supabase.from('preferences').select('letter_cost').limit(1).single()
   ])
 

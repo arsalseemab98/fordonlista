@@ -25,10 +25,23 @@ import {
   MapPin,
   FileSpreadsheet,
   Calculator,
-  Settings
+  Settings,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { markLetterSent } from '@/app/actions/letters'
+import { deleteLead, bulkDeleteLeads } from '@/app/actions/leads'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { sv } from 'date-fns/locale'
@@ -68,6 +81,10 @@ export function LetterList({ leads, counts, currentFilter, letterCost }: LetterL
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set())
   const [isExporting, setIsExporting] = useState(false)
   const [isMarking, setIsMarking] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
+  const [leadToDelete, setLeadToDelete] = useState<Lead | null>(null)
 
   const filters = [
     { key: 'not_sent', label: 'Ej skickat', count: counts.notSent, icon: Clock },
@@ -114,6 +131,51 @@ export function LetterList({ leads, counts, currentFilter, letterCost }: LetterL
       router.refresh()
     } else {
       toast.error(result.error || 'Kunde inte markera som skickade')
+    }
+  }
+
+  const handleDeleteClick = (lead: Lead) => {
+    setLeadToDelete(lead)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!leadToDelete) return
+
+    setIsDeleting(true)
+    const result = await deleteLead(leadToDelete.id)
+    setIsDeleting(false)
+    setDeleteDialogOpen(false)
+    setLeadToDelete(null)
+
+    if (result.success) {
+      toast.success('Lead borttagen')
+      router.refresh()
+    } else {
+      toast.error(result.error || 'Kunde inte ta bort lead')
+    }
+  }
+
+  const handleBulkDeleteClick = () => {
+    if (selectedLeads.size === 0) {
+      toast.error('Välj minst en lead')
+      return
+    }
+    setBulkDeleteDialogOpen(true)
+  }
+
+  const handleBulkDeleteConfirm = async () => {
+    setIsDeleting(true)
+    const result = await bulkDeleteLeads(Array.from(selectedLeads))
+    setIsDeleting(false)
+    setBulkDeleteDialogOpen(false)
+
+    if (result.success) {
+      toast.success(`${selectedLeads.size} leads borttagna`)
+      setSelectedLeads(new Set())
+      router.refresh()
+    } else {
+      toast.error(result.error || 'Kunde inte ta bort leads')
     }
   }
 
@@ -272,6 +334,18 @@ export function LetterList({ leads, counts, currentFilter, letterCost }: LetterL
                   Markera som skickat
                 </Button>
               )}
+
+              {selectedLeads.size > 0 && (
+                <Button
+                  variant="destructive"
+                  onClick={handleBulkDeleteClick}
+                  disabled={isDeleting}
+                  className="gap-2"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Ta bort ({selectedLeads.size})
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>
@@ -301,6 +375,7 @@ export function LetterList({ leads, counts, currentFilter, letterCost }: LetterL
                   <TableHead>Ort</TableHead>
                   <TableHead>Telefon</TableHead>
                   <TableHead>Brev skickat</TableHead>
+                  <TableHead className="w-[80px]">Åtgärd</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -381,6 +456,18 @@ export function LetterList({ leads, counts, currentFilter, letterCost }: LetterL
                           )
                         )}
                       </TableCell>
+                      <TableCell>
+                        {vIndex === 0 && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteClick(lead)}
+                            className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))
                 ))}
@@ -407,6 +494,64 @@ export function LetterList({ leads, counts, currentFilter, letterCost }: LetterL
           </div>
         </CardContent>
       </Card>
+
+      {/* Single Delete Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Ta bort lead
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Är du säker på att du vill ta bort denna lead? Detta tar även bort alla
+              tillhörande fordon och samtalsloggar. Åtgärden kan inte ångras.
+              {leadToDelete && (
+                <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                  <p className="font-medium text-gray-900">{leadToDelete.owner_info || 'Okänd ägare'}</p>
+                  <p className="text-sm text-gray-600">{leadToDelete.vehicles.length} fordon</p>
+                </div>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Avbryt</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? 'Tar bort...' : 'Ta bort'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Dialog */}
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Ta bort {selectedLeads.size} leads
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Är du säker på att du vill ta bort {selectedLeads.size} leads? Detta tar även bort alla
+              tillhörande fordon och samtalsloggar. Åtgärden kan inte ångras.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Avbryt</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDeleteConfirm}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? 'Tar bort...' : `Ta bort ${selectedLeads.size} leads`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

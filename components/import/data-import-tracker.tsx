@@ -36,7 +36,8 @@ import {
   Trash2,
   Database,
   Clock,
-  FileSpreadsheet
+  FileSpreadsheet,
+  MapPin
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { sv } from 'date-fns/locale'
@@ -54,6 +55,7 @@ interface DataImport {
   filter_type: string | null
   record_count: number
   notes: string | null
+  county: string | null
   created_at: string
 }
 
@@ -63,9 +65,34 @@ interface DataImportTrackerProps {
 
 const FILTER_TYPES = [
   { value: 'avställda', label: 'Avställda fordon' },
-  { value: 'dubbel_ägare', label: 'Dubbel ägare (köpt ny bil)' },
-  { value: 'låg_miltal', label: 'Låg miltal/körning' },
+  { value: 'nyköpt_bil', label: 'Nyköpt bil (kort innehavstid)' },
+  { value: 'låg_miltal', label: 'Låg körsträcka' },
   { value: 'alla', label: 'Alla typer' },
+]
+
+const SWEDISH_COUNTIES = [
+  { value: 'alla', label: 'Hela Sverige' },
+  { value: 'blekinge', label: 'Blekinge' },
+  { value: 'dalarna', label: 'Dalarna' },
+  { value: 'gotland', label: 'Gotland' },
+  { value: 'gävleborg', label: 'Gävleborg' },
+  { value: 'halland', label: 'Halland' },
+  { value: 'jämtland', label: 'Jämtland' },
+  { value: 'jönköping', label: 'Jönköping' },
+  { value: 'kalmar', label: 'Kalmar' },
+  { value: 'kronoberg', label: 'Kronoberg' },
+  { value: 'norrbotten', label: 'Norrbotten' },
+  { value: 'skåne', label: 'Skåne' },
+  { value: 'stockholm', label: 'Stockholm' },
+  { value: 'södermanland', label: 'Södermanland' },
+  { value: 'uppsala', label: 'Uppsala' },
+  { value: 'värmland', label: 'Värmland' },
+  { value: 'västerbotten', label: 'Västerbotten' },
+  { value: 'västernorrland', label: 'Västernorrland' },
+  { value: 'västmanland', label: 'Västmanland' },
+  { value: 'västra_götaland', label: 'Västra Götaland' },
+  { value: 'örebro', label: 'Örebro' },
+  { value: 'östergötland', label: 'Östergötland' },
 ]
 
 export function DataImportTracker({ imports }: DataImportTrackerProps) {
@@ -78,7 +105,8 @@ export function DataImportTracker({ imports }: DataImportTrackerProps) {
     date_range_end: '',
     filter_type: '',
     record_count: 0,
-    notes: ''
+    notes: '',
+    county: 'alla'
   })
 
   const handleSave = async () => {
@@ -89,7 +117,8 @@ export function DataImportTracker({ imports }: DataImportTrackerProps) {
       date_range_end: formData.date_range_end || undefined,
       filter_type: formData.filter_type || undefined,
       record_count: formData.record_count,
-      notes: formData.notes || undefined
+      notes: formData.notes || undefined,
+      county: formData.county || 'alla'
     })
     setIsSaving(false)
 
@@ -102,7 +131,8 @@ export function DataImportTracker({ imports }: DataImportTrackerProps) {
         date_range_end: '',
         filter_type: '',
         record_count: 0,
-        notes: ''
+        notes: '',
+        county: 'alla'
       })
       router.refresh()
     } else {
@@ -219,6 +249,25 @@ export function DataImportTracker({ imports }: DataImportTrackerProps) {
                 </div>
 
                 <div className="space-y-2">
+                  <Label htmlFor="county">Län</Label>
+                  <Select
+                    value={formData.county}
+                    onValueChange={(value) => setFormData({ ...formData, county: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Välj län" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SWEDISH_COUNTIES.map(county => (
+                        <SelectItem key={county.value} value={county.value}>
+                          {county.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="record-count">Antal poster</Label>
                   <Input
                     id="record-count"
@@ -267,6 +316,7 @@ export function DataImportTracker({ imports }: DataImportTrackerProps) {
                 <TableHead>Källa</TableHead>
                 <TableHead>Datumperiod</TableHead>
                 <TableHead>Filter</TableHead>
+                <TableHead>Län</TableHead>
                 <TableHead className="text-right">Antal</TableHead>
                 <TableHead className="w-[50px]"></TableHead>
               </TableRow>
@@ -291,6 +341,16 @@ export function DataImportTracker({ imports }: DataImportTrackerProps) {
                       <Badge variant="secondary" className="text-xs">
                         {FILTER_TYPES.find(f => f.value === imp.filter_type)?.label || imp.filter_type}
                       </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {imp.county && imp.county !== 'alla' ? (
+                      <div className="flex items-center gap-1 text-sm text-gray-600">
+                        <MapPin className="h-3 w-3" />
+                        {SWEDISH_COUNTIES.find(c => c.value === imp.county)?.label || imp.county}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-400">Hela Sverige</span>
                     )}
                   </TableCell>
                   <TableCell className="text-right font-mono">

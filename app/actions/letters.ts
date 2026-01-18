@@ -45,6 +45,32 @@ export async function resetLetterStatus(leadId: string) {
   return { success: true }
 }
 
+export async function bulkRemoveFromLetterList(leadIds: string[]) {
+  const supabase = await createClient()
+
+  if (leadIds.length === 0) {
+    return { success: false, error: 'Inga leads valda' }
+  }
+
+  const { error, count } = await supabase
+    .from('leads')
+    .update({
+      letter_sent: null,
+      letter_sent_date: null
+    })
+    .in('id', leadIds)
+
+  if (error) {
+    console.error('Error bulk removing from letter list:', error)
+    return { success: false, error: error.message }
+  }
+
+  revalidatePath('/brev')
+  revalidatePath('/leads')
+  revalidatePath('/playground')
+  return { success: true, removedCount: count || leadIds.length }
+}
+
 export interface LetterExportData {
   reg_nr: string
   owner_info: string | null

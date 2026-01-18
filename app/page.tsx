@@ -13,6 +13,9 @@ import {
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 
+// Revalidate every 60 seconds for dashboard stats
+export const revalidate = 60
+
 async function getStats() {
   const supabase = await createClient()
 

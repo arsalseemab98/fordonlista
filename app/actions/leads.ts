@@ -3,15 +3,25 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-export async function updateLeadStatus(leadId: string, status: string) {
+export async function updateLeadStatus(leadId: string, status: string, completionReason?: string) {
   const supabase = await createClient()
+
+  const updateData: { status: string; updated_at: string; completion_reason?: string | null } = {
+    status,
+    updated_at: new Date().toISOString()
+  }
+
+  // Add completion_reason if status is completed
+  if (status === 'completed' && completionReason) {
+    updateData.completion_reason = completionReason
+  } else if (status !== 'completed') {
+    // Clear completion_reason if status is not completed
+    updateData.completion_reason = null
+  }
 
   const { error } = await supabase
     .from('leads')
-    .update({
-      status,
-      updated_at: new Date().toISOString()
-    })
+    .update(updateData)
     .eq('id', leadId)
 
   if (error) {
@@ -22,6 +32,8 @@ export async function updateLeadStatus(leadId: string, status: string) {
   revalidatePath('/leads')
   revalidatePath(`/leads/${leadId}`)
   revalidatePath('/to-call')
+  revalidatePath('/playground')
+  revalidatePath('/historik')
   revalidatePath('/')
 
   return { success: true }
@@ -33,7 +45,8 @@ export async function addCallLog({
   result,
   notes,
   followUpDate,
-  bookingDate
+  bookingDate,
+  completionReason
 }: {
   leadId: string
   vehicleId?: string
@@ -41,6 +54,7 @@ export async function addCallLog({
   notes?: string
   followUpDate?: string
   bookingDate?: string
+  completionReason?: string
 }) {
   const supabase = await createClient()
 
@@ -62,22 +76,27 @@ export async function addCallLog({
   }
 
   // Update lead's updated_at and potentially status
-  let newStatus = undefined
-  if (result.includes('Intresserad')) {
+  // Use database values (English) for comparison
+  let newStatus: string | undefined = undefined
+  let newCompletionReason: string | null = null
+
+  if (result === 'interested') {
     newStatus = 'interested'
-  } else if (result.includes('Ej intresserad') || result.includes('Såld')) {
-    newStatus = 'not_interested'
-  } else if (result.includes('Ring tillbaka')) {
-    newStatus = 'callback'
-  } else if (result.includes('Bokad')) {
-    newStatus = 'booked'
-  } else if (result.includes('Inget svar') || result.includes('Upptaget')) {
-    newStatus = 'no_answer'
-  } else if (result.includes('Fel nummer')) {
+  } else if (result === 'not_interested') {
     newStatus = 'completed'
+    newCompletionReason = completionReason || 'not_interested'
+  } else if (result === 'call_back') {
+    newStatus = 'callback'
+  } else if (result === 'booked') {
+    newStatus = 'booked'
+  } else if (result === 'no_answer' || result === 'busy') {
+    newStatus = 'no_answer'
+  } else if (result === 'wrong_number') {
+    newStatus = 'completed'
+    newCompletionReason = 'wrong_number'
   }
 
-  const updateData: { updated_at: string; status?: string } = {
+  const updateData: { updated_at: string; status?: string; completion_reason?: string | null } = {
     updated_at: new Date().toISOString()
   }
 
@@ -85,14 +104,27 @@ export async function addCallLog({
     updateData.status = newStatus
   }
 
-  await supabase
+  if (newCompletionReason) {
+    updateData.completion_reason = newCompletionReason
+  }
+
+  const { error: updateError } = await supabase
     .from('leads')
     .update(updateData)
     .eq('id', leadId)
 
+  if (updateError) {
+    console.error('Error updating lead status:', updateError)
+    // Still return success since call log was added, but log the error
+  } else {
+    console.log(`Lead ${leadId} status updated to: ${newStatus || 'unchanged'}`)
+  }
+
   revalidatePath('/leads')
   revalidatePath(`/leads/${leadId}`)
   revalidatePath('/to-call')
+  revalidatePath('/playground')
+  revalidatePath('/historik')
   revalidatePath('/')
 
   return { success: true }
@@ -136,4 +168,581 @@ export async function toggleVehicleInteresting(vehicleId: string, isInteresting:
   revalidatePath('/vehicles')
 
   return { success: true }
+}
+
+export interface BulkUpdateMetadata {
+  county?: string | null
+  prospect_type?: string | null
+  data_period_start?: string | null
+  data_period_end?: string | null
+}
+
+export async function markLeadForLetter(leadId: string) {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('leads')
+    .update({
+      letter_sent: false, // Mark as "to be sent"
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', leadId)
+
+  if (error) {
+    console.error('Error marking lead for letter:', error)
+    return { success: false, error: error.message }
+  }
+
+  revalidatePath('/leads')
+  revalidatePath('/playground')
+  revalidatePath('/brev')
+
+  return { success: true }
+}
+
+export async function removeLeadFromLetterList(leadId: string) {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('leads')
+    .update({
+      letter_sent: null, // Remove from letter list entirely
+      letter_sent_date: null,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', leadId)
+
+  if (error) {
+    console.error('Error removing lead from letter list:', error)
+    return { success: false, error: error.message }
+  }
+
+  revalidatePath('/leads')
+  revalidatePath('/playground')
+  revalidatePath('/brev')
+
+  return { success: true }
+}
+
+export async function bulkUpdateLeadsMetadata(
+  leadIds: string[],
+  metadata: BulkUpdateMetadata
+): Promise<{ success: boolean; error?: string; updatedCount?: number }> {
+  const supabase = await createClient()
+
+  if (leadIds.length === 0) {
+    return { success: false, error: 'Inga leads valda' }
+  }
+
+  // Build update object only with defined values
+  const updateData: Record<string, unknown> = {
+    updated_at: new Date().toISOString()
+  }
+
+  if (metadata.county !== undefined) {
+    updateData.county = metadata.county
+  }
+  if (metadata.prospect_type !== undefined) {
+    updateData.prospect_type = metadata.prospect_type
+  }
+  if (metadata.data_period_start !== undefined) {
+    updateData.data_period_start = metadata.data_period_start
+  }
+  if (metadata.data_period_end !== undefined) {
+    updateData.data_period_end = metadata.data_period_end
+  }
+
+  const { error, count } = await supabase
+    .from('leads')
+    .update(updateData)
+    .in('id', leadIds)
+
+  if (error) {
+    console.error('Error bulk updating leads:', error)
+    return { success: false, error: error.message }
+  }
+
+  revalidatePath('/leads')
+  revalidatePath('/playground')
+  revalidatePath('/')
+
+  return { success: true, updatedCount: count || leadIds.length }
+}
+
+export async function deleteLead(leadId: string) {
+  console.log('=== DELETE LEAD START ===')
+  console.log('Received leadId:', leadId)
+  console.log('leadId type:', typeof leadId)
+  console.log('leadId length:', leadId?.length)
+
+  // Validate leadId
+  if (!leadId || typeof leadId !== 'string' || leadId.trim() === '') {
+    console.error('VALIDATION FAILED - Invalid leadId:', leadId)
+    return { success: false, error: 'Ogiltigt lead-ID' }
+  }
+
+  console.log('Validation passed, creating Supabase client...')
+  const supabase = await createClient()
+  console.log('Supabase client created')
+
+  try {
+    // Delete associated vehicles first (cascade)
+    console.log('Attempting to delete vehicles for lead_id:', leadId)
+    const { error: vehicleError, count: vehicleCount } = await supabase
+      .from('vehicles')
+      .delete()
+      .eq('lead_id', leadId)
+      .select()
+
+    console.log('Vehicle delete result - error:', vehicleError, 'count:', vehicleCount)
+
+    if (vehicleError) {
+      console.error('Error deleting vehicles:', JSON.stringify(vehicleError, null, 2))
+      // Continue anyway - vehicles might not exist
+    }
+
+    // Delete associated call logs
+    console.log('Attempting to delete call_logs for lead_id:', leadId)
+    const { error: callLogError, count: callLogCount } = await supabase
+      .from('call_logs')
+      .delete()
+      .eq('lead_id', leadId)
+      .select()
+
+    console.log('Call log delete result - error:', callLogError, 'count:', callLogCount)
+
+    if (callLogError) {
+      console.error('Error deleting call logs:', JSON.stringify(callLogError, null, 2))
+      // Continue anyway - call logs might not exist
+    }
+
+    // Delete the lead
+    console.log('Attempting to delete lead with id:', leadId)
+    const { error, data } = await supabase
+      .from('leads')
+      .delete()
+      .eq('id', leadId)
+      .select()
+
+    console.log('Lead delete result - error:', error, 'data:', data)
+
+    if (error) {
+      console.error('Error deleting lead:', JSON.stringify(error, null, 2))
+      return { success: false, error: error.message }
+    }
+
+    console.log('Delete successful, revalidating paths...')
+    revalidatePath('/leads')
+    revalidatePath('/playground')
+    revalidatePath('/brev')
+    revalidatePath('/to-call')
+    revalidatePath('/historik')
+    revalidatePath('/')
+
+    console.log('=== DELETE LEAD SUCCESS ===')
+    return { success: true }
+  } catch (err) {
+    console.error('=== DELETE LEAD EXCEPTION ===')
+    console.error('Unexpected error deleting lead:', err)
+    console.error('Error type:', typeof err)
+    console.error('Error string:', String(err))
+    if (err instanceof Error) {
+      console.error('Error message:', err.message)
+      console.error('Error stack:', err.stack)
+    }
+    return { success: false, error: 'Ett oväntat fel uppstod' }
+  }
+}
+
+export async function updateLeadProspectType(leadId: string, prospectType: string | null) {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('leads')
+    .update({
+      prospect_type: prospectType,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', leadId)
+
+  if (error) {
+    console.error('Error updating prospect type:', error)
+    return { success: false, error: error.message }
+  }
+
+  revalidatePath('/leads')
+  revalidatePath('/playground')
+
+  return { success: true }
+}
+
+export async function deleteExtraDataColumn(columnName: string) {
+  const supabase = await createClient()
+
+  // Get all leads with extra_data containing this column
+  const { data: leads, error: fetchError } = await supabase
+    .from('leads')
+    .select('id, extra_data')
+    .not('extra_data', 'is', null)
+
+  if (fetchError) {
+    console.error('Error fetching leads:', fetchError)
+    return { success: false, error: fetchError.message }
+  }
+
+  let updatedCount = 0
+
+  // Update each lead, removing the column from extra_data
+  for (const lead of leads || []) {
+    if (lead.extra_data && typeof lead.extra_data === 'object' && columnName in lead.extra_data) {
+      const newExtraData = { ...lead.extra_data }
+      delete newExtraData[columnName]
+
+      // If extra_data is now empty, set it to null
+      const finalExtraData = Object.keys(newExtraData).length > 0 ? newExtraData : null
+
+      const { error: updateError } = await supabase
+        .from('leads')
+        .update({
+          extra_data: finalExtraData,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', lead.id)
+
+      if (!updateError) {
+        updatedCount++
+      }
+    }
+  }
+
+  revalidatePath('/leads')
+  revalidatePath('/playground')
+
+  return { success: true, updatedCount }
+}
+
+export async function bulkDeleteLeads(leadIds: string[]) {
+  console.log('=== BULK DELETE START ===')
+  console.log('Total IDs received:', leadIds?.length)
+
+  if (!leadIds || leadIds.length === 0) {
+    return { success: false, error: 'Inga leads valda' }
+  }
+
+  // Filter out any invalid IDs
+  const validIds = leadIds.filter(id => id && typeof id === 'string' && id.trim() !== '')
+  console.log('Valid IDs after filter:', validIds.length)
+
+  if (validIds.length === 0) {
+    return { success: false, error: 'Inga giltiga lead-IDs' }
+  }
+
+  const supabase = await createClient()
+
+  // Process in chunks of 100 to avoid Supabase limits
+  const CHUNK_SIZE = 100
+  let totalDeleted = 0
+
+  try {
+    for (let i = 0; i < validIds.length; i += CHUNK_SIZE) {
+      const chunk = validIds.slice(i, i + CHUNK_SIZE)
+      console.log(`Processing chunk ${Math.floor(i / CHUNK_SIZE) + 1}/${Math.ceil(validIds.length / CHUNK_SIZE)}, size: ${chunk.length}`)
+
+      // Delete associated vehicles first
+      const { error: vehicleError } = await supabase
+        .from('vehicles')
+        .delete()
+        .in('lead_id', chunk)
+
+      if (vehicleError) {
+        console.error('Error deleting vehicles in chunk:', vehicleError)
+        // Continue anyway
+      }
+
+      // Delete associated call logs
+      const { error: callLogError } = await supabase
+        .from('call_logs')
+        .delete()
+        .in('lead_id', chunk)
+
+      if (callLogError) {
+        console.error('Error deleting call logs in chunk:', callLogError)
+        // Continue anyway
+      }
+
+      // Delete the leads
+      const { error, count } = await supabase
+        .from('leads')
+        .delete()
+        .in('id', chunk)
+
+      if (error) {
+        console.error('Error deleting leads in chunk:', error)
+        // Continue with next chunk instead of failing completely
+      } else {
+        totalDeleted += count || chunk.length
+      }
+    }
+
+    console.log('=== BULK DELETE SUCCESS ===')
+    console.log('Total deleted:', totalDeleted)
+
+    revalidatePath('/leads')
+    revalidatePath('/playground')
+    revalidatePath('/brev')
+    revalidatePath('/to-call')
+    revalidatePath('/historik')
+    revalidatePath('/')
+
+    return { success: true, deletedCount: totalDeleted }
+  } catch (err) {
+    console.error('=== BULK DELETE EXCEPTION ===')
+    console.error('Unexpected error bulk deleting leads:', err)
+    return { success: false, error: 'Ett oväntat fel uppstod' }
+  }
+}
+
+export interface HistoryCheckOptions {
+  matchRegNr: boolean
+  matchChassis: boolean
+  matchName: boolean
+  matchPhone: boolean
+}
+
+export interface HistoryCheckMatch {
+  leadId: string
+  matchedLeadId: string
+  matchType: 'reg_nr' | 'chassis' | 'name' | 'phone'
+  matchValue: string
+}
+
+export interface HistoryCheckResult {
+  success: boolean
+  error?: string
+  totalChecked: number
+  uniqueCount: number
+  duplicateCount: number
+  matches: HistoryCheckMatch[]
+  duplicateLeadIds: string[]
+}
+
+export async function checkLeadsHistory(
+  leadIdsToCheck: string[],
+  options: HistoryCheckOptions
+): Promise<HistoryCheckResult> {
+  const supabase = await createClient()
+
+  if (leadIdsToCheck.length === 0) {
+    return {
+      success: false,
+      error: 'Inga leads att kontrollera',
+      totalChecked: 0,
+      uniqueCount: 0,
+      duplicateCount: 0,
+      matches: [],
+      duplicateLeadIds: []
+    }
+  }
+
+  if (!options.matchRegNr && !options.matchChassis && !options.matchName && !options.matchPhone) {
+    return {
+      success: false,
+      error: 'Välj minst ett matchningsfält',
+      totalChecked: 0,
+      uniqueCount: 0,
+      duplicateCount: 0,
+      matches: [],
+      duplicateLeadIds: []
+    }
+  }
+
+  try {
+    // Fetch the leads we want to check (the new ones in playground)
+    const { data: leadsToCheck, error: fetchError } = await supabase
+      .from('leads')
+      .select(`
+        id,
+        phone,
+        owner_info,
+        vehicles (
+          id,
+          reg_nr,
+          chassis_nr
+        )
+      `)
+      .in('id', leadIdsToCheck)
+
+    if (fetchError) {
+      console.error('Error fetching leads to check:', fetchError)
+      return {
+        success: false,
+        error: fetchError.message,
+        totalChecked: 0,
+        uniqueCount: 0,
+        duplicateCount: 0,
+        matches: [],
+        duplicateLeadIds: []
+      }
+    }
+
+    // Fetch ALL other leads (not in our check list) to compare against
+    const { data: existingLeads, error: existingError } = await supabase
+      .from('leads')
+      .select(`
+        id,
+        phone,
+        owner_info,
+        vehicles (
+          id,
+          reg_nr,
+          chassis_nr
+        )
+      `)
+      .not('id', 'in', `(${leadIdsToCheck.join(',')})`)
+
+    if (existingError) {
+      console.error('Error fetching existing leads:', existingError)
+      return {
+        success: false,
+        error: existingError.message,
+        totalChecked: 0,
+        uniqueCount: 0,
+        duplicateCount: 0,
+        matches: [],
+        duplicateLeadIds: []
+      }
+    }
+
+    // Build lookup maps for existing leads
+    const existingByRegNr = new Map<string, { leadId: string; regNr: string }>()
+    const existingByChassis = new Map<string, { leadId: string; chassis: string }>()
+    const existingByPhone = new Map<string, { leadId: string; phone: string }>()
+    const existingByName = new Map<string, { leadId: string; name: string }>()
+
+    for (const lead of existingLeads || []) {
+      // Index by phone
+      if (options.matchPhone && lead.phone) {
+        const cleanPhone = lead.phone.replace(/\D/g, '')
+        if (cleanPhone.length >= 8) {
+          existingByPhone.set(cleanPhone, { leadId: lead.id, phone: lead.phone })
+        }
+      }
+
+      // Index by name (normalized)
+      if (options.matchName && lead.owner_info) {
+        const normalizedName = lead.owner_info.toLowerCase().trim()
+        if (normalizedName.length > 3) {
+          existingByName.set(normalizedName, { leadId: lead.id, name: lead.owner_info })
+        }
+      }
+
+      // Index by vehicles
+      for (const vehicle of lead.vehicles || []) {
+        if (options.matchRegNr && vehicle.reg_nr) {
+          const cleanRegNr = vehicle.reg_nr.toUpperCase().replace(/\s/g, '')
+          existingByRegNr.set(cleanRegNr, { leadId: lead.id, regNr: vehicle.reg_nr })
+        }
+        if (options.matchChassis && vehicle.chassis_nr) {
+          const cleanChassis = vehicle.chassis_nr.toUpperCase().replace(/\s/g, '')
+          existingByChassis.set(cleanChassis, { leadId: lead.id, chassis: vehicle.chassis_nr })
+        }
+      }
+    }
+
+    // Check each lead against the maps
+    const matches: HistoryCheckMatch[] = []
+    const duplicateLeadIds = new Set<string>()
+
+    for (const lead of leadsToCheck || []) {
+      let foundMatch = false
+
+      // Check phone
+      if (options.matchPhone && lead.phone) {
+        const cleanPhone = lead.phone.replace(/\D/g, '')
+        const match = existingByPhone.get(cleanPhone)
+        if (match) {
+          matches.push({
+            leadId: lead.id,
+            matchedLeadId: match.leadId,
+            matchType: 'phone',
+            matchValue: lead.phone
+          })
+          foundMatch = true
+        }
+      }
+
+      // Check name
+      if (options.matchName && lead.owner_info) {
+        const normalizedName = lead.owner_info.toLowerCase().trim()
+        const match = existingByName.get(normalizedName)
+        if (match) {
+          matches.push({
+            leadId: lead.id,
+            matchedLeadId: match.leadId,
+            matchType: 'name',
+            matchValue: lead.owner_info
+          })
+          foundMatch = true
+        }
+      }
+
+      // Check vehicles
+      for (const vehicle of lead.vehicles || []) {
+        if (options.matchRegNr && vehicle.reg_nr) {
+          const cleanRegNr = vehicle.reg_nr.toUpperCase().replace(/\s/g, '')
+          const match = existingByRegNr.get(cleanRegNr)
+          if (match) {
+            matches.push({
+              leadId: lead.id,
+              matchedLeadId: match.leadId,
+              matchType: 'reg_nr',
+              matchValue: vehicle.reg_nr
+            })
+            foundMatch = true
+          }
+        }
+        if (options.matchChassis && vehicle.chassis_nr) {
+          const cleanChassis = vehicle.chassis_nr.toUpperCase().replace(/\s/g, '')
+          const match = existingByChassis.get(cleanChassis)
+          if (match) {
+            matches.push({
+              leadId: lead.id,
+              matchedLeadId: match.leadId,
+              matchType: 'chassis',
+              matchValue: vehicle.chassis_nr
+            })
+            foundMatch = true
+          }
+        }
+      }
+
+      if (foundMatch) {
+        duplicateLeadIds.add(lead.id)
+      }
+    }
+
+    const totalChecked = leadsToCheck?.length || 0
+    const duplicateCount = duplicateLeadIds.size
+    const uniqueCount = totalChecked - duplicateCount
+
+    return {
+      success: true,
+      totalChecked,
+      uniqueCount,
+      duplicateCount,
+      matches,
+      duplicateLeadIds: Array.from(duplicateLeadIds)
+    }
+  } catch (error) {
+    console.error('History check error:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Okänt fel',
+      totalChecked: 0,
+      uniqueCount: 0,
+      duplicateCount: 0,
+      matches: [],
+      duplicateLeadIds: []
+    }
+  }
 }

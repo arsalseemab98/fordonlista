@@ -36,7 +36,11 @@ import {
   Save,
   X,
   Check,
-  Mail
+  Mail,
+  Plug,
+  Eye,
+  EyeOff,
+  Info
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -44,7 +48,8 @@ import {
   deleteColumnMapping,
   saveValuePattern,
   deleteValuePattern,
-  savePreferences
+  savePreferences,
+  saveCarInfoTokens
 } from '@/app/actions/settings'
 import { useRouter } from 'next/navigation'
 
@@ -76,34 +81,47 @@ interface Preferences {
   letter_cost: number
 }
 
+interface ApiTokens {
+  id: string
+  service_name: string
+  refresh_token?: string
+  bearer_token?: string
+  updated_at?: string
+}
+
 interface SettingsTabsProps {
   columnMappings: ColumnMapping[]
   valuePatterns: ValuePattern[]
   preferences: Preferences | null
+  carInfoTokens: ApiTokens | null
 }
 
-export function SettingsTabs({ columnMappings, valuePatterns, preferences }: SettingsTabsProps) {
+export function SettingsTabs({ columnMappings, valuePatterns, preferences, carInfoTokens }: SettingsTabsProps) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState('general')
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="max-w-4xl">
-      <TabsList className="grid w-full grid-cols-4">
+      <TabsList className="grid w-full grid-cols-5">
         <TabsTrigger value="general" className="gap-2">
           <Settings className="h-4 w-4" />
           Allmänt
         </TabsTrigger>
         <TabsTrigger value="columns" className="gap-2">
           <FileSpreadsheet className="h-4 w-4" />
-          Kolumnmappning
+          Kolumner
         </TabsTrigger>
         <TabsTrigger value="patterns" className="gap-2">
           <Code className="h-4 w-4" />
-          Värdemönster
+          Mönster
         </TabsTrigger>
         <TabsTrigger value="ai" className="gap-2">
           <Brain className="h-4 w-4" />
-          AI-inställningar
+          AI
+        </TabsTrigger>
+        <TabsTrigger value="integrations" className="gap-2">
+          <Plug className="h-4 w-4" />
+          Integrationer
         </TabsTrigger>
       </TabsList>
 
@@ -121,6 +139,10 @@ export function SettingsTabs({ columnMappings, valuePatterns, preferences }: Set
 
       <TabsContent value="ai" className="mt-6">
         <AISettings preferences={preferences} />
+      </TabsContent>
+
+      <TabsContent value="integrations" className="mt-6">
+        <IntegrationsSettings carInfoTokens={carInfoTokens} />
       </TabsContent>
     </Tabs>
   )
@@ -616,5 +638,173 @@ function AISettings({ preferences }: { preferences: Preferences | null }) {
         </Button>
       </CardContent>
     </Card>
+  )
+}
+
+function IntegrationsSettings({ carInfoTokens }: { carInfoTokens: ApiTokens | null }) {
+  const router = useRouter()
+  const [refreshToken, setRefreshToken] = useState(carInfoTokens?.refresh_token || '')
+  const [bearerToken, setBearerToken] = useState(carInfoTokens?.bearer_token || '')
+  const [showRefreshToken, setShowRefreshToken] = useState(false)
+  const [showBearerToken, setShowBearerToken] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isTesting, setIsTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
+
+  const handleSave = async () => {
+    if (!refreshToken || !bearerToken) {
+      toast.error('Båda tokens krävs')
+      return
+    }
+
+    setIsSaving(true)
+    const result = await saveCarInfoTokens({
+      refresh_token: refreshToken,
+      bearer_token: bearerToken
+    })
+    setIsSaving(false)
+
+    if (result.success) {
+      toast.success('Tokens sparade')
+      router.refresh()
+    } else {
+      toast.error(result.error || 'Kunde inte spara tokens')
+    }
+  }
+
+  const handleTest = async () => {
+    setIsTesting(true)
+    setTestResult(null)
+
+    try {
+      const response = await fetch('/api/carinfo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reg_number: 'ABC123' })
+      })
+
+      const data = await response.json()
+
+      if (data.error) {
+        setTestResult({ success: false, message: data.error })
+      } else {
+        setTestResult({ success: true, message: 'Anslutningen fungerar!' })
+      }
+    } catch {
+      setTestResult({ success: false, message: 'Kunde inte ansluta till API' })
+    }
+
+    setIsTesting(false)
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <img src="https://www.car.info/favicon.ico" alt="" className="h-5 w-5" />
+            Car.info Integration
+          </CardTitle>
+          <CardDescription>
+            Hämta utökad fordonsinformation från car.info. Kräver inloggning på car.info.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Instructions */}
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <div className="flex gap-2">
+              <Info className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+              <div className="space-y-2">
+                <p className="font-medium text-blue-900">Så här hittar du dina tokens:</p>
+                <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
+                  <li>Logga in på <a href="https://www.car.info" target="_blank" rel="noopener noreferrer" className="underline">car.info</a></li>
+                  <li>Öppna DevTools (Cmd+Option+I på Mac, F12 på Windows)</li>
+                  <li>Gå till Application → Cookies → www.car.info</li>
+                  <li>Kopiera värdena för <code className="bg-blue-100 px-1 rounded">refreshToken</code> och <code className="bg-blue-100 px-1 rounded">BEARER</code></li>
+                </ol>
+              </div>
+            </div>
+          </div>
+
+          {/* Refresh Token */}
+          <div className="space-y-2">
+            <Label htmlFor="refresh-token">Refresh Token</Label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  id="refresh-token"
+                  type={showRefreshToken ? 'text' : 'password'}
+                  placeholder="cd8bca103676383a..."
+                  value={refreshToken}
+                  onChange={(e) => setRefreshToken(e.target.value)}
+                  className="pr-10 font-mono text-sm"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                  onClick={() => setShowRefreshToken(!showRefreshToken)}
+                >
+                  {showRefreshToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Bearer Token */}
+          <div className="space-y-2">
+            <Label htmlFor="bearer-token">Bearer Token (JWT)</Label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  id="bearer-token"
+                  type={showBearerToken ? 'text' : 'password'}
+                  placeholder="eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..."
+                  value={bearerToken}
+                  onChange={(e) => setBearerToken(e.target.value)}
+                  className="pr-10 font-mono text-sm"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                  onClick={() => setShowBearerToken(!showBearerToken)}
+                >
+                  {showBearerToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Test Result */}
+          {testResult && (
+            <div className={`rounded-lg p-3 ${testResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+              {testResult.success ? <Check className="inline h-4 w-4 mr-2" /> : <X className="inline h-4 w-4 mr-2" />}
+              {testResult.message}
+            </div>
+          )}
+
+          {/* Last Updated */}
+          {carInfoTokens?.updated_at && (
+            <p className="text-xs text-gray-500">
+              Senast uppdaterad: {new Date(carInfoTokens.updated_at).toLocaleString('sv-SE')}
+            </p>
+          )}
+
+          {/* Buttons */}
+          <div className="flex gap-2">
+            <Button onClick={handleSave} disabled={isSaving} className="gap-2">
+              <Save className="h-4 w-4" />
+              {isSaving ? 'Sparar...' : 'Spara tokens'}
+            </Button>
+            <Button variant="outline" onClick={handleTest} disabled={isTesting}>
+              {isTesting ? 'Testar...' : 'Testa anslutning'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   )
 }

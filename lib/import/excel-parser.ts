@@ -1,5 +1,51 @@
 import * as XLSX from 'xlsx'
 
+// Fix mojibake - UTF-8 text incorrectly decoded as Latin-1/Windows-1252
+function fixEncoding(text: string | null | undefined): string {
+  if (!text || typeof text !== 'string') return text as string
+
+  // Common Swedish character mojibake patterns (UTF-8 → Latin-1)
+  // Using string replacements to avoid regex parsing issues with special chars
+  const replacements: [string, string][] = [
+    ['Ã…', 'Å'],
+    ['Ã¤', 'ä'],
+    ['Ã¶', 'ö'],
+    ['Ã¥', 'å'],
+    ['Ã„', 'Ä'],
+    ['Ã–', 'Ö'],
+    ['Ã©', 'é'],
+    ['Ã¨', 'è'],
+    ['Ã¼', 'ü'],
+    ['Ã±', 'ñ'],
+    ['Â°', '°'],
+    ['Â´', '´'],
+    ['Â§', '§'],
+    ['Ã ', 'à'],
+    ['Ã¢', 'â'],
+    ['Ã®', 'î'],
+    ['Ã´', 'ô'],
+    ['Ã»', 'û'],
+  ]
+
+  let result = text
+  for (const [search, replacement] of replacements) {
+    // Use split/join for global replacement without regex
+    result = result.split(search).join(replacement)
+  }
+
+  return result
+}
+
+// Fix encoding for all string values in a row
+function fixRowEncoding(row: (string | number | boolean | null | undefined)[]): (string | number | boolean | null | undefined)[] {
+  return row.map(cell => {
+    if (typeof cell === 'string') {
+      return fixEncoding(cell)
+    }
+    return cell
+  })
+}
+
 export interface ParsedRow {
   [key: string]: string | number | boolean | null
 }
@@ -52,21 +98,25 @@ export function parseExcelBuffer(buffer: ArrayBuffer): ParseResult {
     return { headers: [], rows: [], suggestedMappings: [], totalRows: 0 }
   }
 
-  // Första raden är headers
+  // Första raden är headers - fix encoding
   const headers = (rawData[0] || []).map((h, i) =>
-    h ? String(h).trim() : `Kolumn ${i + 1}`
+    h ? fixEncoding(String(h).trim()) : `Kolumn ${i + 1}`
   )
 
-  // Resten är data
-  const dataRows = rawData.slice(1).filter(row =>
-    row && row.some(cell => cell !== null && cell !== undefined && cell !== '')
-  )
+  // Resten är data - fix encoding for all rows
+  const dataRows = rawData.slice(1)
+    .map(row => fixRowEncoding(row as (string | number | boolean | null | undefined)[]))
+    .filter(row =>
+      row && row.some(cell => cell !== null && cell !== undefined && cell !== '')
+    )
 
   // Bygg parsed rows
   const rows: ParsedRow[] = dataRows.map(row => {
     const parsed: ParsedRow = {}
     headers.forEach((header, index) => {
-      parsed[header] = row[index] ?? null
+      const value = row[index]
+      // Apply encoding fix to string values
+      parsed[header] = typeof value === 'string' ? fixEncoding(value) : (value ?? null)
     })
     return parsed
   })
@@ -77,7 +127,7 @@ export function parseExcelBuffer(buffer: ArrayBuffer): ParseResult {
       .slice(0, 5)
       .map(row => row[index])
       .filter(v => v !== null && v !== undefined)
-      .map(v => String(v))
+      .map(v => fixEncoding(String(v)))
 
     // Försök matcha mot kända fält
     let mappedField: string | null = null

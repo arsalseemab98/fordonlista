@@ -3,10 +3,25 @@
 import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import { Checkbox } from '@/components/ui/checkbox'
 import { FileDropzone } from '@/components/import/file-dropzone'
 import { ColumnMapper } from '@/components/import/column-mapper'
 import { ImportPreview } from '@/components/import/import-preview'
-import { parseExcelFile, importVehicles, ImportResult } from '@/app/actions/import'
+import { parseExcelFile, importVehicles, ImportResult, ImportMetadata } from '@/app/actions/import'
 import { ParseResult, ColumnMapping } from '@/lib/import/excel-parser'
 import { toast } from 'sonner'
 import {
@@ -18,7 +33,11 @@ import {
   Loader2,
   RefreshCw,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  MapPin,
+  Tag,
+  Calendar,
+  X
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -26,6 +45,38 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
+
+const SWEDISH_COUNTIES = [
+  { value: 'blekinge', label: 'Blekinge' },
+  { value: 'dalarna', label: 'Dalarna' },
+  { value: 'gotland', label: 'Gotland' },
+  { value: 'gävleborg', label: 'Gävleborg' },
+  { value: 'halland', label: 'Halland' },
+  { value: 'jämtland', label: 'Jämtland' },
+  { value: 'jönköping', label: 'Jönköping' },
+  { value: 'kalmar', label: 'Kalmar' },
+  { value: 'kronoberg', label: 'Kronoberg' },
+  { value: 'norrbotten', label: 'Norrbotten' },
+  { value: 'skåne', label: 'Skåne' },
+  { value: 'stockholm', label: 'Stockholm' },
+  { value: 'södermanland', label: 'Södermanland' },
+  { value: 'uppsala', label: 'Uppsala' },
+  { value: 'värmland', label: 'Värmland' },
+  { value: 'västerbotten', label: 'Västerbotten' },
+  { value: 'västernorrland', label: 'Västernorrland' },
+  { value: 'västmanland', label: 'Västmanland' },
+  { value: 'västra_götaland', label: 'Västra Götaland' },
+  { value: 'örebro', label: 'Örebro' },
+  { value: 'östergötland', label: 'Östergötland' },
+]
+
+const PROSPECT_TYPES = [
+  { value: '', label: 'Välj typ...' },
+  { value: 'avställda', label: 'Avställda fordon' },
+  { value: 'nyköpt_bil', label: 'Nyköpt bil (kort innehavstid)' },
+  { value: 'låg_miltal', label: 'Låg körsträcka' },
+  { value: 'alla', label: 'Alla typer' },
+]
 
 type ImportStep = 'upload' | 'map' | 'review' | 'complete'
 
@@ -37,6 +88,12 @@ export function ImportWizard() {
   const [isLoading, setIsLoading] = useState(false)
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [showErrors, setShowErrors] = useState(false)
+  const [selectedCounties, setSelectedCounties] = useState<string[]>([])
+  const [metadata, setMetadata] = useState<Omit<ImportMetadata, 'county'>>({
+    prospect_type: '',
+    data_period_start: '',
+    data_period_end: ''
+  })
 
   const handleFileAccepted = async (acceptedFile: File) => {
     setFile(acceptedFile)
@@ -89,7 +146,15 @@ export function ImportWizard() {
 
     // Filter out any undefined mappings
     const validMappings = mappings.filter(m => m && m.excelColumn !== undefined)
-    const result = await importVehicles(formData, validMappings)
+
+    // Prepare metadata (only include non-empty values)
+    const importMetadata: ImportMetadata = {}
+    if (selectedCounties.length > 0) importMetadata.county = selectedCounties.join(',')
+    if (metadata.prospect_type) importMetadata.prospect_type = metadata.prospect_type
+    if (metadata.data_period_start) importMetadata.data_period_start = metadata.data_period_start
+    if (metadata.data_period_end) importMetadata.data_period_end = metadata.data_period_end
+
+    const result = await importVehicles(formData, validMappings, importMetadata)
 
     setIsLoading(false)
     setImportResult(result)
@@ -108,6 +173,22 @@ export function ImportWizard() {
     setMappings([])
     setStep('upload')
     setImportResult(null)
+    setSelectedCounties([])
+    setMetadata({
+      prospect_type: '',
+      data_period_start: '',
+      data_period_end: ''
+    })
+  }
+
+  const toggleCounty = (countyValue: string) => {
+    setSelectedCounties(prev => {
+      if (prev.includes(countyValue)) {
+        return prev.filter(c => c !== countyValue)
+      } else {
+        return [...prev, countyValue]
+      }
+    })
   }
 
   const steps = [
@@ -192,6 +273,145 @@ export function ImportWizard() {
 
       {step === 'map' && parseResult && (
         <div className="space-y-6">
+          {/* Import Metadata */}
+          <Card className="border-blue-200 bg-blue-50/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Tag className="h-5 w-5 text-blue-600" />
+                Import-metadata
+              </CardTitle>
+              <CardDescription>
+                Ange information om denna datahämtning för att enklare kunna filtrera i Playground
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-gray-500" />
+                    Län
+                  </Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-between",
+                          selectedCounties.length > 0 && "border-blue-500 bg-blue-50"
+                        )}
+                      >
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4" />
+                          {selectedCounties.length > 0
+                            ? `${selectedCounties.length} län valda`
+                            : 'Välj län...'
+                          }
+                        </div>
+                        <ChevronDown className="h-4 w-4 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-2" align="start">
+                      <div className="space-y-1 max-h-[300px] overflow-y-auto">
+                        {SWEDISH_COUNTIES.map(county => (
+                          <label
+                            key={county.value}
+                            className="flex items-center space-x-2 p-2 hover:bg-gray-100 rounded cursor-pointer"
+                          >
+                            <Checkbox
+                              checked={selectedCounties.includes(county.value)}
+                              onCheckedChange={() => toggleCounty(county.value)}
+                            />
+                            <span className="text-sm">{county.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                      {selectedCounties.length > 0 && (
+                        <div className="border-t mt-2 pt-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full text-gray-500"
+                            onClick={() => setSelectedCounties([])}
+                          >
+                            <X className="h-4 w-4 mr-2" />
+                            Rensa val
+                          </Button>
+                        </div>
+                      )}
+                    </PopoverContent>
+                  </Popover>
+                  {selectedCounties.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {selectedCounties.map(county => {
+                        const countyInfo = SWEDISH_COUNTIES.find(c => c.value === county)
+                        return (
+                          <span
+                            key={county}
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full"
+                          >
+                            {countyInfo?.label || county}
+                            <button
+                              onClick={() => toggleCounty(county)}
+                              className="hover:text-red-500"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Tag className="h-4 w-4 text-gray-500" />
+                    Prospekt-typ
+                  </Label>
+                  <Select
+                    value={metadata.prospect_type}
+                    onValueChange={(value) => setMetadata({ ...metadata, prospect_type: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Välj typ..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PROSPECT_TYPES.map(type => (
+                        <SelectItem key={type.value || 'empty'} value={type.value || 'none'}>
+                          {type.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-gray-500" />
+                    Dataperiod från
+                  </Label>
+                  <Input
+                    type="date"
+                    value={metadata.data_period_start}
+                    onChange={(e) => setMetadata({ ...metadata, data_period_start: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-gray-500" />
+                    Dataperiod till
+                  </Label>
+                  <Input
+                    type="date"
+                    value={metadata.data_period_end}
+                    onChange={(e) => setMetadata({ ...metadata, data_period_end: e.target.value })}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Mappa kolumner</CardTitle>

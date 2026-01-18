@@ -1,5 +1,6 @@
 export type LeadStatus =
   | 'new'
+  | 'pending_review'
   | 'to_call'
   | 'called'
   | 'interested'
@@ -7,6 +8,8 @@ export type LeadStatus =
   | 'bought'
   | 'not_interested'
   | 'do_not_call'
+  | 'callback'
+  | 'no_answer'
 
 export type CallResult =
   | 'no_answer'
@@ -17,6 +20,8 @@ export type CallResult =
   | 'wrong_number'
   | 'call_back'
 
+export type ProspectType = 'avställda' | 'nyköpt_bil' | 'låg_miltal' | 'alla' | null
+
 export interface Lead {
   id: string
   phone: string | null
@@ -24,6 +29,11 @@ export interface Lead {
   location: string | null
   status: LeadStatus
   source: string | null
+  county: string | null
+  prospect_type: ProspectType
+  data_period_start: string | null
+  data_period_end: string | null
+  extra_data: Record<string, string | number | boolean | null> | null
   created_at: string
   updated_at: string
   last_called_at: string | null
@@ -59,6 +69,19 @@ export interface Vehicle {
   ai_reasoning: string | null
   created_at: string
   updated_at: string
+  // Car.info fields
+  color: string | null
+  skatt: number | null
+  co2_gkm: number | null
+  antal_agare: number | null
+  valuation_company: number | null
+  valuation_private: number | null
+  total_in_sweden: number | null
+  vehicle_history: Array<{ date: string; event: string; details?: string }> | null
+  senaste_avställning: string | null
+  senaste_påställning: string | null
+  första_registrering: string | null
+  carinfo_fetched_at: string | null
 }
 
 export interface CallLog {

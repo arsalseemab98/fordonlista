@@ -88,15 +88,15 @@ const STATUS_OPTIONS = [
   { value: 'completed', label: 'Avslutad', color: 'bg-gray-100 text-gray-600' },
 ]
 
-const CALL_RESULTS = [
-  'Inget svar',
-  'Upptaget',
-  'Svarade - Intresserad',
-  'Svarade - Ej intresserad',
-  'Svarade - Ring tillbaka',
-  'Svarade - Bokad visning',
-  'Svarade - Såld',
-  'Fel nummer',
+// Call result options with database values and Swedish labels
+const CALL_RESULT_OPTIONS = [
+  { value: 'no_answer', label: 'Inget svar' },
+  { value: 'busy', label: 'Upptaget' },
+  { value: 'interested', label: 'Intresserad' },
+  { value: 'not_interested', label: 'Ej intresserad' },
+  { value: 'call_back', label: 'Ring tillbaka' },
+  { value: 'booked', label: 'Bokad visning' },
+  { value: 'wrong_number', label: 'Fel nummer' },
 ]
 
 function formatMileage(mileage?: number): string {
@@ -324,9 +324,9 @@ export function LeadDetail({ lead }: LeadDetailProps) {
                       <SelectValue placeholder="Välj resultat..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {CALL_RESULTS.map((result) => (
-                        <SelectItem key={result} value={result}>
-                          {result}
+                      {CALL_RESULT_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
                         </SelectItem>
                       ))}
                     </SelectContent>

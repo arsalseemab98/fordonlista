@@ -23,8 +23,10 @@ interface LeadsFiltersProps {
     minMileage?: string
     maxMileage?: string
     inTraffic?: string
+    completionReason?: string
   }
   makes: string[]
+  showCompletionReasonFilter?: boolean
 }
 
 const STATUS_OPTIONS = [
@@ -45,7 +47,18 @@ const TRAFFIC_OPTIONS = [
   { value: 'false', label: 'Avställda' },
 ]
 
-export function LeadsFilters({ currentFilters, makes }: LeadsFiltersProps) {
+const COMPLETION_REASON_OPTIONS = [
+  { value: 'all', label: 'Alla anledningar' },
+  { value: 'sold_to_us', label: '✅ Vi köpte' },
+  { value: 'sold_to_others', label: '🚗 Sålde till annan' },
+  { value: 'not_interested', label: '❌ Ej intresserad' },
+  { value: 'wrong_number', label: '📵 Fel nummer' },
+  { value: 'no_car', label: '🚫 Har ej bil' },
+  { value: 'too_expensive', label: '💰 För dyrt' },
+  { value: 'changed_mind', label: '🔄 Ångrat sig' },
+]
+
+export function LeadsFilters({ currentFilters, makes, showCompletionReasonFilter }: LeadsFiltersProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
@@ -171,6 +184,25 @@ export function LeadsFilters({ currentFilters, makes }: LeadsFiltersProps) {
           </SelectContent>
         </Select>
 
+        {/* Completion reason filter - only shown when viewing completed leads */}
+        {showCompletionReasonFilter && (
+          <Select
+            value={currentFilters.completionReason || 'all'}
+            onValueChange={(value) => updateFilter('completionReason', value)}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Anledning" />
+            </SelectTrigger>
+            <SelectContent>
+              {COMPLETION_REASON_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
         {/* Clear filters */}
         {activeFilterCount > 0 && (
           <Button
@@ -233,6 +265,17 @@ export function LeadsFilters({ currentFilters, makes }: LeadsFiltersProps) {
               {currentFilters.inTraffic === 'true' ? 'I trafik' : 'Avställda'}
               <button
                 onClick={() => updateFilter('inTraffic', null)}
+                className="ml-1 hover:text-red-500"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          {currentFilters.completionReason && currentFilters.completionReason !== 'all' && (
+            <Badge variant="secondary" className="gap-1">
+              Anledning: {COMPLETION_REASON_OPTIONS.find(o => o.value === currentFilters.completionReason)?.label.replace(/^[^\s]+\s/, '')}
+              <button
+                onClick={() => updateFilter('completionReason', null)}
                 className="ml-1 hover:text-red-500"
               >
                 <X className="h-3 w-3" />

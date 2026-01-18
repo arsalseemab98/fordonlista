@@ -189,6 +189,7 @@ export async function saveDataImport(data: {
   filter_type?: string
   record_count?: number
   notes?: string
+  county?: string
 }) {
   const supabase = await createClient()
 
@@ -200,7 +201,8 @@ export async function saveDataImport(data: {
       date_range_end: data.date_range_end || null,
       filter_type: data.filter_type,
       record_count: data.record_count || 0,
-      notes: data.notes
+      notes: data.notes,
+      county: data.county || 'alla'
     })
 
   if (error) {
@@ -258,4 +260,68 @@ export async function getLetterCost() {
     .single()
 
   return data?.letter_cost || 12.00
+}
+
+// API Token management for car.info integration
+export async function getCarInfoTokens() {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase
+    .from('api_tokens')
+    .select('*')
+    .eq('service_name', 'car_info')
+    .single()
+
+  if (error) {
+    console.error('Error fetching car.info tokens:', error)
+    return null
+  }
+
+  return data
+}
+
+export async function saveCarInfoTokens(data: {
+  refresh_token: string
+  bearer_token: string
+}) {
+  const supabase = await createClient()
+
+  // Check if tokens exist
+  const { data: existing } = await supabase
+    .from('api_tokens')
+    .select('id')
+    .eq('service_name', 'car_info')
+    .single()
+
+  if (existing) {
+    const { error } = await supabase
+      .from('api_tokens')
+      .update({
+        refresh_token: data.refresh_token,
+        bearer_token: data.bearer_token,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', existing.id)
+
+    if (error) {
+      console.error('Error updating car.info tokens:', error)
+      return { success: false, error: error.message }
+    }
+  } else {
+    const { error } = await supabase
+      .from('api_tokens')
+      .insert({
+        service_name: 'car_info',
+        refresh_token: data.refresh_token,
+        bearer_token: data.bearer_token
+      })
+
+    if (error) {
+      console.error('Error creating car.info tokens:', error)
+      return { success: false, error: error.message }
+    }
+  }
+
+  revalidatePath('/settings')
+  return { success: true }
 }

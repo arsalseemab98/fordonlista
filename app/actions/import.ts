@@ -36,6 +36,7 @@ interface MappedData {
   four_wheel_drive?: boolean | null
   engine_cc?: number | null
   model_series?: string
+  extra_data?: Record<string, string | number | boolean | null>
 }
 
 // Patterns för boolean-extraktion
@@ -65,9 +66,17 @@ export async function parseExcelFile(formData: FormData): Promise<{ success: boo
   }
 }
 
+export interface ImportMetadata {
+  county?: string
+  prospect_type?: string
+  data_period_start?: string
+  data_period_end?: string
+}
+
 export async function importVehicles(
   formData: FormData,
-  mappings: ColumnMapping[]
+  mappings: ColumnMapping[],
+  metadata?: ImportMetadata
 ): Promise<ImportResult> {
   const supabase = await createClient()
   const errors: string[] = []
@@ -98,17 +107,37 @@ export async function importVehicles(
       }
     })
 
-    // Bearbeta varje rad
+    // ============================================
+    // PHASE 1: Parse all data and extract identifiers
+    // ============================================
+    interface ProcessedRow {
+      rowIndex: number
+      mapped: MappedData
+      extraData: Record<string, string | number | boolean | null>
+    }
+
+    const processedRows: ProcessedRow[] = []
+    const allChassisNrs: string[] = []
+    const allRegNrs: string[] = []
+
     for (let i = 0; i < parseResult.rows.length; i++) {
       const row = parseResult.rows[i]
 
       try {
-        // Mappa data
         const mapped: MappedData = {}
+        const extraData: Record<string, string | number | boolean | null> = {}
 
         for (const [excelCol, value] of Object.entries(row)) {
           const field = fieldMap[excelCol]
-          if (!field || value === null || value === undefined) continue
+
+          if (!field) {
+            if (value !== null && value !== undefined && value !== '') {
+              extraData[excelCol] = typeof value === 'object' ? JSON.stringify(value) : value
+            }
+            continue
+          }
+
+          if (value === null || value === undefined) continue
 
           switch (field) {
             case 'reg_nr':
@@ -173,97 +202,198 @@ export async function importVehicles(
           continue
         }
 
-        // Kontrollera duplicat
-        let existingVehicle = null
+        // Collect identifiers for batch lookup
+        if (mapped.chassis_nr) allChassisNrs.push(mapped.chassis_nr)
+        if (mapped.reg_nr) allRegNrs.push(mapped.reg_nr)
 
-        // Prioritera chassinummer för duplikat-detektion
-        if (mapped.chassis_nr) {
-          const { data } = await supabase
-            .from('vehicles')
-            .select('id, lead_id')
-            .eq('chassis_nr', mapped.chassis_nr)
-            .single()
-          existingVehicle = data
-        }
-
-        // Om ingen chassi-match, försök reg.nr
-        if (!existingVehicle && mapped.reg_nr) {
-          const { data } = await supabase
-            .from('vehicles')
-            .select('id, lead_id')
-            .eq('reg_nr', mapped.reg_nr)
-            .single()
-          existingVehicle = data
-        }
-
-        if (existingVehicle) {
-          // Uppdatera befintligt fordon
-          const { error: updateError } = await supabase
-            .from('vehicles')
-            .update({
-              make: mapped.make,
-              model: mapped.model,
-              mileage: mapped.mileage,
-              year: mapped.year,
-              fuel_type: mapped.fuel_type,
-              in_traffic: mapped.in_traffic,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existingVehicle.id)
-
-          if (updateError) {
-            errors.push(`Rad ${i + 2}: Kunde inte uppdatera fordon - ${updateError.message}`)
-          } else {
-            updatedVehicles++
-            duplicateVehicles++
-          }
-          continue
-        }
-
-        // Skapa ny lead
-        const location = extractLocation(mapped.owner_info || null)
-
-        const { data: lead, error: leadError } = await supabase
-          .from('leads')
-          .insert({
-            owner_info: mapped.owner_info,
-            location: location,
-            status: 'new',
-            source: 'excel_import'
-          })
-          .select('id')
-          .single()
-
-        if (leadError || !lead) {
-          errors.push(`Rad ${i + 2}: Kunde inte skapa lead - ${leadError?.message}`)
-          continue
-        }
-
-        newLeads++
-
-        // Skapa fordon kopplat till lead
-        const { error: vehicleError } = await supabase
-          .from('vehicles')
-          .insert({
-            lead_id: lead.id,
-            reg_nr: mapped.reg_nr,
-            chassis_nr: mapped.chassis_nr,
-            make: mapped.make,
-            model: mapped.model,
-            mileage: mapped.mileage,
-            year: mapped.year,
-            fuel_type: mapped.fuel_type,
-            in_traffic: mapped.in_traffic
-          })
-
-        if (vehicleError) {
-          errors.push(`Rad ${i + 2}: Kunde inte skapa fordon - ${vehicleError.message}`)
-        } else {
-          newVehicles++
-        }
-
+        processedRows.push({ rowIndex: i, mapped, extraData })
       } catch (rowError) {
         errors.push(`Rad ${i + 2}: ${rowError instanceof Error ? rowError.message : 'Okänt fel'}`)
+      }
+    }
+
+    // ============================================
+    // PHASE 2: Batch fetch existing vehicles
+    // ============================================
+    const existingByChassisNr = new Map<string, { id: string; lead_id: string }>()
+    const existingByRegNr = new Map<string, { id: string; lead_id: string }>()
+
+    // Batch query for existing vehicles (single query instead of N queries)
+    if (allChassisNrs.length > 0 || allRegNrs.length > 0) {
+      const { data: existingVehicles } = await supabase
+        .from('vehicles')
+        .select('id, lead_id, chassis_nr, reg_nr')
+        .or(`chassis_nr.in.(${allChassisNrs.map(c => `"${c}"`).join(',')}),reg_nr.in.(${allRegNrs.map(r => `"${r}"`).join(',')})`)
+
+      if (existingVehicles) {
+        for (const v of existingVehicles) {
+          if (v.chassis_nr) existingByChassisNr.set(v.chassis_nr, { id: v.id, lead_id: v.lead_id })
+          if (v.reg_nr) existingByRegNr.set(v.reg_nr, { id: v.id, lead_id: v.lead_id })
+        }
+      }
+    }
+
+    // ============================================
+    // PHASE 3: Separate into updates and inserts
+    // Also detect duplicates WITHIN the import file
+    // ============================================
+    interface UpdateItem {
+      vehicleId: string
+      mapped: MappedData
+    }
+
+    interface InsertItem {
+      rowIndex: number
+      mapped: MappedData
+      extraData: Record<string, string | number | boolean | null>
+    }
+
+    const vehiclesToUpdate: UpdateItem[] = []
+    const rowsToInsert: InsertItem[] = []
+
+    // Track identifiers we've already seen in THIS import to avoid duplicates within the file
+    const seenChassisNrsInImport = new Set<string>()
+    const seenRegNrsInImport = new Set<string>()
+    let skippedInternalDuplicates = 0
+
+    for (const row of processedRows) {
+      // Check for existing vehicle in DB (prioritize chassis_nr)
+      let existingVehicle = null
+      if (row.mapped.chassis_nr) {
+        existingVehicle = existingByChassisNr.get(row.mapped.chassis_nr)
+      }
+      if (!existingVehicle && row.mapped.reg_nr) {
+        existingVehicle = existingByRegNr.get(row.mapped.reg_nr)
+      }
+
+      if (existingVehicle) {
+        vehiclesToUpdate.push({ vehicleId: existingVehicle.id, mapped: row.mapped })
+        duplicateVehicles++
+      } else {
+        // Check if we've already seen this identifier in THIS import file
+        const chassisDuplicate = row.mapped.chassis_nr && seenChassisNrsInImport.has(row.mapped.chassis_nr)
+        const regDuplicate = row.mapped.reg_nr && seenRegNrsInImport.has(row.mapped.reg_nr)
+
+        if (chassisDuplicate || regDuplicate) {
+          // Skip this row - it's a duplicate within the import file
+          skippedInternalDuplicates++
+          duplicateVehicles++
+          continue
+        }
+
+        // Mark these identifiers as seen
+        if (row.mapped.chassis_nr) seenChassisNrsInImport.add(row.mapped.chassis_nr)
+        if (row.mapped.reg_nr) seenRegNrsInImport.add(row.mapped.reg_nr)
+
+        rowsToInsert.push(row)
+      }
+    }
+
+    // ============================================
+    // PHASE 4: Batch update existing vehicles
+    // ============================================
+    if (vehiclesToUpdate.length > 0) {
+      // Update in parallel batches of 50
+      const BATCH_SIZE = 50
+      for (let i = 0; i < vehiclesToUpdate.length; i += BATCH_SIZE) {
+        const batch = vehiclesToUpdate.slice(i, i + BATCH_SIZE)
+        await Promise.all(
+          batch.map(async (item) => {
+            const { error } = await supabase
+              .from('vehicles')
+              .update({
+                make: item.mapped.make,
+                model: item.mapped.model,
+                mileage: item.mapped.mileage,
+                year: item.mapped.year,
+                fuel_type: item.mapped.fuel_type,
+                in_traffic: item.mapped.in_traffic,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', item.vehicleId)
+
+            if (!error) updatedVehicles++
+          })
+        )
+      }
+    }
+
+    // ============================================
+    // PHASE 5: Batch insert new leads (chunked for large imports)
+    // ============================================
+    const INSERT_CHUNK_SIZE = 500 // Supabase works best with smaller batches
+
+    if (rowsToInsert.length > 0) {
+      const allInsertedLeads: { id: string }[] = []
+
+      // Process leads in chunks
+      for (let i = 0; i < rowsToInsert.length; i += INSERT_CHUNK_SIZE) {
+        const chunk = rowsToInsert.slice(i, i + INSERT_CHUNK_SIZE)
+
+        const leadsToInsert = chunk.map(row => {
+          const location = extractLocation(row.mapped.owner_info || null)
+          const hasExtraData = Object.keys(row.extraData).length > 0
+          return {
+            owner_info: row.mapped.owner_info,
+            location: location,
+            status: 'pending_review',
+            source: 'excel_import',
+            county: metadata?.county || null,
+            prospect_type: metadata?.prospect_type || null,
+            data_period_start: metadata?.data_period_start || null,
+            data_period_end: metadata?.data_period_end || null,
+            extra_data: hasExtraData ? row.extraData : null
+          }
+        })
+
+        const { data: insertedLeads, error: leadsError } = await supabase
+          .from('leads')
+          .insert(leadsToInsert)
+          .select('id')
+
+        if (leadsError || !insertedLeads) {
+          errors.push(`Kunde inte skapa leads (chunk ${Math.floor(i / INSERT_CHUNK_SIZE) + 1}): ${leadsError?.message}`)
+        } else {
+          allInsertedLeads.push(...insertedLeads)
+        }
+      }
+
+      newLeads = allInsertedLeads.length
+
+      // ============================================
+      // PHASE 6: Batch insert new vehicles (chunked)
+      // ============================================
+      if (allInsertedLeads.length > 0) {
+        for (let i = 0; i < allInsertedLeads.length; i += INSERT_CHUNK_SIZE) {
+          const leadChunk = allInsertedLeads.slice(i, i + INSERT_CHUNK_SIZE)
+          const rowChunk = rowsToInsert.slice(i, i + INSERT_CHUNK_SIZE)
+
+          const vehiclesToInsert = leadChunk.map((lead, index) => {
+            const row = rowChunk[index]
+            return {
+              lead_id: lead.id,
+              reg_nr: row.mapped.reg_nr,
+              chassis_nr: row.mapped.chassis_nr,
+              make: row.mapped.make,
+              model: row.mapped.model,
+              mileage: row.mapped.mileage,
+              year: row.mapped.year,
+              fuel_type: row.mapped.fuel_type,
+              in_traffic: row.mapped.in_traffic
+            }
+          })
+
+          const { data: insertedVehicles, error: vehiclesError } = await supabase
+            .from('vehicles')
+            .insert(vehiclesToInsert)
+            .select('id')
+
+          if (vehiclesError) {
+            errors.push(`Kunde inte skapa fordon (chunk ${Math.floor(i / INSERT_CHUNK_SIZE) + 1}): ${vehiclesError.message}`)
+          } else {
+            newVehicles += insertedVehicles?.length || 0
+          }
+        }
       }
     }
 
@@ -282,6 +412,7 @@ export async function importVehicles(
     revalidatePath('/')
     revalidatePath('/leads')
     revalidatePath('/vehicles')
+    revalidatePath('/playground')
 
     return {
       success: true,
