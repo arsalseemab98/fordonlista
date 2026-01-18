@@ -24,13 +24,64 @@ export interface CarInfoData {
   total_in_sweden?: number
   senaste_avställning?: string
   senaste_påställning?: string
+  senaste_agarbyte?: string
   första_registrering?: string
   besiktning_till?: string
   vehicle_history?: Array<{ date: string; event: string; details?: string }>
+  antal_foretagsannonser?: number
+  antal_privatannonser?: number
+  // Debug info from fetch-carinfo.ts
+  _debug_agarbyte?: {
+    histitem_count: number
+    latestAgarbyte_from_loop: string | null
+    fallback_ran: boolean
+    fallback_found: string | null
+    events_with_garbyte: Array<{ date: string; event: string; eventLower: string }>
+  }
 }
 
 export async function saveCarInfoToVehicle(vehicleId: string, carInfo: CarInfoData) {
   const supabase = await createClient()
+
+  // Log the attempt with sample event texts for debugging
+  const sampleEvents = carInfo.vehicle_history?.slice(0, 10).map(h => {
+    const eventLower = h.event.normalize('NFC').toLowerCase()
+    const checksAgarbyte = eventLower.includes('ägarbyte')
+    const checksGarbyte = h.event.toLowerCase().includes('garbyte')
+    return {
+      date: h.date,
+      event: h.event,
+      eventLower,
+      eventHex: Buffer.from(h.event).toString('hex'),
+      checksAgarbyte,
+      checksGarbyte,
+      wouldMatch: checksAgarbyte || checksGarbyte
+    }
+  }) || []
+
+  // Also check for any event that contains "garbyte" in the full history
+  const agarbyteMatches = carInfo.vehicle_history?.filter(h => {
+    const eventLower = h.event.normalize('NFC').toLowerCase()
+    return eventLower.includes('ägarbyte') ||
+           eventLower.includes('garbyte') ||
+           h.event.toLowerCase().includes('garbyte')
+  }).map(h => ({ date: h.date, event: h.event })) || []
+
+  await supabase.from('activity_logs').insert({
+    action: 'carinfo_save_attempt',
+    entity_type: 'vehicle',
+    entity_id: vehicleId,
+    entity_ref: carInfo.reg_number,
+    details: {
+      has_agarbyte: !!carInfo.senaste_agarbyte,
+      senaste_agarbyte: carInfo.senaste_agarbyte,
+      history_count: carInfo.vehicle_history?.length || 0,
+      sample_events: sampleEvents,
+      agarbyte_matches: agarbyteMatches,
+      // Debug info from fetch-carinfo.ts parsing
+      fetch_debug: carInfo._debug_agarbyte
+    }
+  })
 
   const updateData: Record<string, unknown> = {
     carinfo_fetched_at: new Date().toISOString(),
@@ -53,6 +104,8 @@ export async function saveCarInfoToVehicle(vehicleId: string, carInfo: CarInfoDa
   if (carInfo.valuation_private) updateData.valuation_private = carInfo.valuation_private
   if (carInfo.total_in_sweden) updateData.total_in_sweden = carInfo.total_in_sweden
   if (carInfo.vehicle_history) updateData.vehicle_history = carInfo.vehicle_history
+  if (carInfo.antal_foretagsannonser) updateData.antal_foretagsannonser = carInfo.antal_foretagsannonser
+  if (carInfo.antal_privatannonser) updateData.antal_privatannonser = carInfo.antal_privatannonser
 
   // Handle dates
   if (carInfo.senaste_avställning) {
@@ -60,6 +113,9 @@ export async function saveCarInfoToVehicle(vehicleId: string, carInfo: CarInfoDa
   }
   if (carInfo.senaste_påställning) {
     updateData.senaste_påställning = carInfo.senaste_påställning
+  }
+  if (carInfo.senaste_agarbyte) {
+    updateData.senaste_agarbyte = carInfo.senaste_agarbyte
   }
   if (carInfo.första_registrering) {
     updateData.första_registrering = carInfo.första_registrering
@@ -80,8 +136,27 @@ export async function saveCarInfoToVehicle(vehicleId: string, carInfo: CarInfoDa
 
   if (error) {
     console.error('Error saving car.info to vehicle:', error)
+    await supabase.from('activity_logs').insert({
+      action: 'carinfo_save_error',
+      entity_type: 'vehicle',
+      entity_id: vehicleId,
+      entity_ref: carInfo.reg_number,
+      details: { error: error.message }
+    })
     return { success: false, error: error.message }
   }
+
+  // Log success
+  await supabase.from('activity_logs').insert({
+    action: 'carinfo_save_success',
+    entity_type: 'vehicle',
+    entity_id: vehicleId,
+    entity_ref: carInfo.reg_number,
+    details: {
+      senaste_agarbyte: carInfo.senaste_agarbyte,
+      fields_saved: Object.keys(updateData).length
+    }
+  })
 
   revalidatePath('/playground')
   revalidatePath('/leads')
@@ -304,8 +379,11 @@ export async function bulkResetCarInfo(vehicleIds: string[]) {
     vehicle_history: null,
     senaste_avställning: null,
     senaste_påställning: null,
+    senaste_agarbyte: null,
     första_registrering: null,
     besiktning_till: null,
+    antal_foretagsannonser: null,
+    antal_privatannonser: null,
     in_traffic: null,
     updated_at: new Date().toISOString()
   }
@@ -325,4 +403,68 @@ export async function bulkResetCarInfo(vehicleIds: string[]) {
   revalidatePath('/vehicles')
 
   return { success: true, resetCount: count || vehicleIds.length }
+}
+
+// Manually add a vehicle with registration number
+export async function addManualVehicle(data: {
+  reg_nr: string
+  make?: string
+  model?: string
+  year?: number
+  mileage?: number
+  owner_info?: string
+  county?: string
+  prospect_type?: string
+}) {
+  const supabase = await createClient()
+
+  // Clean registration number
+  const cleanRegNr = data.reg_nr.toUpperCase().replace(/\s/g, '')
+
+  if (!cleanRegNr || cleanRegNr.length < 2) {
+    return { success: false, error: 'Ogiltigt registreringsnummer' }
+  }
+
+  // Create lead first
+  const { data: lead, error: leadError } = await supabase
+    .from('leads')
+    .insert({
+      owner_info: data.owner_info || null,
+      status: 'pending_review',
+      source: 'manual_entry',
+      county: data.county || null,
+      prospect_type: data.prospect_type || null
+    })
+    .select('id')
+    .single()
+
+  if (leadError || !lead) {
+    console.error('Error creating manual lead:', leadError)
+    return { success: false, error: leadError?.message || 'Kunde inte skapa lead' }
+  }
+
+  // Create vehicle
+  const { error: vehicleError } = await supabase
+    .from('vehicles')
+    .insert({
+      lead_id: lead.id,
+      reg_nr: cleanRegNr,
+      make: data.make || null,
+      model: data.model || null,
+      year: data.year || null,
+      mileage: data.mileage || null
+    })
+
+  if (vehicleError) {
+    console.error('Error creating manual vehicle:', vehicleError)
+    // Try to clean up the lead
+    await supabase.from('leads').delete().eq('id', lead.id)
+    return { success: false, error: vehicleError.message }
+  }
+
+  revalidatePath('/playground')
+  revalidatePath('/leads')
+  revalidatePath('/vehicles')
+
+  return { success: true, leadId: lead.id }
 }
