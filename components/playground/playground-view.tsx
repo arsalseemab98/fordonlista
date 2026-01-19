@@ -74,7 +74,7 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { bulkUpdateLeadsMetadata, addCallLog, markLeadForLetter, removeLeadFromLetterList, updateLeadProspectType, deleteExtraDataColumn, bulkDeleteLeads, checkLeadsHistory, HistoryCheckResult } from '@/app/actions/leads'
-import { saveCarInfoToVehicle, activateLead, bulkActivateLeads, bulkResetCarInfo, CarInfoData } from '@/app/actions/vehicles'
+import { saveCarInfoToVehicle, activateLead, bulkActivateLeads, bulkResetCarInfo, addManualVehicle, CarInfoData } from '@/app/actions/vehicles'
 import {
   Tooltip,
   TooltipContent,
@@ -150,6 +150,9 @@ interface Vehicle {
   besiktning_till?: string | null
   senaste_avställning?: string | null
   senaste_påställning?: string | null
+  senaste_agarbyte?: string | null
+  antal_foretagsannonser?: number | null
+  antal_privatannonser?: number | null
 }
 
 interface CallLog {
@@ -183,6 +186,17 @@ interface CurrentFilters {
   search?: string
 }
 
+interface ActivePreferences {
+  preferredMakes: string[]
+  excludedMakes: string[]
+  preferredModels: string[]
+  excludedModels: string[]
+  minMileage: number
+  maxMileage: number
+  minYear: number
+  maxYear: number
+}
+
 interface PlaygroundViewProps {
   leads: Lead[]
   totalCount: number
@@ -193,6 +207,7 @@ interface PlaygroundViewProps {
   availableProspectTypes: string[]
   availableExtraColumns: string[]
   currentFilters: CurrentFilters
+  activePreferences?: ActivePreferences
 }
 
 const SWEDISH_COUNTIES = [
@@ -264,7 +279,8 @@ export function PlaygroundView({
   availableCounties,
   availableProspectTypes,
   availableExtraColumns,
-  currentFilters
+  currentFilters,
+  activePreferences
 }: PlaygroundViewProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -350,6 +366,16 @@ export function PlaygroundView({
   const [historyMatchChassis, setHistoryMatchChassis] = useState(true)
   const [historyMatchName, setHistoryMatchName] = useState(false)
   const [historyMatchPhone, setHistoryMatchPhone] = useState(false)
+
+  // Manual entry state
+  const [manualEntryDialogOpen, setManualEntryDialogOpen] = useState(false)
+  const [isAddingManual, setIsAddingManual] = useState(false)
+  const [manualRegNr, setManualRegNr] = useState('')
+  const [manualMake, setManualMake] = useState('')
+  const [manualModel, setManualModel] = useState('')
+  const [manualYear, setManualYear] = useState('')
+  const [manualMileage, setManualMileage] = useState('')
+  const [manualOwnerInfo, setManualOwnerInfo] = useState('')
 
   // Smart county ordering - most used first
   const sortedCounties = useMemo(() => {
@@ -1217,9 +1243,61 @@ export function PlaygroundView({
     }
   }, [historyCheckResult, clearSelection, router])
 
+  // Handle manual vehicle entry
+  const handleAddManualVehicle = useCallback(async () => {
+    if (!manualRegNr.trim()) {
+      toast.error('Ange registreringsnummer')
+      return
+    }
+
+    setIsAddingManual(true)
+
+    try {
+      const result = await addManualVehicle({
+        reg_nr: manualRegNr.trim(),
+        make: manualMake.trim() || undefined,
+        model: manualModel.trim() || undefined,
+        year: manualYear ? parseInt(manualYear) : undefined,
+        mileage: manualMileage ? parseInt(manualMileage) : undefined,
+        owner_info: manualOwnerInfo.trim() || undefined,
+      })
+
+      if (result.success) {
+        toast.success('Fordon tillagt!')
+        setManualEntryDialogOpen(false)
+        // Reset form
+        setManualRegNr('')
+        setManualMake('')
+        setManualModel('')
+        setManualYear('')
+        setManualMileage('')
+        setManualOwnerInfo('')
+        router.refresh()
+      } else {
+        toast.error(result.error || 'Kunde inte lägga till fordon')
+      }
+    } catch (error) {
+      console.error('Add manual vehicle error:', error)
+      toast.error('Något gick fel')
+    } finally {
+      setIsAddingManual(false)
+    }
+  }, [manualRegNr, manualMake, manualModel, manualYear, manualMileage, manualOwnerInfo, router])
+
   const activeFilterCount = Object.entries(currentFilters).filter(
     ([_, value]) => value && value !== 'all'
   ).length
+
+  // Check if there are active preference filters
+  const hasPreferenceFilters =
+    (activePreferences?.preferredMakes?.length ?? 0) > 0 ||
+    (activePreferences?.excludedMakes?.length ?? 0) > 0 ||
+    (activePreferences?.preferredModels?.length ?? 0) > 0 ||
+    (activePreferences?.excludedModels?.length ?? 0) > 0 ||
+    (activePreferences?.minMileage ?? 0) > 0 ||
+    (activePreferences?.maxMileage ?? 999999) < 999999 ||
+    (activePreferences?.minYear ?? 0) > 0 ||
+    (activePreferences?.maxYear ?? new Date().getFullYear()) < new Date().getFullYear()
 
   // Get display labels for filter values
   const getCountyLabel = (value?: string) => {
@@ -1596,6 +1674,16 @@ export function PlaygroundView({
             </Button>
           </div>
 
+          {/* Add Manual Vehicle Button */}
+          <Button
+            onClick={() => setManualEntryDialogOpen(true)}
+            variant="outline"
+            className="border-green-300 bg-green-50 text-green-700 hover:bg-green-100"
+          >
+            <Car className="h-4 w-4 mr-2" />
+            Lägg till fordon
+          </Button>
+
           {/* County filter with multi-select */}
           <Popover>
             <PopoverTrigger asChild>
@@ -1774,7 +1862,7 @@ export function PlaygroundView({
         </div>
 
         {/* Active filters badges */}
-        {activeFilterCount > 0 && (
+        {(activeFilterCount > 0 || hasPreferenceFilters) && (
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm text-gray-500 flex items-center gap-1.5">
               <Filter className="h-4 w-4" />
@@ -1836,6 +1924,75 @@ export function PlaygroundView({
                 >
                   <X className="h-3 w-3" />
                 </button>
+              </Badge>
+            )}
+            {/* Preference-based filters (from settings) */}
+            {activePreferences?.preferredMakes && activePreferences.preferredMakes.length > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="outline" className="gap-1 border-green-300 bg-green-50 text-green-700">
+                    <Settings2 className="h-3 w-3" />
+                    Föredragna: {activePreferences.preferredMakes.length} märken
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="font-medium mb-1">Föredragna märken (från inställningar):</p>
+                  <p>{activePreferences.preferredMakes.join(', ')}</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {activePreferences?.excludedMakes && activePreferences.excludedMakes.length > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="outline" className="gap-1 border-red-300 bg-red-50 text-red-700">
+                    <Settings2 className="h-3 w-3" />
+                    Exkluderade: {activePreferences.excludedMakes.length} märken
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="font-medium mb-1">Exkluderade märken (från inställningar):</p>
+                  <p>{activePreferences.excludedMakes.join(', ')}</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {activePreferences?.preferredModels && activePreferences.preferredModels.length > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="outline" className="gap-1 border-green-300 bg-green-50 text-green-700">
+                    <Settings2 className="h-3 w-3" />
+                    Föredragna: {activePreferences.preferredModels.length} modeller
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="font-medium mb-1">Föredragna modeller (från inställningar):</p>
+                  <p>{activePreferences.preferredModels.join(', ')}</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {activePreferences?.excludedModels && activePreferences.excludedModels.length > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="outline" className="gap-1 border-red-300 bg-red-50 text-red-700">
+                    <Settings2 className="h-3 w-3" />
+                    Exkluderade: {activePreferences.excludedModels.length} modeller
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="font-medium mb-1">Exkluderade modeller (från inställningar):</p>
+                  <p>{activePreferences.excludedModels.join(', ')}</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {((activePreferences?.minMileage ?? 0) > 0 || (activePreferences?.maxMileage ?? 999999) < 999999) && (
+              <Badge variant="outline" className="gap-1 border-blue-300 bg-blue-50 text-blue-700">
+                <Settings2 className="h-3 w-3" />
+                Miltal: {activePreferences?.minMileage?.toLocaleString() || 0} - {activePreferences?.maxMileage?.toLocaleString() || '∞'} km
+              </Badge>
+            )}
+            {((activePreferences?.minYear ?? 0) > 0 || (activePreferences?.maxYear ?? new Date().getFullYear()) < new Date().getFullYear()) && (
+              <Badge variant="outline" className="gap-1 border-blue-300 bg-blue-50 text-blue-700">
+                <Settings2 className="h-3 w-3" />
+                Årsmodell: {activePreferences?.minYear || 'alla'} - {activePreferences?.maxYear || new Date().getFullYear()}
               </Badge>
             )}
           </div>
@@ -1990,6 +2147,7 @@ export function PlaygroundView({
               <p className="text-sm mt-1">Prova att ändra dina filter</p>
             </div>
           ) : (
+            <TooltipProvider delayDuration={200}>
             <Table>
               <TableHeader>
                 <TableRow className="bg-gray-50">
@@ -2014,13 +2172,66 @@ export function PlaygroundView({
                   <TableHead className="w-[150px]">Prospekt-typ</TableHead>
                   <TableHead className="w-[130px]">Status</TableHead>
                   {/* Car.info columns */}
-                  <TableHead className="w-[80px] text-center">Ägare</TableHead>
-                  <TableHead className="w-[120px] text-right">Värdering F</TableHead>
-                  <TableHead className="w-[120px] text-right">Värdering P</TableHead>
-                  <TableHead className="w-[90px] text-center">Besiktning</TableHead>
-                  <TableHead className="w-[110px]">Avställd</TableHead>
-                  <TableHead className="w-[110px]">Påställd</TableHead>
-                  <TableHead className="w-[90px] text-center">Trafik</TableHead>
+                  <TableHead className="w-[80px] text-center">
+                    <Tooltip>
+                      <TooltipTrigger className="cursor-help underline decoration-dotted">Ägare</TooltipTrigger>
+                      <TooltipContent>Antal tidigare ägare</TooltipContent>
+                    </Tooltip>
+                  </TableHead>
+                  <TableHead className="w-[120px] text-right">
+                    <Tooltip>
+                      <TooltipTrigger className="cursor-help underline decoration-dotted">Värdering F</TooltipTrigger>
+                      <TooltipContent>Värdering för företag (inköpspris)</TooltipContent>
+                    </Tooltip>
+                  </TableHead>
+                  <TableHead className="w-[120px] text-right">
+                    <Tooltip>
+                      <TooltipTrigger className="cursor-help underline decoration-dotted">Värdering P</TooltipTrigger>
+                      <TooltipContent>Värdering för privatperson</TooltipContent>
+                    </Tooltip>
+                  </TableHead>
+                  <TableHead className="w-[90px] text-center">
+                    <Tooltip>
+                      <TooltipTrigger className="cursor-help underline decoration-dotted">Besiktning</TooltipTrigger>
+                      <TooltipContent>Besiktas senast (deadline)</TooltipContent>
+                    </Tooltip>
+                  </TableHead>
+                  <TableHead className="w-[110px]">
+                    <Tooltip>
+                      <TooltipTrigger className="cursor-help underline decoration-dotted">Avställd</TooltipTrigger>
+                      <TooltipContent>Senaste avställningsdatum</TooltipContent>
+                    </Tooltip>
+                  </TableHead>
+                  <TableHead className="w-[110px]">
+                    <Tooltip>
+                      <TooltipTrigger className="cursor-help underline decoration-dotted">Påställd</TooltipTrigger>
+                      <TooltipContent>Senaste påställningsdatum</TooltipContent>
+                    </Tooltip>
+                  </TableHead>
+                  <TableHead className="w-[110px]">
+                    <Tooltip>
+                      <TooltipTrigger className="cursor-help underline decoration-dotted">Ägarbyte</TooltipTrigger>
+                      <TooltipContent>Senaste ägarbytesdatum</TooltipContent>
+                    </Tooltip>
+                  </TableHead>
+                  <TableHead className="w-[80px] text-center">
+                    <Tooltip>
+                      <TooltipTrigger className="cursor-help underline decoration-dotted">Företag</TooltipTrigger>
+                      <TooltipContent>Antal företagsannonser i historik</TooltipContent>
+                    </Tooltip>
+                  </TableHead>
+                  <TableHead className="w-[80px] text-center">
+                    <Tooltip>
+                      <TooltipTrigger className="cursor-help underline decoration-dotted">Privat</TooltipTrigger>
+                      <TooltipContent>Antal privatannonser i historik</TooltipContent>
+                    </Tooltip>
+                  </TableHead>
+                  <TableHead className="w-[90px] text-center">
+                    <Tooltip>
+                      <TooltipTrigger className="cursor-help underline decoration-dotted">Trafik</TooltipTrigger>
+                      <TooltipContent>I trafik eller avställd</TooltipContent>
+                    </Tooltip>
+                  </TableHead>
                   {/* Extra columns from import */}
                   {availableExtraColumns.filter(col => visibleExtraColumns.has(col)).map((column) => (
                     <TableHead key={column} className="w-[120px]">
@@ -2266,6 +2477,28 @@ export function PlaygroundView({
                         )}
                       </TableCell>
 
+                      <TableCell>
+                        {primaryVehicle?.senaste_agarbyte ? (
+                          <span className="text-sm text-gray-600">
+                            {primaryVehicle.senaste_agarbyte}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-sm">-</span>
+                        )}
+                      </TableCell>
+
+                      <TableCell className="text-center">
+                        <span className="text-sm text-gray-600">
+                          {primaryVehicle?.antal_foretagsannonser ?? 0}
+                        </span>
+                      </TableCell>
+
+                      <TableCell className="text-center">
+                        <span className="text-sm text-gray-600">
+                          {primaryVehicle?.antal_privatannonser ?? 0}
+                        </span>
+                      </TableCell>
+
                       <TableCell className="text-center">
                         {primaryVehicle?.in_traffic === true ? (
                           <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
@@ -2457,6 +2690,7 @@ export function PlaygroundView({
                 })}
               </TableBody>
             </Table>
+            </TooltipProvider>
           )}
         </CardContent>
       </Card>
@@ -2797,6 +3031,129 @@ export function PlaygroundView({
                 )}
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manual Entry Dialog */}
+      <Dialog open={manualEntryDialogOpen} onOpenChange={(open) => {
+        setManualEntryDialogOpen(open)
+        if (!open) {
+          // Reset form when closing
+          setManualRegNr('')
+          setManualMake('')
+          setManualModel('')
+          setManualYear('')
+          setManualMileage('')
+          setManualOwnerInfo('')
+        }
+      }}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Car className="h-5 w-5 text-green-600" />
+              Lägg till fordon manuellt
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {/* Registration Number - Required */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1">
+                Registreringsnummer <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                placeholder="ABC123"
+                value={manualRegNr}
+                onChange={(e) => setManualRegNr(e.target.value.toUpperCase())}
+                className="uppercase"
+              />
+            </div>
+
+            {/* Make and Model - Optional */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Märke</Label>
+                <Input
+                  placeholder="Volvo"
+                  value={manualMake}
+                  onChange={(e) => setManualMake(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Modell</Label>
+                <Input
+                  placeholder="V70"
+                  value={manualModel}
+                  onChange={(e) => setManualModel(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Year and Mileage - Optional */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>År</Label>
+                <Input
+                  type="number"
+                  placeholder="2020"
+                  value={manualYear}
+                  onChange={(e) => setManualYear(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Miltal (km)</Label>
+                <Input
+                  type="number"
+                  placeholder="50000"
+                  value={manualMileage}
+                  onChange={(e) => setManualMileage(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Owner Info - Optional */}
+            <div className="space-y-2">
+              <Label>Ägare (valfritt)</Label>
+              <Input
+                placeholder="Namn på ägaren"
+                value={manualOwnerInfo}
+                onChange={(e) => setManualOwnerInfo(e.target.value)}
+              />
+            </div>
+
+            <div className="bg-gray-50 border rounded-lg p-3">
+              <p className="text-sm text-gray-600">
+                Fordonet kommer att läggas till som en ny lead med status &quot;Pending Review&quot;.
+                Du kan hämta mer data med car.info efter att fordonet lagts till.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setManualEntryDialogOpen(false)}
+            >
+              Avbryt
+            </Button>
+            <Button
+              onClick={handleAddManualVehicle}
+              disabled={isAddingManual || !manualRegNr.trim()}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {isAddingManual ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Lägger till...
+                </>
+              ) : (
+                <>
+                  <Check className="h-4 w-4 mr-2" />
+                  Lägg till
+                </>
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

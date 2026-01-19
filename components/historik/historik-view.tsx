@@ -77,6 +77,18 @@ interface Vehicle {
   model?: string
   year?: number
   mileage?: number
+  in_traffic?: boolean
+  is_interesting?: boolean
+  ai_score?: number
+  carinfo_fetched_at?: string
+  antal_agare?: number
+  valuation_company?: number
+  valuation_private?: number
+  besiktning_till?: string
+  senaste_avställning?: string
+  senaste_påställning?: string
+  antal_foretagsannonser?: number
+  antal_privatannonser?: number
 }
 
 interface CallLog {
@@ -96,6 +108,7 @@ interface Lead {
   county?: string
   prospect_type?: string
   letter_sent?: boolean | null
+  extra_data?: Record<string, unknown>
   created_at: string
   vehicles: Vehicle[]
   call_logs: CallLog[]
@@ -113,6 +126,7 @@ interface HistorikViewProps {
   currentLimit: string
   availableCounties: string[]
   currentCounty?: string
+  availableExtraColumns?: string[]
 }
 
 const ROW_LIMITS = [
@@ -133,6 +147,20 @@ function formatMileage(mileage?: number): string {
   return `${mileage.toLocaleString('sv-SE')} km`
 }
 
+function formatValuation(value?: number): string {
+  if (!value) return '-'
+  return `${(value / 1000).toFixed(0)}k`
+}
+
+function formatDate(dateStr?: string): string {
+  if (!dateStr) return '-'
+  try {
+    return format(new Date(dateStr), 'yy-MM-dd')
+  } catch {
+    return '-'
+  }
+}
+
 export function HistorikView({
   leads,
   totalCount,
@@ -144,7 +172,8 @@ export function HistorikView({
   currentSearch,
   currentLimit,
   availableCounties,
-  currentCounty
+  currentCounty,
+  availableExtraColumns = []
 }: HistorikViewProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -624,7 +653,7 @@ export function HistorikView({
 
       {/* Table */}
       <Card>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           {leads.length === 0 ? (
             <div className="text-center py-16 text-gray-500">
               <Car className="h-12 w-12 mx-auto text-gray-300 mb-4" />
@@ -649,20 +678,25 @@ export function HistorikView({
                       aria-label="Välj alla"
                     />
                   </TableHead>
-                  <TableHead className="w-[130px]">Reg.nr</TableHead>
+                  <TableHead className="w-[100px]">Reg.nr</TableHead>
                   <TableHead>Märke / Modell</TableHead>
+                  <TableHead className="w-[60px]">År</TableHead>
+                  <TableHead className="w-[90px]">Miltal</TableHead>
                   <TableHead>Ägare</TableHead>
-                  <TableHead className="w-[120px]">Telefon</TableHead>
-                  <TableHead className="w-[150px]">Aktivitet</TableHead>
-                  <TableHead>Senaste resultat</TableHead>
-                  <TableHead className="w-[150px]">Senaste kontakt</TableHead>
-                  <TableHead className="w-[120px] text-center">Åtgärder</TableHead>
+                  <TableHead className="w-[100px]">Län</TableHead>
+                  <TableHead className="w-[60px] text-center">Ägare</TableHead>
+                  <TableHead className="w-[70px] text-center">Värd. F</TableHead>
+                  <TableHead className="w-[70px] text-center">Värd. P</TableHead>
+                  <TableHead className="w-[80px] text-center">Besikt.</TableHead>
+                  <TableHead className="w-[80px] text-center">Avställd</TableHead>
+                  <TableHead className="w-[50px] text-center">Trafik</TableHead>
+                  <TableHead className="w-[120px]">Aktivitet</TableHead>
+                  <TableHead className="w-[100px] text-center">Åtgärder</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {leads.map((lead) => {
                   const primaryVehicle = lead.vehicles?.[0]
-                  const latestCall = lead.call_logs?.[0]
                   const callCount = lead.call_logs?.length || 0
 
                   return (
@@ -685,25 +719,25 @@ export function HistorikView({
                       {/* Reg.nr */}
                       <TableCell>
                         {primaryVehicle?.reg_nr ? (
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-sm font-medium bg-gray-100 px-2 py-1 rounded">
+                          <div className="flex items-center gap-1">
+                            <span className="font-mono text-xs font-medium bg-gray-100 px-1.5 py-0.5 rounded">
                               {primaryVehicle.reg_nr}
                             </span>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7"
+                              className="h-6 w-6"
                               onClick={() => copyRegNr(primaryVehicle.reg_nr!, primaryVehicle.id)}
                             >
                               {copiedId === primaryVehicle.id ? (
-                                <Check className="h-4 w-4 text-green-500" />
+                                <Check className="h-3 w-3 text-green-500" />
                               ) : (
-                                <Copy className="h-4 w-4 text-gray-400" />
+                                <Copy className="h-3 w-3 text-gray-400" />
                               )}
                             </Button>
                           </div>
                         ) : (
-                          <span className="text-gray-400 text-sm">-</span>
+                          <span className="text-gray-400 text-xs">-</span>
                         )}
                       </TableCell>
 
@@ -714,14 +748,25 @@ export function HistorikView({
                             .filter(Boolean)
                             .join(' ') || '-'}
                         </span>
-                        {primaryVehicle?.year && (
-                          <span className="text-gray-400 ml-2">({primaryVehicle.year})</span>
-                        )}
+                      </TableCell>
+
+                      {/* Year */}
+                      <TableCell>
+                        <span className="text-sm text-gray-600">
+                          {primaryVehicle?.year || '-'}
+                        </span>
+                      </TableCell>
+
+                      {/* Mileage */}
+                      <TableCell>
+                        <span className="text-sm text-gray-600">
+                          {formatMileage(primaryVehicle?.mileage)}
+                        </span>
                       </TableCell>
 
                       {/* Owner */}
                       <TableCell>
-                        <div className="max-w-[180px]">
+                        <div className="max-w-[150px]">
                           <p className="text-sm truncate" title={lead.owner_info || ''}>
                             {lead.owner_info || '-'}
                           </p>
@@ -733,31 +778,75 @@ export function HistorikView({
                         </div>
                       </TableCell>
 
-                      {/* Phone */}
+                      {/* County */}
                       <TableCell>
-                        {lead.phone ? (
-                          <a
-                            href={`tel:${lead.phone}`}
-                            className="text-sm text-blue-600 hover:underline flex items-center gap-1"
-                          >
-                            <Phone className="h-3 w-3" />
-                            {lead.phone}
-                          </a>
+                        <span className="text-sm text-gray-600">
+                          {lead.county || '-'}
+                        </span>
+                      </TableCell>
+
+                      {/* Antal ägare */}
+                      <TableCell className="text-center">
+                        <span className="text-sm text-gray-600">
+                          {primaryVehicle?.antal_agare ?? '-'}
+                        </span>
+                      </TableCell>
+
+                      {/* Värdering Företag */}
+                      <TableCell className="text-center">
+                        <span className="text-sm text-gray-600">
+                          {formatValuation(primaryVehicle?.valuation_company)}
+                        </span>
+                      </TableCell>
+
+                      {/* Värdering Privat */}
+                      <TableCell className="text-center">
+                        <span className="text-sm text-gray-600">
+                          {formatValuation(primaryVehicle?.valuation_private)}
+                        </span>
+                      </TableCell>
+
+                      {/* Besiktning */}
+                      <TableCell className="text-center">
+                        <span className="text-sm text-gray-600">
+                          {formatDate(primaryVehicle?.besiktning_till)}
+                        </span>
+                      </TableCell>
+
+                      {/* Avställd */}
+                      <TableCell className="text-center">
+                        <span className="text-sm text-gray-600">
+                          {formatDate(primaryVehicle?.senaste_avställning)}
+                        </span>
+                      </TableCell>
+
+                      {/* Trafik */}
+                      <TableCell className="text-center">
+                        {primaryVehicle?.in_traffic !== undefined ? (
+                          primaryVehicle.in_traffic ? (
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs">
+                              Ja
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 text-xs">
+                              Nej
+                            </Badge>
+                          )
                         ) : (
-                          <span className="text-gray-400 text-sm">-</span>
+                          <span className="text-gray-400 text-xs">-</span>
                         )}
                       </TableCell>
 
                       {/* Activity indicators */}
                       <TableCell>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
                           {callCount > 0 && (
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger>
                                   <Badge
                                     variant="outline"
-                                    className="gap-1 bg-green-50 text-green-700 border-green-200"
+                                    className="gap-1 bg-green-50 text-green-700 border-green-200 text-xs"
                                   >
                                     <PhoneCall className="h-3 w-3" />
                                     {callCount}x
@@ -775,7 +864,7 @@ export function HistorikView({
                                 <TooltipTrigger>
                                   <Badge
                                     variant="outline"
-                                    className="gap-1 bg-amber-50 text-amber-700 border-amber-200"
+                                    className="gap-1 bg-amber-50 text-amber-700 border-amber-200 text-xs"
                                   >
                                     <Mail className="h-3 w-3" />
                                   </Badge>
@@ -789,52 +878,6 @@ export function HistorikView({
                         </div>
                       </TableCell>
 
-                      {/* Latest result */}
-                      <TableCell>
-                        {latestCall ? (
-                          <div className="space-y-1">
-                            <Badge
-                              variant="outline"
-                              className={cn("text-xs", getResultBadgeColor(latestCall.result))}
-                            >
-                              {latestCall.result}
-                            </Badge>
-                            {latestCall.notes && (
-                              <p className="text-xs text-gray-500 truncate max-w-[150px]" title={latestCall.notes}>
-                                <MessageSquare className="h-3 w-3 inline mr-1" />
-                                {latestCall.notes}
-                              </p>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-gray-400 text-sm">-</span>
-                        )}
-                      </TableCell>
-
-                      {/* Latest contact time */}
-                      <TableCell>
-                        {latestCall ? (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger>
-                                <div className="flex items-center gap-1 text-sm text-gray-600">
-                                  <Clock className="h-3 w-3" />
-                                  {formatDistanceToNow(new Date(latestCall.called_at), {
-                                    addSuffix: true,
-                                    locale: sv
-                                  })}
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                {format(new Date(latestCall.called_at), 'PPP HH:mm', { locale: sv })}
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        ) : (
-                          <span className="text-gray-400 text-sm">-</span>
-                        )}
-                      </TableCell>
-
                       {/* Actions */}
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-1">
@@ -845,7 +888,7 @@ export function HistorikView({
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8"
+                                    className="h-7 w-7"
                                     onClick={() => openDetailDialog(lead)}
                                   >
                                     <MessageSquare className="h-4 w-4 text-gray-500" />

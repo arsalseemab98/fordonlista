@@ -81,6 +81,9 @@ export interface Vehicle {
   senaste_avställning: string | null
   senaste_påställning: string | null
   första_registrering: string | null
+  besiktning_till: string | null
+  antal_foretagsannonser: number | null
+  antal_privatannonser: number | null
   carinfo_fetched_at: string | null
 }
 

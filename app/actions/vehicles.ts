@@ -37,6 +37,7 @@ export interface CarInfoData {
     fallback_ran: boolean
     fallback_found: string | null
     events_with_garbyte: Array<{ date: string; event: string; eventLower: string }>
+    debug_timestamp: number
   }
 }
 

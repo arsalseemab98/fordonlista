@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { PlaygroundView } from '@/components/playground/playground-view'
+import { getPreferences } from '@/app/actions/settings'
 
 // Revalidate every 30 seconds for better performance
 export const revalidate = 30
@@ -24,7 +25,7 @@ export default async function PlaygroundPage({
   const showHidden = params.show_hidden === 'true'
 
   // Run queries in parallel for better performance
-  const [leadsResult, filterOptionsResult] = await Promise.all([
+  const [leadsResult, filterOptionsResult, preferences] = await Promise.all([
     // Main leads query - only select needed columns
     (async () => {
       let query = supabase
@@ -56,7 +57,10 @@ export default async function PlaygroundPage({
             valuation_private,
             besiktning_till,
             "senaste_avställning",
-            "senaste_påställning"
+            "senaste_påställning",
+            senaste_agarbyte,
+            antal_foretagsannonser,
+            antal_privatannonser
           ),
           call_logs (
             id,
@@ -79,7 +83,9 @@ export default async function PlaygroundPage({
     supabase
       .from('leads')
       .select('county, prospect_type')
-      .eq('status', 'pending_review')
+      .eq('status', 'pending_review'),
+    // Get user preferences for filtering
+    getPreferences()
   ])
 
   const leads = leadsResult.data || []
@@ -117,6 +123,78 @@ export default async function PlaygroundPage({
     })
   }
 
+  // Apply preferred/excluded makes filtering from settings
+  const preferredMakes = preferences.preferred_makes || []
+  const excludedMakes = preferences.excluded_makes || []
+  const preferredModels = preferences.preferred_models || []
+  const excludedModels = preferences.excluded_models || []
+  const minMileage = preferences.min_mileage || 0
+  const maxMileage = preferences.max_mileage || 999999
+  const minYear = preferences.min_year || 0
+  const maxYear = preferences.max_year || new Date().getFullYear()
+
+  // Filter by preferred makes (if any are specified)
+  if (preferredMakes.length > 0) {
+    const preferredLower = preferredMakes.map((m: string) => m.toLowerCase())
+    filteredLeads = filteredLeads.filter(lead => {
+      // Lead must have at least one vehicle with a preferred make
+      return lead.vehicles?.some((v: { make?: string }) =>
+        v.make && preferredLower.includes(v.make.toLowerCase())
+      )
+    })
+  }
+
+  // Filter out excluded makes
+  if (excludedMakes.length > 0) {
+    const excludedLower = excludedMakes.map((m: string) => m.toLowerCase())
+    filteredLeads = filteredLeads.filter(lead => {
+      // Lead must NOT have any vehicle with an excluded make
+      return !lead.vehicles?.some((v: { make?: string }) =>
+        v.make && excludedLower.includes(v.make.toLowerCase())
+      )
+    })
+  }
+
+  // Filter by preferred models (if any are specified)
+  if (preferredModels.length > 0) {
+    const preferredLower = preferredModels.map((m: string) => m.toLowerCase())
+    filteredLeads = filteredLeads.filter(lead => {
+      return lead.vehicles?.some((v: { model?: string }) =>
+        v.model && preferredLower.some((pm: string) => v.model!.toLowerCase().includes(pm))
+      )
+    })
+  }
+
+  // Filter out excluded models
+  if (excludedModels.length > 0) {
+    const excludedLower = excludedModels.map((m: string) => m.toLowerCase())
+    filteredLeads = filteredLeads.filter(lead => {
+      return !lead.vehicles?.some((v: { model?: string }) =>
+        v.model && excludedLower.some((em: string) => v.model!.toLowerCase().includes(em))
+      )
+    })
+  }
+
+  // Filter by mileage range
+  if (minMileage > 0 || maxMileage < 999999) {
+    filteredLeads = filteredLeads.filter(lead => {
+      return lead.vehicles?.some((v: { mileage?: number }) => {
+        if (v.mileage === undefined || v.mileage === null) return true // Keep vehicles without mileage data
+        return v.mileage >= minMileage && v.mileage <= maxMileage
+      })
+    })
+  }
+
+  // Filter by year range (min and max year)
+  if (minYear > 0 || maxYear < new Date().getFullYear()) {
+    filteredLeads = filteredLeads.filter(lead => {
+      return lead.vehicles?.some((v: { year?: number }) => {
+        if (v.year === undefined || v.year === null) return true // Keep vehicles without year data
+        return v.year >= minYear && v.year <= maxYear
+      })
+    })
+  }
+
   // Separate leads: hidden = marked for letter (letter_sent === false)
   const hiddenLeads = filteredLeads.filter(lead => lead.letter_sent === false)
   const visibleLeads = filteredLeads.filter(lead => lead.letter_sent !== false)
@@ -147,6 +225,16 @@ export default async function PlaygroundPage({
             dateFrom,
             dateTo,
             search
+          }}
+          activePreferences={{
+            preferredMakes,
+            excludedMakes,
+            preferredModels,
+            excludedModels,
+            minMileage,
+            maxMileage,
+            minYear,
+            maxYear
           }}
         />
       </div>

@@ -83,8 +83,6 @@ export async function importVehicles(
 
   let newLeads = 0
   let newVehicles = 0
-  let duplicateVehicles = 0
-  let updatedVehicles = 0
 
   try {
     const file = formData.get('file') as File
@@ -117,8 +115,6 @@ export async function importVehicles(
     }
 
     const processedRows: ProcessedRow[] = []
-    const allChassisNrs: string[] = []
-    const allRegNrs: string[] = []
 
     for (let i = 0; i < parseResult.rows.length; i++) {
       const row = parseResult.rows[i]
@@ -202,10 +198,6 @@ export async function importVehicles(
           continue
         }
 
-        // Collect identifiers for batch lookup
-        if (mapped.chassis_nr) allChassisNrs.push(mapped.chassis_nr)
-        if (mapped.reg_nr) allRegNrs.push(mapped.reg_nr)
-
         processedRows.push({ rowIndex: i, mapped, extraData })
       } catch (rowError) {
         errors.push(`Rad ${i + 2}: ${rowError instanceof Error ? rowError.message : 'Okänt fel'}`)
@@ -213,122 +205,17 @@ export async function importVehicles(
     }
 
     // ============================================
-    // PHASE 2: Batch fetch existing vehicles
-    // ============================================
-    const existingByChassisNr = new Map<string, { id: string; lead_id: string }>()
-    const existingByRegNr = new Map<string, { id: string; lead_id: string }>()
-
-    // Batch query for existing vehicles (single query instead of N queries)
-    if (allChassisNrs.length > 0 || allRegNrs.length > 0) {
-      const { data: existingVehicles } = await supabase
-        .from('vehicles')
-        .select('id, lead_id, chassis_nr, reg_nr')
-        .or(`chassis_nr.in.(${allChassisNrs.map(c => `"${c}"`).join(',')}),reg_nr.in.(${allRegNrs.map(r => `"${r}"`).join(',')})`)
-
-      if (existingVehicles) {
-        for (const v of existingVehicles) {
-          if (v.chassis_nr) existingByChassisNr.set(v.chassis_nr, { id: v.id, lead_id: v.lead_id })
-          if (v.reg_nr) existingByRegNr.set(v.reg_nr, { id: v.id, lead_id: v.lead_id })
-        }
-      }
-    }
-
-    // ============================================
-    // PHASE 3: Separate into updates and inserts
-    // Also detect duplicates WITHIN the import file
-    // ============================================
-    interface UpdateItem {
-      vehicleId: string
-      mapped: MappedData
-    }
-
-    interface InsertItem {
-      rowIndex: number
-      mapped: MappedData
-      extraData: Record<string, string | number | boolean | null>
-    }
-
-    const vehiclesToUpdate: UpdateItem[] = []
-    const rowsToInsert: InsertItem[] = []
-
-    // Track identifiers we've already seen in THIS import to avoid duplicates within the file
-    const seenChassisNrsInImport = new Set<string>()
-    const seenRegNrsInImport = new Set<string>()
-    let skippedInternalDuplicates = 0
-
-    for (const row of processedRows) {
-      // Check for existing vehicle in DB (prioritize chassis_nr)
-      let existingVehicle = null
-      if (row.mapped.chassis_nr) {
-        existingVehicle = existingByChassisNr.get(row.mapped.chassis_nr)
-      }
-      if (!existingVehicle && row.mapped.reg_nr) {
-        existingVehicle = existingByRegNr.get(row.mapped.reg_nr)
-      }
-
-      if (existingVehicle) {
-        vehiclesToUpdate.push({ vehicleId: existingVehicle.id, mapped: row.mapped })
-        duplicateVehicles++
-      } else {
-        // Check if we've already seen this identifier in THIS import file
-        const chassisDuplicate = row.mapped.chassis_nr && seenChassisNrsInImport.has(row.mapped.chassis_nr)
-        const regDuplicate = row.mapped.reg_nr && seenRegNrsInImport.has(row.mapped.reg_nr)
-
-        if (chassisDuplicate || regDuplicate) {
-          // Skip this row - it's a duplicate within the import file
-          skippedInternalDuplicates++
-          duplicateVehicles++
-          continue
-        }
-
-        // Mark these identifiers as seen
-        if (row.mapped.chassis_nr) seenChassisNrsInImport.add(row.mapped.chassis_nr)
-        if (row.mapped.reg_nr) seenRegNrsInImport.add(row.mapped.reg_nr)
-
-        rowsToInsert.push(row)
-      }
-    }
-
-    // ============================================
-    // PHASE 4: Batch update existing vehicles
-    // ============================================
-    if (vehiclesToUpdate.length > 0) {
-      // Update in parallel batches of 50
-      const BATCH_SIZE = 50
-      for (let i = 0; i < vehiclesToUpdate.length; i += BATCH_SIZE) {
-        const batch = vehiclesToUpdate.slice(i, i + BATCH_SIZE)
-        await Promise.all(
-          batch.map(async (item) => {
-            const { error } = await supabase
-              .from('vehicles')
-              .update({
-                make: item.mapped.make,
-                model: item.mapped.model,
-                mileage: item.mapped.mileage,
-                year: item.mapped.year,
-                fuel_type: item.mapped.fuel_type,
-                in_traffic: item.mapped.in_traffic,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', item.vehicleId)
-
-            if (!error) updatedVehicles++
-          })
-        )
-      }
-    }
-
-    // ============================================
-    // PHASE 5: Batch insert new leads (chunked for large imports)
+    // PHASE 2: Batch insert new leads (chunked for large imports)
+    // No duplicate checking - handled in playground instead
     // ============================================
     const INSERT_CHUNK_SIZE = 500 // Supabase works best with smaller batches
 
-    if (rowsToInsert.length > 0) {
+    if (processedRows.length > 0) {
       const allInsertedLeads: { id: string }[] = []
 
       // Process leads in chunks
-      for (let i = 0; i < rowsToInsert.length; i += INSERT_CHUNK_SIZE) {
-        const chunk = rowsToInsert.slice(i, i + INSERT_CHUNK_SIZE)
+      for (let i = 0; i < processedRows.length; i += INSERT_CHUNK_SIZE) {
+        const chunk = processedRows.slice(i, i + INSERT_CHUNK_SIZE)
 
         const leadsToInsert = chunk.map(row => {
           const location = extractLocation(row.mapped.owner_info || null)
@@ -366,7 +253,7 @@ export async function importVehicles(
       if (allInsertedLeads.length > 0) {
         for (let i = 0; i < allInsertedLeads.length; i += INSERT_CHUNK_SIZE) {
           const leadChunk = allInsertedLeads.slice(i, i + INSERT_CHUNK_SIZE)
-          const rowChunk = rowsToInsert.slice(i, i + INSERT_CHUNK_SIZE)
+          const rowChunk = processedRows.slice(i, i + INSERT_CHUNK_SIZE)
 
           const vehiclesToInsert = leadChunk.map((lead, index) => {
             const row = rowChunk[index]
@@ -403,8 +290,8 @@ export async function importVehicles(
       total_rows: parseResult.totalRows,
       new_leads: newLeads,
       new_vehicles: newVehicles,
-      duplicate_vehicles: duplicateVehicles,
-      updated_vehicles: updatedVehicles,
+      duplicate_vehicles: 0, // No longer checked during import
+      updated_vehicles: 0,   // No longer checked during import
       errors: errors.length,
       error_details: errors.length > 0 ? errors : null
     })
@@ -416,13 +303,13 @@ export async function importVehicles(
 
     return {
       success: true,
-      message: `Import klar! ${newVehicles} nya fordon, ${duplicateVehicles} dubbletter (${updatedVehicles} uppdaterade)`,
+      message: `Import klar! ${newVehicles} fordon importerade. Kontrollera dubbletter i Playground.`,
       stats: {
         totalRows: parseResult.totalRows,
         newLeads,
         newVehicles,
-        duplicateVehicles,
-        updatedVehicles,
+        duplicateVehicles: 0, // No longer checked during import
+        updatedVehicles: 0,   // No longer checked during import
         errors: errors.length
       },
       errors: errors.length > 0 ? errors : undefined

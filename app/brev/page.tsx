@@ -78,7 +78,7 @@ async function getLeadsForLetters(filter: string) {
     supabase.from('leads').select('*', { count: 'exact', head: true }).neq('status', 'pending_review').or('phone.is.null,phone.eq.'),
     supabase.from('leads').select('*', { count: 'exact', head: true }).neq('status', 'pending_review').or('letter_sent.is.null,letter_sent.eq.false'),
     supabase.from('leads').select('*', { count: 'exact', head: true }).neq('status', 'pending_review').eq('letter_sent', true),
-    supabase.from('preferences').select('letter_cost').limit(1).single()
+    supabase.from('preferences').select('letter_cost').limit(1).maybeSingle()
   ])
 
   return {

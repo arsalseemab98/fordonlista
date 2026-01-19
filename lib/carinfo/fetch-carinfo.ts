@@ -39,6 +39,7 @@ export interface CarInfoResult {
     fallback_ran: boolean
     fallback_found: string | null
     events_with_garbyte: Array<{ date: string; event: string; eventLower: string }>
+    debug_timestamp: number
   }
 }
 
@@ -491,14 +492,19 @@ export async function fetchCarInfo(regNumber: string): Promise<CarInfoResult> {
     }
   }
 
-  // Add debug info to result
-  result._debug_agarbyte = {
+  // Add debug info to result (use non-underscore prefix to test if underscore fields are stripped)
+  const debugInfo = {
     histitem_count: histitemCount,
     latestAgarbyte_from_loop: latestAgarbyte || null,
     fallback_ran: fallbackRan,
     fallback_found: fallbackFound,
-    events_with_garbyte: eventsWithGarbyte
+    events_with_garbyte: eventsWithGarbyte,
+    debug_timestamp: Date.now()
   }
+  result._debug_agarbyte = debugInfo
+
+  // Also log to console for Vercel logs
+  console.log(`[CARINFO DEBUG] ${cleanRegNr}: histitemCount=${histitemCount}, latestAgarbyte=${latestAgarbyte || 'null'}, fallbackRan=${fallbackRan}, fallbackFound=${fallbackFound || 'null'}, eventsWithGarbyte=${eventsWithGarbyte.length}`)
 
   // Fallback: Extract dates from page text if not found in history
   if (!result.senaste_avställning) {

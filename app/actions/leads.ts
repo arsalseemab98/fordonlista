@@ -586,31 +586,84 @@ export async function checkLeadsHistory(
     }
 
     // Fetch ALL other leads (not in our check list) to compare against
-    const { data: existingLeads, error: existingError } = await supabase
-      .from('leads')
-      .select(`
-        id,
-        phone,
-        owner_info,
-        vehicles (
-          id,
-          reg_nr,
-          chassis_nr
-        )
-      `)
-      .not('id', 'in', `(${leadIdsToCheck.join(',')})`)
+    // Note: We need to fetch in batches to avoid Supabase's 1000 row limit
+    let existingLeads: NonNullable<typeof leadsToCheck> = []
+    let existingErrorMessage: string | null = null
 
-    if (existingError) {
-      console.error('Error fetching existing leads:', existingError)
+    // Fetch all existing leads in batches of 1000
+    let offset = 0
+    const batchSize = 1000
+    let hasMore = true
+
+    while (hasMore) {
+      const { data: batch, error: batchError } = await supabase
+        .from('leads')
+        .select(`
+          id,
+          phone,
+          owner_info,
+          vehicles (
+            id,
+            reg_nr,
+            chassis_nr
+          )
+        `)
+        .not('id', 'in', `(${leadIdsToCheck.join(',')})`)
+        .range(offset, offset + batchSize - 1)
+
+      if (batchError) {
+        existingErrorMessage = batchError.message
+        console.error('Error fetching existing leads batch:', batchError)
+        break
+      }
+
+      if (batch && batch.length > 0) {
+        existingLeads = [...existingLeads, ...batch]
+        offset += batchSize
+        hasMore = batch.length === batchSize
+      } else {
+        hasMore = false
+      }
+    }
+
+    if (existingErrorMessage) {
       return {
         success: false,
-        error: existingError.message,
+        error: existingErrorMessage,
         totalChecked: 0,
         uniqueCount: 0,
         duplicateCount: 0,
         matches: [],
         duplicateLeadIds: []
       }
+    }
+
+    // Debug logging
+    console.log('=== HISTORY CHECK DEBUG ===')
+    console.log('Leads to check:', leadsToCheck?.length)
+    console.log('Existing leads found:', existingLeads.length)
+    console.log('Match options:', options)
+
+    // Log sample of leads to check
+    if (leadsToCheck && leadsToCheck.length > 0) {
+      const sampleLeadToCheck = leadsToCheck[0]
+      console.log('Sample lead to check:', {
+        id: sampleLeadToCheck.id,
+        phone: sampleLeadToCheck.phone,
+        owner_info: sampleLeadToCheck.owner_info,
+        vehicles: sampleLeadToCheck.vehicles?.map(v => ({ reg_nr: v.reg_nr, chassis_nr: v.chassis_nr }))
+      })
+    }
+
+    // Log sample of existing leads
+    if (existingLeads.length > 0) {
+      const sampleExisting = existingLeads[0]
+      console.log('Sample existing lead:', {
+        id: sampleExisting.id,
+        phone: sampleExisting.phone,
+        owner_info: sampleExisting.owner_info,
+        vehicles: sampleExisting.vehicles?.map(v => ({ reg_nr: v.reg_nr, chassis_nr: v.chassis_nr }))
+      })
     }
 
     // Build lookup maps for existing leads
@@ -649,12 +702,32 @@ export async function checkLeadsHistory(
       }
     }
 
+    // Log lookup map sizes
+    console.log('Lookup map sizes:', {
+      regNr: existingByRegNr.size,
+      chassis: existingByChassis.size,
+      phone: existingByPhone.size,
+      name: existingByName.size
+    })
+
+    // Log sample of reg_nr values in the map
+    if (existingByRegNr.size > 0) {
+      const regNrSamples = Array.from(existingByRegNr.keys()).slice(0, 5)
+      console.log('Sample reg_nr keys in existing map:', regNrSamples)
+    }
+
     // Check each lead against the maps
     const matches: HistoryCheckMatch[] = []
     const duplicateLeadIds = new Set<string>()
 
     for (const lead of leadsToCheck || []) {
       let foundMatch = false
+
+      // Log what we're checking for this lead
+      if (lead.vehicles && lead.vehicles.length > 0) {
+        const regNrs = lead.vehicles.map(v => v.reg_nr ? v.reg_nr.toUpperCase().replace(/\s/g, '') : 'null')
+        console.log(`Checking lead ${lead.id} with reg_nrs:`, regNrs)
+      }
 
       // Check phone
       if (options.matchPhone && lead.phone) {
@@ -720,6 +793,79 @@ export async function checkLeadsHistory(
         duplicateLeadIds.add(lead.id)
       }
     }
+
+    // ALSO check for duplicates WITHIN the selected leads themselves
+    // This catches cases where the user selects multiple leads that are duplicates of each other
+    console.log('Checking for internal duplicates within selected leads...')
+
+    const internalByRegNr = new Map<string, string[]>() // regNr -> [leadIds]
+    const internalByChassis = new Map<string, string[]>()
+    const internalByPhone = new Map<string, string[]>()
+    const internalByName = new Map<string, string[]>()
+
+    for (const lead of leadsToCheck || []) {
+      // Index by phone
+      if (options.matchPhone && lead.phone) {
+        const cleanPhone = lead.phone.replace(/\D/g, '')
+        if (cleanPhone.length >= 8) {
+          const existing = internalByPhone.get(cleanPhone) || []
+          existing.push(lead.id)
+          internalByPhone.set(cleanPhone, existing)
+        }
+      }
+
+      // Index by name
+      if (options.matchName && lead.owner_info) {
+        const normalizedName = lead.owner_info.toLowerCase().trim()
+        if (normalizedName.length > 3) {
+          const existing = internalByName.get(normalizedName) || []
+          existing.push(lead.id)
+          internalByName.set(normalizedName, existing)
+        }
+      }
+
+      // Index by vehicles
+      for (const vehicle of lead.vehicles || []) {
+        if (options.matchRegNr && vehicle.reg_nr) {
+          const cleanRegNr = vehicle.reg_nr.toUpperCase().replace(/\s/g, '')
+          const existing = internalByRegNr.get(cleanRegNr) || []
+          existing.push(lead.id)
+          internalByRegNr.set(cleanRegNr, existing)
+        }
+        if (options.matchChassis && vehicle.chassis_nr) {
+          const cleanChassis = vehicle.chassis_nr.toUpperCase().replace(/\s/g, '')
+          const existing = internalByChassis.get(cleanChassis) || []
+          existing.push(lead.id)
+          internalByChassis.set(cleanChassis, existing)
+        }
+      }
+    }
+
+    // Find internal duplicates (entries with more than one lead ID)
+    const addInternalDuplicates = (map: Map<string, string[]>, matchType: 'reg_nr' | 'chassis' | 'phone' | 'name') => {
+      for (const [value, leadIds] of map.entries()) {
+        if (leadIds.length > 1) {
+          console.log(`Found internal duplicate: ${matchType} = ${value}, leads: ${leadIds.join(', ')}`)
+          // Mark all leads with this value as duplicates (except the first one, which is "original")
+          for (let i = 1; i < leadIds.length; i++) {
+            duplicateLeadIds.add(leadIds[i])
+            matches.push({
+              leadId: leadIds[i],
+              matchedLeadId: leadIds[0], // First one is the "original"
+              matchType,
+              matchValue: value
+            })
+          }
+        }
+      }
+    }
+
+    addInternalDuplicates(internalByRegNr, 'reg_nr')
+    addInternalDuplicates(internalByChassis, 'chassis')
+    addInternalDuplicates(internalByPhone, 'phone')
+    addInternalDuplicates(internalByName, 'name')
+
+    console.log('Internal duplicate check complete. Total duplicates found:', duplicateLeadIds.size)
 
     const totalChecked = leadsToCheck?.length || 0
     const duplicateCount = duplicateLeadIds.size

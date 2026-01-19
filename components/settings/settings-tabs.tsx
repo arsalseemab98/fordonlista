@@ -40,8 +40,11 @@ import {
   Plug,
   Eye,
   EyeOff,
-  Info
+  Info,
+  Star,
+  Ban
 } from 'lucide-react'
+import { TagInput } from '@/components/ui/tag-input'
 import { toast } from 'sonner'
 import {
   saveColumnMapping,
@@ -74,8 +77,12 @@ interface Preferences {
   id: string
   preferred_makes: string[]
   excluded_makes: string[]
+  preferred_models: string[]
+  excluded_models: string[]
+  min_mileage: number
   max_mileage: number
   min_year: number
+  max_year: number
   prefer_deregistered: boolean
   ai_enabled: boolean
   letter_cost: number
@@ -150,14 +157,22 @@ export function SettingsTabs({ columnMappings, valuePatterns, preferences, carIn
 
 function GeneralSettings({ preferences }: { preferences: Preferences | null }) {
   const router = useRouter()
-  const [preferredMakes, setPreferredMakes] = useState(
-    preferences?.preferred_makes?.join(', ') || ''
+  const [preferredMakes, setPreferredMakes] = useState<string[]>(
+    preferences?.preferred_makes || []
   )
-  const [excludedMakes, setExcludedMakes] = useState(
-    preferences?.excluded_makes?.join(', ') || ''
+  const [excludedMakes, setExcludedMakes] = useState<string[]>(
+    preferences?.excluded_makes || []
   )
+  const [preferredModels, setPreferredModels] = useState<string[]>(
+    preferences?.preferred_models || []
+  )
+  const [excludedModels, setExcludedModels] = useState<string[]>(
+    preferences?.excluded_models || []
+  )
+  const [minMileage, setMinMileage] = useState(preferences?.min_mileage || 0)
   const [maxMileage, setMaxMileage] = useState(preferences?.max_mileage || 200000)
   const [minYear, setMinYear] = useState(preferences?.min_year || 2010)
+  const [maxYear, setMaxYear] = useState(preferences?.max_year || new Date().getFullYear())
   const [preferDeregistered, setPreferDeregistered] = useState(
     preferences?.prefer_deregistered || false
   )
@@ -167,10 +182,14 @@ function GeneralSettings({ preferences }: { preferences: Preferences | null }) {
   const handleSave = async () => {
     setIsSaving(true)
     const result = await savePreferences({
-      preferred_makes: preferredMakes.split(',').map(s => s.trim()).filter(Boolean),
-      excluded_makes: excludedMakes.split(',').map(s => s.trim()).filter(Boolean),
+      preferred_makes: preferredMakes,
+      excluded_makes: excludedMakes,
+      preferred_models: preferredModels,
+      excluded_models: excludedModels,
+      min_mileage: minMileage,
       max_mileage: maxMileage,
       min_year: minYear,
+      max_year: maxYear,
       prefer_deregistered: preferDeregistered,
       ai_enabled: preferences?.ai_enabled ?? true,
       letter_cost: letterCost
@@ -195,32 +214,87 @@ function GeneralSettings({ preferences }: { preferences: Preferences | null }) {
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-2">
-          <Label htmlFor="preferred-makes">Föredragna märken</Label>
-          <Input
-            id="preferred-makes"
-            placeholder="Volvo, BMW, Audi, Mercedes..."
+          <div className="flex items-center gap-2">
+            <Star className="h-4 w-4 text-green-600" />
+            <Label>Föredragna märken</Label>
+          </div>
+          <TagInput
             value={preferredMakes}
-            onChange={(e) => setPreferredMakes(e.target.value)}
+            onChange={setPreferredMakes}
+            placeholder="Skriv märke och tryck Enter..."
+            variant="success"
           />
           <p className="text-xs text-gray-500">
-            Separera med komma. Dessa märken får högre prioritet.
+            Dessa märken får högre prioritet. Tryck Enter eller klicka + för att lägga till.
           </p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="excluded-makes">Exkluderade märken</Label>
-          <Input
-            id="excluded-makes"
-            placeholder="Märken du inte köper..."
+          <div className="flex items-center gap-2">
+            <Ban className="h-4 w-4 text-red-600" />
+            <Label>Exkluderade märken</Label>
+          </div>
+          <TagInput
             value={excludedMakes}
-            onChange={(e) => setExcludedMakes(e.target.value)}
+            onChange={setExcludedMakes}
+            placeholder="Skriv märke och tryck Enter..."
+            variant="destructive"
           />
           <p className="text-xs text-gray-500">
             Dessa märken visas med varning eller filtreras bort.
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        {/* Model preferences */}
+        <div className="border-t pt-6 mt-6">
+          <h3 className="text-sm font-medium mb-4 text-gray-700">Modellfilter (valfritt)</h3>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Star className="h-4 w-4 text-green-600" />
+                <Label>Föredragna modeller</Label>
+              </div>
+              <TagInput
+                value={preferredModels}
+                onChange={setPreferredModels}
+                placeholder="T.ex. V70, XC90, 3-Serie..."
+                variant="success"
+              />
+              <p className="text-xs text-gray-500">
+                Specifika modeller som får extra prioritet.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Ban className="h-4 w-4 text-red-600" />
+                <Label>Exkluderade modeller</Label>
+              </div>
+              <TagInput
+                value={excludedModels}
+                onChange={setExcludedModels}
+                placeholder="T.ex. Smart, Aygo..."
+                variant="destructive"
+              />
+              <p className="text-xs text-gray-500">
+                Specifika modeller som du inte är intresserad av.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="min-mileage">Min miltal (km)</Label>
+            <Input
+              id="min-mileage"
+              type="number"
+              value={minMileage}
+              onChange={(e) => setMinMileage(parseInt(e.target.value) || 0)}
+              placeholder="0"
+            />
+          </div>
           <div className="space-y-2">
             <Label htmlFor="max-mileage">Max miltal (km)</Label>
             <Input
@@ -231,12 +305,23 @@ function GeneralSettings({ preferences }: { preferences: Preferences | null }) {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="min-year">Minsta årsmodell</Label>
+            <Label htmlFor="min-year">Min årsmodell</Label>
             <Input
               id="min-year"
               type="number"
               value={minYear}
               onChange={(e) => setMinYear(parseInt(e.target.value) || 0)}
+              placeholder="2010"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="max-year">Max årsmodell</Label>
+            <Input
+              id="max-year"
+              type="number"
+              value={maxYear}
+              onChange={(e) => setMaxYear(parseInt(e.target.value) || new Date().getFullYear())}
+              placeholder={new Date().getFullYear().toString()}
             />
           </div>
         </div>

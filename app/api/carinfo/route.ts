@@ -22,6 +22,8 @@ interface CarInfoResponse {
   mileage_mil?: number
   mileage_km?: number
   antal_agare?: number
+  antal_foretagsannonser?: number
+  antal_privatannonser?: number
   valuation_company?: number
   valuation_company_formatted?: string
   valuation_private?: number
@@ -68,7 +70,7 @@ export async function POST(request: NextRequest) {
       .from('api_tokens')
       .select('refresh_token, bearer_token')
       .eq('service_name', 'car_info')
-      .single()
+      .maybeSingle()
 
     if (!tokens?.refresh_token || !tokens?.bearer_token) {
       return NextResponse.json({
@@ -218,6 +220,13 @@ export async function POST(request: NextRequest) {
           if (vehicle && (vehicle['@type'] === 'Car' || vehicle['@type'] === 'Vehicle')) {
             result.make = vehicle.brand?.name || vehicle.manufacturer
             result.model = vehicle.model || vehicle.name
+
+            // Remove duplicate make from model if model starts with make
+            // e.g. "Volvo V70 2.4D..." -> "V70 2.4D..." when make is "Volvo"
+            if (result.make && result.model && result.model.toLowerCase().startsWith(result.make.toLowerCase())) {
+              result.model = result.model.substring(result.make.length).trim()
+            }
+
             result.year = parseInt(vehicle.vehicleModelDate) || undefined
             result.color = vehicle.color
             result.fuel_type = vehicle.vehicleEngine?.fuelType
@@ -283,11 +292,29 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Extract status and color from meta description
-    // Format: "JYU220 är en svart Volkswagen Golf 5-door från 2010, just nu i trafik..."
+    // Extract color from meta description
     const metaDescription = $('meta[name="description"]').attr('content') || ''
     const pageText = $('body').text()
-    result.status = extractStatus(metaDescription || pageText)
+
+    // Extract status from .sprow "I trafik" row - check for "Nej" or "Ja"
+    let statusFound = false
+    $('.sprow').each((_, el) => {
+      const label = $(el).find('.sptitle').text().trim().toLowerCase()
+      if (label === 'i trafik') {
+        const fullText = $(el).text().toLowerCase()
+        if (fullText.includes('nej')) {
+          result.status = 'avställd'
+          statusFound = true
+        } else if (fullText.includes('ja')) {
+          result.status = 'i_trafik'
+          statusFound = true
+        }
+      }
+    })
+    // Fallback to meta description if not found in .sprow
+    if (!statusFound) {
+      result.status = extractStatus(metaDescription || pageText)
+    }
 
     // Extract color from meta description if not already set
     if (!result.color && metaDescription) {
@@ -314,10 +341,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Extract featured info items (car.info specific structure)
+    // Extract featured info items (besiktning, fordonsskatt, etc.)
+    // Structure: <div class="featured_info_item">
+    //   <div class="btn..."><span class="text-truncate">VALUE</span></div>
+    //   <div class="text-muted fs-9">LABEL</div>
+    // </div>
+    // Note: There are TWO besiktning fields:
+    //   - "Besiktad" = last inspection date (already done)
+    //   - "Besiktas senast" = next inspection deadline (what we want)
     $('.featured_info_item').each((_, el) => {
       const value = $(el).find('.text-truncate').first().text().trim()
-      const label = $(el).find('.text-muted').text().trim().toLowerCase()
+      const label = $(el).find('.text-muted, .fs-9').text().trim().toLowerCase()
 
       if (label.includes('fordonsskatt') && !result.skatt) {
         result.skatt = parseSwedishNumber(value)
@@ -326,7 +360,8 @@ export async function POST(request: NextRequest) {
       if (label.includes('i trafik sedan') || label.includes('första reg')) {
         result.första_registrering = value
       }
-      if ((label.includes('besiktning') || label.includes('besiktigas')) && !result.besiktning_till) {
+      // "Besiktas senast" = next inspection deadline (what we want for besiktning_till)
+      if (label.includes('besiktas senast')) {
         result.besiktning_till = value
       }
     })
@@ -357,9 +392,7 @@ export async function POST(request: NextRequest) {
       if (label.includes('ägare') && !result.antal_agare) {
         result.antal_agare = parseSwedishNumber(value)
       }
-      if ((label.includes('besiktning') || label.includes('kontrollbesiktning')) && !result.besiktning_till) {
-        result.besiktning_till = value
-      }
+      // Note: besiktning_till is extracted from .featured_info_item "Besiktas senast" instead
     })
 
     // Additional extraction from page text for dates
@@ -385,33 +418,79 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Try to extract valuation
-    $('[data-valuation], .valuation, .price-estimate').each((_, el) => {
-      const text = $(el).text()
-      const value = parseSwedishNumber(text)
-      if (value && value > 10000) {
-        if (text.toLowerCase().includes('företag')) {
-          result.valuation_company = value
-          result.valuation_company_formatted = `${value.toLocaleString('sv-SE')} SEK`
-        } else if (text.toLowerCase().includes('privat')) {
-          result.valuation_private = value
-          result.valuation_private_formatted = `${value.toLocaleString('sv-SE')} SEK`
+    // Extract vehicle history from .histitem elements
+    // Structure: <div class="histitem card">
+    //   <time datetime="2025-03-17">2025-03-17</time>
+    //   <div class="sub_text fw-bold is_header">Avställd</div>
+    // </div>
+    const history: Array<{ date: string; event: string; details?: string }> = []
+    let latestAvställning: string | undefined
+    let latestPåställning: string | undefined
+    let antalForetagsannonser = 0
+    let antalPrivatannonser = 0
+
+    $('.histitem').each((_, el) => {
+      const dateEl = $(el).find('time')
+      const date = dateEl.attr('datetime') || dateEl.text().trim()
+      const event = $(el).find('.sub_text.is_header, .is_header').first().text().trim()
+      const details = $(el).find('.sub_text.pt_card_1').first().text().trim()
+
+      if (date && event) {
+        history.push({ date, event, details: details || undefined })
+
+        // Track most recent avställning/påställning (first occurrence = most recent)
+        const eventLower = event.toLowerCase()
+        if (!latestAvställning && eventLower === 'avställd') {
+          latestAvställning = date
+        }
+        if (!latestPåställning && eventLower === 'i trafik') {
+          latestPåställning = date
+        }
+        // Count annonser (Auktion räknas som företagsannons)
+        if (eventLower.includes('företagsannons') || eventLower.includes('auktion')) {
+          antalForetagsannonser++
+        }
+        if (eventLower.includes('privatannons')) {
+          antalPrivatannonser++
         }
       }
     })
 
-    // Extract vehicle history
-    const history: Array<{ date: string; event: string; details?: string }> = []
-    $('.history-item, .timeline-item, [data-history]').each((_, el) => {
-      const date = $(el).find('.date, [data-date]').text().trim()
-      const event = $(el).find('.event, .title, [data-event]').text().trim()
-      const details = $(el).find('.details, .description').text().trim()
-      if (date && event) {
-        history.push({ date, event, details: details || undefined })
-      }
-    })
     if (history.length > 0) {
       result.vehicle_history = history
+    }
+    if (antalForetagsannonser > 0) {
+      result.antal_foretagsannonser = antalForetagsannonser
+    }
+    if (antalPrivatannonser > 0) {
+      result.antal_privatannonser = antalPrivatannonser
+    }
+
+    // Set dates from history (most accurate source)
+    if (latestAvställning) {
+      result.senaste_avställning = latestAvställning
+    }
+    if (latestPåställning) {
+      result.senaste_påställning = latestPåställning
+    }
+
+    // Extract valuation from indikativ värdering sections
+    // Look for "Indikativ värdering (företag)" and "Indikativ värdering (privatperson)"
+    const valuationMatch = html.match(/Indikativ\s*värdering\s*\(företag\)[\s\S]*?([\d\s]+)\s*SEK/i)
+    if (valuationMatch) {
+      const value = parseSwedishNumber(valuationMatch[1])
+      if (value && value > 10000) {
+        result.valuation_company = value
+        result.valuation_company_formatted = `${value.toLocaleString('sv-SE')} kr`
+      }
+    }
+    const valuationPrivateMatch = html.match(/Indikativ\s*värdering\s*\(privatperson\)[\s\S]*?([\d\s]+)\s*SEK/i)
+    if (valuationPrivateMatch) {
+      const value = parseSwedishNumber(valuationPrivateMatch[1])
+      if (value && value > 10000) {
+        result.valuation_private = value
+        result.valuation_private_formatted = `${value.toLocaleString('sv-SE')} kr`
+      }
     }
 
     // Look for total in Sweden

@@ -72,6 +72,7 @@ export default async function HistorikPage({
           county,
           prospect_type,
           letter_sent,
+          extra_data,
           created_at,
           vehicles (
             id,
@@ -80,7 +81,19 @@ export default async function HistorikPage({
             model,
             year,
             mileage,
-            chassis_nr
+            chassis_nr,
+            in_traffic,
+            is_interesting,
+            ai_score,
+            carinfo_fetched_at,
+            antal_agare,
+            valuation_company,
+            valuation_private,
+            besiktning_till,
+            "senaste_avställning",
+            "senaste_påställning",
+            antal_foretagsannonser,
+            antal_privatannonser
           ),
           call_logs (
             id,
@@ -152,6 +165,14 @@ export default async function HistorikPage({
     leads = leads.slice(0, limit)
   }
 
+  // Extract all unique extra_data column names across all leads (like playground)
+  const extraColumns = new Set<string>()
+  leads.forEach(lead => {
+    if (lead.extra_data && typeof lead.extra_data === 'object') {
+      Object.keys(lead.extra_data).forEach(key => extraColumns.add(key))
+    }
+  })
+
   // Stats are already fetched from database with accurate counts above
   // totalCount, uniqueCalledCount, letterSentCount, pendingCount are available
 
@@ -175,6 +196,7 @@ export default async function HistorikPage({
           currentLimit={limitParam}
           availableCounties={availableCounties}
           currentCounty={countyParam}
+          availableExtraColumns={Array.from(extraColumns)}
         />
       </div>
     </div>

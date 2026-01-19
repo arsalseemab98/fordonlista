@@ -133,20 +133,24 @@ export async function deleteValuePattern(id: string) {
 export async function savePreferences(data: {
   preferred_makes: string[]
   excluded_makes: string[]
+  preferred_models?: string[]
+  excluded_models?: string[]
+  min_mileage?: number
   max_mileage: number
   min_year: number
+  max_year?: number
   prefer_deregistered: boolean
   ai_enabled: boolean
   letter_cost?: number
 }) {
   const supabase = await createClient()
 
-  // Check if preferences exist
+  // Check if preferences exist - use maybeSingle() to avoid error when no row exists
   const { data: existing } = await supabase
     .from('preferences')
     .select('id')
     .limit(1)
-    .single()
+    .maybeSingle()
 
   if (existing) {
     const { error } = await supabase
@@ -250,6 +254,30 @@ export async function deleteDataImport(id: string) {
   return { success: true }
 }
 
+export async function getPreferences() {
+  const supabase = await createClient()
+
+  const { data } = await supabase
+    .from('preferences')
+    .select('preferred_makes, excluded_makes, preferred_models, excluded_models, min_mileage, max_mileage, min_year, max_year, prefer_deregistered, ai_enabled, letter_cost')
+    .limit(1)
+    .maybeSingle()
+
+  return data || {
+    preferred_makes: [],
+    excluded_makes: [],
+    preferred_models: [],
+    excluded_models: [],
+    min_mileage: 0,
+    max_mileage: 200000,
+    min_year: 2000,
+    max_year: new Date().getFullYear(),
+    prefer_deregistered: false,
+    ai_enabled: true,
+    letter_cost: 12.00
+  }
+}
+
 export async function getLetterCost() {
   const supabase = await createClient()
 
@@ -257,7 +285,7 @@ export async function getLetterCost() {
     .from('preferences')
     .select('letter_cost')
     .limit(1)
-    .single()
+    .maybeSingle()
 
   return data?.letter_cost || 12.00
 }
@@ -266,16 +294,11 @@ export async function getLetterCost() {
 export async function getCarInfoTokens() {
   const supabase = await createClient()
 
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from('api_tokens')
     .select('*')
     .eq('service_name', 'car_info')
-    .single()
-
-  if (error) {
-    console.error('Error fetching car.info tokens:', error)
-    return null
-  }
+    .maybeSingle()
 
   return data
 }
@@ -291,7 +314,7 @@ export async function saveCarInfoTokens(data: {
     .from('api_tokens')
     .select('id')
     .eq('service_name', 'car_info')
-    .single()
+    .maybeSingle()
 
   if (existing) {
     const { error } = await supabase

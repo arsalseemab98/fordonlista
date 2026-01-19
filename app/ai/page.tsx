@@ -30,7 +30,7 @@ async function getAIStats() {
     supabase.from('leads').select('*', { count: 'exact', head: true }).eq('status', 'not_interested'),
     supabase.from('vehicles').select('*', { count: 'exact', head: true }).gt('mileage', 200000),
     supabase.from('vehicles').select('*', { count: 'exact', head: true }).eq('in_traffic', false),
-    supabase.from('preferences').select('*').limit(1).single(),
+    supabase.from('preferences').select('*').limit(1).maybeSingle(),
     supabase.from('vehicles').select('make').not('make', 'is', null)
   ])
 

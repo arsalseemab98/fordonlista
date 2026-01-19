@@ -13,8 +13,8 @@ async function getSettings() {
   ] = await Promise.all([
     supabase.from('column_mappings').select('*').order('target_field'),
     supabase.from('value_patterns').select('*').order('field_name'),
-    supabase.from('preferences').select('*').limit(1).single(),
-    supabase.from('api_tokens').select('*').eq('service_name', 'car_info').single()
+    supabase.from('preferences').select('*').limit(1).maybeSingle(),
+    supabase.from('api_tokens').select('*').eq('service_name', 'car_info').maybeSingle()
   ])
 
   return {
