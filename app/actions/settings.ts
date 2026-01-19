@@ -142,6 +142,7 @@ export async function savePreferences(data: {
   prefer_deregistered: boolean
   ai_enabled: boolean
   letter_cost?: number
+  filters_enabled?: boolean
 }) {
   const supabase = await createClient()
 
@@ -259,7 +260,7 @@ export async function getPreferences() {
 
   const { data } = await supabase
     .from('preferences')
-    .select('preferred_makes, excluded_makes, preferred_models, excluded_models, min_mileage, max_mileage, min_year, max_year, prefer_deregistered, ai_enabled, letter_cost')
+    .select('preferred_makes, excluded_makes, preferred_models, excluded_models, min_mileage, max_mileage, min_year, max_year, prefer_deregistered, ai_enabled, letter_cost, filters_enabled')
     .limit(1)
     .maybeSingle()
 
@@ -274,7 +275,8 @@ export async function getPreferences() {
     max_year: new Date().getFullYear(),
     prefer_deregistered: false,
     ai_enabled: true,
-    letter_cost: 12.00
+    letter_cost: 12.00,
+    filters_enabled: true
   }
 }
 

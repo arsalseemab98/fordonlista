@@ -86,6 +86,7 @@ interface Preferences {
   prefer_deregistered: boolean
   ai_enabled: boolean
   letter_cost: number
+  filters_enabled: boolean
 }
 
 interface ApiTokens {
@@ -157,6 +158,9 @@ export function SettingsTabs({ columnMappings, valuePatterns, preferences, carIn
 
 function GeneralSettings({ preferences }: { preferences: Preferences | null }) {
   const router = useRouter()
+  const [filtersEnabled, setFiltersEnabled] = useState(
+    preferences?.filters_enabled ?? true
+  )
   const [preferredMakes, setPreferredMakes] = useState<string[]>(
     preferences?.preferred_makes || []
   )
@@ -192,7 +196,8 @@ function GeneralSettings({ preferences }: { preferences: Preferences | null }) {
       max_year: maxYear,
       prefer_deregistered: preferDeregistered,
       ai_enabled: preferences?.ai_enabled ?? true,
-      letter_cost: letterCost
+      letter_cost: letterCost,
+      filters_enabled: filtersEnabled
     })
     setIsSaving(false)
 
@@ -213,6 +218,21 @@ function GeneralSettings({ preferences }: { preferences: Preferences | null }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Master toggle for filters */}
+        <div className="flex items-center justify-between rounded-lg border p-4 bg-gray-50">
+          <div className="space-y-0.5">
+            <Label className="text-base font-medium">Aktivera filter</Label>
+            <p className="text-xs text-gray-500">
+              Slå av för att visa alla fordon utan filtrering
+            </p>
+          </div>
+          <Switch
+            checked={filtersEnabled}
+            onCheckedChange={setFiltersEnabled}
+          />
+        </div>
+
+        <div className={filtersEnabled ? '' : 'opacity-50 pointer-events-none'}>
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <Star className="h-4 w-4 text-green-600" />
@@ -360,6 +380,7 @@ function GeneralSettings({ preferences }: { preferences: Preferences | null }) {
           <p className="text-xs text-amber-600">
             Används för att räkna ut total kostnad vid brevutskick. Standardvärde: 12 kr.
           </p>
+        </div>
         </div>
 
         <Button onClick={handleSave} disabled={isSaving} className="gap-2">
