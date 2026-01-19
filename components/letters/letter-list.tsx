@@ -31,6 +31,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { markLetterSent } from '@/app/actions/letters'
+import { FilterPresets } from '@/components/ui/filter-presets'
 import { deleteLead, bulkDeleteLeads } from '@/app/actions/leads'
 import {
   AlertDialog,
@@ -117,6 +118,19 @@ export function LetterList({ leads, counts, currentFilter, letterCost }: LetterL
 
   const handleFilterChange = (filter: string) => {
     router.push(`/brev?filter=${filter}`)
+  }
+
+  const loadPresetFilters = (filters: { [key: string]: string | string[] | boolean | number | null | undefined }) => {
+    const params = new URLSearchParams()
+    if (filters.filter && filters.filter !== 'all') {
+      params.set('filter', String(filters.filter))
+    }
+    router.push(`/brev${params.toString() ? '?' + params.toString() : ''}`)
+  }
+
+  // Current filters object for FilterPresets
+  const currentFilters = {
+    filter: currentFilter
   }
 
   const toggleSelectAll = () => {
@@ -256,7 +270,7 @@ export function LetterList({ leads, counts, currentFilter, letterCost }: LetterL
   return (
     <div className="space-y-6">
       {/* Filter Tabs */}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {filters.map(filter => {
           const Icon = filter.icon
           const isActive = currentFilter === filter.key
@@ -285,6 +299,13 @@ export function LetterList({ leads, counts, currentFilter, letterCost }: LetterL
             </Button>
           )
         })}
+
+        {/* Filter presets */}
+        <FilterPresets
+          page="brev"
+          currentFilters={currentFilters as { [key: string]: string | string[] | boolean | number | null | undefined }}
+          onLoadPreset={loadPresetFilters}
+        />
       </div>
 
       {/* Cost Calculator */}

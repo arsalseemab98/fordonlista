@@ -16,9 +16,11 @@ import {
   ArrowRight,
   Upload,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  Inbox
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { FilterPresets } from '@/components/ui/filter-presets'
 import { formatDistanceToNow } from 'date-fns'
 import { sv } from 'date-fns/locale'
 import { deleteLead, bulkDeleteLeads } from '@/app/actions/leads'
@@ -68,6 +70,7 @@ interface ToCallListProps {
   newCount: number
   callbackCount: number
   noAnswerCount: number
+  currentFilter: string
 }
 
 const STATUS_STYLES: Record<string, { label: string; className: string }> = {
@@ -81,7 +84,7 @@ function formatMileage(mileage?: number): string {
   return `${mileage.toLocaleString('sv-SE')} km`
 }
 
-export function ToCallList({ leads, newCount, callbackCount, noAnswerCount }: ToCallListProps) {
+export function ToCallList({ leads, newCount, callbackCount, noAnswerCount, currentFilter }: ToCallListProps) {
   const router = useRouter()
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set())
   const [isDeleting, setIsDeleting] = useState(false)
@@ -89,6 +92,30 @@ export function ToCallList({ leads, newCount, callbackCount, noAnswerCount }: To
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
   const [leadToDelete, setLeadToDelete] = useState<Lead | null>(null)
   const [selectionMode, setSelectionMode] = useState(false)
+
+  const filters = [
+    { key: 'all', label: 'Alla', count: newCount + callbackCount + noAnswerCount, icon: Inbox },
+    { key: 'new', label: 'Nya', count: newCount, icon: Star },
+    { key: 'callback', label: 'Ring tillbaka', count: callbackCount, icon: Phone },
+    { key: 'no_answer', label: 'Inget svar', count: noAnswerCount, icon: Clock },
+  ]
+
+  const handleFilterChange = (filter: string) => {
+    router.push(`/to-call?status=${filter}`)
+  }
+
+  const loadPresetFilters = (presetFilters: { [key: string]: string | string[] | boolean | number | null | undefined }) => {
+    const params = new URLSearchParams()
+    if (presetFilters.status && presetFilters.status !== 'all') {
+      params.set('status', String(presetFilters.status))
+    }
+    router.push(`/to-call${params.toString() ? '?' + params.toString() : ''}`)
+  }
+
+  // Current filters object for FilterPresets
+  const currentFilters = {
+    status: currentFilter
+  }
 
   const toggleSelect = (leadId: string, e: React.MouseEvent) => {
     e.preventDefault()
@@ -165,6 +192,45 @@ export function ToCallList({ leads, newCount, callbackCount, noAnswerCount }: To
 
   return (
     <div className="space-y-6">
+      {/* Filter Tabs */}
+      <div className="flex flex-wrap items-center gap-2">
+        {filters.map(filter => {
+          const Icon = filter.icon
+          const isActive = currentFilter === filter.key
+          return (
+            <Button
+              key={filter.key}
+              variant={isActive ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => handleFilterChange(filter.key)}
+              className={cn(
+                'gap-2',
+                isActive && 'bg-blue-600 hover:bg-blue-700'
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {filter.label}
+              <Badge
+                variant="secondary"
+                className={cn(
+                  'ml-1',
+                  isActive ? 'bg-blue-500 text-white' : 'bg-gray-100'
+                )}
+              >
+                {filter.count}
+              </Badge>
+            </Button>
+          )
+        })}
+
+        {/* Filter presets */}
+        <FilterPresets
+          page="to-call"
+          currentFilters={currentFilters as { [key: string]: string | string[] | boolean | number | null | undefined }}
+          onLoadPreset={loadPresetFilters}
+        />
+      </div>
+
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         <Card>

@@ -5,6 +5,10 @@ import { ToCallList } from '@/components/to-call/to-call-list'
 // Revalidate every 30 seconds for better performance
 export const revalidate = 30
 
+interface PageProps {
+  searchParams: Promise<{ status?: string }>
+}
+
 interface Vehicle {
   id: string
   reg_nr?: string
@@ -34,13 +38,16 @@ interface Lead {
   call_logs: CallLog[]
 }
 
-async function getLeadsToCall() {
+async function getLeadsToCall(statusFilter?: string) {
   const supabase = await createClient()
 
-  // Get leads that need to be called:
-  // 1. Status = 'new' (never contacted)
-  // 2. Status = 'callback' (scheduled callback)
-  // 3. Status = 'no_answer' (try again)
+  // Determine which statuses to filter by
+  const validStatuses = ['new', 'callback', 'no_answer']
+  const statusesToFetch = statusFilter && validStatuses.includes(statusFilter)
+    ? [statusFilter]
+    : validStatuses
+
+  // Get leads that need to be called
   const { data: leads, error } = await supabase
     .from('leads')
     .select(`
@@ -62,7 +69,7 @@ async function getLeadsToCall() {
         result
       )
     `)
-    .in('status', ['new', 'callback', 'no_answer'])
+    .in('status', statusesToFetch)
     .order('created_at', { ascending: true })
     .limit(50)
 
@@ -94,8 +101,10 @@ async function getLeadsToCall() {
   return sorted as Lead[]
 }
 
-export default async function ToCallPage() {
-  const leads = await getLeadsToCall()
+export default async function ToCallPage({ searchParams }: PageProps) {
+  const params = await searchParams
+  const statusFilter = params.status || 'all'
+  const leads = await getLeadsToCall(statusFilter === 'all' ? undefined : statusFilter)
 
   const newCount = leads.filter(l => l.status === 'new').length
   const callbackCount = leads.filter(l => l.status === 'callback').length
@@ -114,6 +123,7 @@ export default async function ToCallPage() {
           newCount={newCount}
           callbackCount={callbackCount}
           noAnswerCount={noAnswerCount}
+          currentFilter={statusFilter}
         />
       </div>
     </div>
