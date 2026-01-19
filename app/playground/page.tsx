@@ -23,6 +23,7 @@ export default async function PlaygroundPage({
   const dateTo = typeof params.date_to === 'string' ? params.date_to : undefined
   const search = typeof params.search === 'string' ? params.search : undefined
   const showHidden = params.show_hidden === 'true'
+  const sortParam = typeof params.sort === 'string' ? params.sort : 'newest'
 
   // Run queries in parallel for better performance
   const [leadsResult, filterOptionsResult, preferences] = await Promise.all([
@@ -201,6 +202,16 @@ export default async function PlaygroundPage({
     })
   }
 
+  // Apply sorting based on sortParam
+  if (sortParam === 'oldest') {
+    filteredLeads = filteredLeads.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+  } else if (sortParam === 'name_asc') {
+    filteredLeads = filteredLeads.sort((a, b) => (a.owner_info || '').localeCompare(b.owner_info || '', 'sv'))
+  } else if (sortParam === 'name_desc') {
+    filteredLeads = filteredLeads.sort((a, b) => (b.owner_info || '').localeCompare(a.owner_info || '', 'sv'))
+  }
+  // 'newest' is default - already sorted by DB query
+
   // Separate leads: hidden = marked for letter (letter_sent === false)
   const hiddenLeads = filteredLeads.filter(lead => lead.letter_sent === false)
   const visibleLeads = filteredLeads.filter(lead => lead.letter_sent !== false)
@@ -230,7 +241,8 @@ export default async function PlaygroundPage({
             prospectType: prospectTypeParam,
             dateFrom,
             dateTo,
-            search
+            search,
+            sort: sortParam
           }}
           activePreferences={{
             preferredMakes,

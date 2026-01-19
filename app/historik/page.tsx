@@ -23,6 +23,9 @@ export default async function HistorikPage({
   const countyParam = typeof params.county === 'string' ? params.county : undefined
   const selectedCounties = countyParam ? countyParam.split(',').filter(c => c.trim()) : []
 
+  // Sort parameter - default to newest first
+  const sortParam = typeof params.sort === 'string' ? params.sort : 'newest'
+
   // First, get accurate counts from database (bypasses 1000 row limit)
   const [
     { count: totalCount },
@@ -173,6 +176,16 @@ export default async function HistorikPage({
     })
   }
 
+  // Apply sorting based on sortParam
+  if (sortParam === 'oldest') {
+    leads = leads.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+  } else if (sortParam === 'name_asc') {
+    leads = leads.sort((a, b) => (a.owner_info || '').localeCompare(b.owner_info || '', 'sv'))
+  } else if (sortParam === 'name_desc') {
+    leads = leads.sort((a, b) => (b.owner_info || '').localeCompare(a.owner_info || '', 'sv'))
+  }
+  // 'newest' is default - already sorted by DB query
+
   // Store filtered count before applying limit
   const filteredCount = leads.length
 
@@ -212,6 +225,7 @@ export default async function HistorikPage({
           currentFilter={filter}
           currentSearch={search}
           currentLimit={limitParam}
+          currentSort={sortParam}
           availableCounties={availableCounties}
           currentCounty={countyParam}
           availableExtraColumns={Array.from(extraColumns)}

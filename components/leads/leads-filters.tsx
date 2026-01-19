@@ -14,6 +14,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Search, X, Filter, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { FilterPresets } from '@/components/ui/filter-presets'
 
 interface LeadsFiltersProps {
   currentFilters: {
@@ -95,6 +96,21 @@ export function LeadsFilters({ currentFilters, makes, showCompletionReasonFilter
     setSearchValue('')
     startTransition(() => {
       router.push('/leads')
+    })
+  }, [router])
+
+  const loadPresetFilters = useCallback((filters: { [key: string]: string | string[] | boolean | number | null | undefined }) => {
+    const params = new URLSearchParams()
+    if (filters.status) params.set('status', String(filters.status))
+    if (filters.search) {
+      params.set('search', String(filters.search))
+      setSearchValue(String(filters.search))
+    }
+    if (filters.make) params.set('make', String(filters.make))
+    if (filters.inTraffic) params.set('inTraffic', String(filters.inTraffic))
+    if (filters.completionReason) params.set('completionReason', String(filters.completionReason))
+    startTransition(() => {
+      router.push(`/leads?${params.toString()}`)
     })
   }, [router])
 
@@ -215,6 +231,13 @@ export function LeadsFilters({ currentFilters, makes, showCompletionReasonFilter
             Rensa filter
           </Button>
         )}
+
+        {/* Filter presets */}
+        <FilterPresets
+          page="leads"
+          currentFilters={currentFilters as { [key: string]: string | string[] | boolean | number | null | undefined }}
+          onLoadPreset={loadPresetFilters}
+        />
       </div>
 
       {/* Active filters badges */}

@@ -81,6 +81,7 @@ import { format, formatDistanceToNow } from 'date-fns'
 import { sv } from 'date-fns/locale'
 import { deleteLead, bulkDeleteLeads } from '@/app/actions/leads'
 import { bulkActivateLeads } from '@/app/actions/vehicles'
+import { FilterPresets } from '@/components/ui/filter-presets'
 
 interface Vehicle {
   id: string
@@ -142,6 +143,7 @@ interface HistorikViewProps {
   currentFilter: string
   currentSearch?: string
   currentLimit: string
+  currentSort: string
   availableCounties: string[]
   currentCounty?: string
   availableExtraColumns?: string[]
@@ -151,6 +153,13 @@ const ROW_LIMITS = [
   { value: '50', label: '50 rader' },
   { value: '100', label: '100 rader' },
   { value: 'all', label: 'Alla' },
+]
+
+const SORT_OPTIONS = [
+  { value: 'newest', label: 'Senaste först' },
+  { value: 'oldest', label: 'Äldsta först' },
+  { value: 'name_asc', label: 'Namn A-Ö' },
+  { value: 'name_desc', label: 'Namn Ö-A' },
 ]
 
 const FILTER_TABS = [
@@ -191,6 +200,7 @@ export function HistorikView({
   currentFilter,
   currentSearch,
   currentLimit,
+  currentSort,
   availableCounties,
   currentCounty,
   availableExtraColumns = []
@@ -252,6 +262,24 @@ export function HistorikView({
     setSearchValue('')
     updateFilter('search', null)
   }, [updateFilter])
+
+  // Load preset filters and apply them to URL
+  const loadPresetFilters = useCallback((filters: Record<string, string | string[] | boolean | number | null | undefined>) => {
+    const params = new URLSearchParams()
+
+    if (filters.filter) params.set('filter', String(filters.filter))
+    if (filters.county) params.set('county', String(filters.county))
+    if (filters.search) {
+      params.set('search', String(filters.search))
+      setSearchValue(String(filters.search))
+    }
+    if (filters.limit) params.set('limit', String(filters.limit))
+    if (filters.sort) params.set('sort', String(filters.sort))
+
+    startTransition(() => {
+      router.push(`/historik?${params.toString()}`)
+    })
+  }, [router])
 
   const copyRegNr = useCallback((regNr: string, vehicleId: string) => {
     navigator.clipboard.writeText(regNr)
@@ -525,6 +553,23 @@ export function HistorikView({
           ))}
         </div>
 
+        {/* Sort Selector */}
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+          {SORT_OPTIONS.map((sort) => (
+            <Button
+              key={sort.value}
+              variant={currentSort === sort.value ? "default" : "ghost"}
+              size="sm"
+              onClick={() => updateFilter('sort', sort.value)}
+              className={cn(
+                currentSort === sort.value && "bg-white shadow-sm"
+              )}
+            >
+              {sort.label}
+            </Button>
+          ))}
+        </div>
+
         {/* County Multi-Select Filter */}
         {availableCounties.length > 0 && (
           <Popover>
@@ -591,6 +636,19 @@ export function HistorikView({
             Rensa sök
           </Button>
         )}
+
+        {/* Filter presets */}
+        <FilterPresets
+          page="historik"
+          currentFilters={{
+            filter: currentFilter,
+            county: currentCounty,
+            search: currentSearch,
+            limit: currentLimit,
+            sort: currentSort
+          }}
+          onLoadPreset={loadPresetFilters}
+        />
       </div>
 
       {/* Active filter badges */}

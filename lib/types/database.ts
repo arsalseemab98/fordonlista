@@ -162,3 +162,13 @@ export interface LeadWithVehiclesAndCalls extends Lead {
   vehicles: Vehicle[]
   call_logs: CallLog[]
 }
+
+export interface FilterPreset {
+  id: string
+  name: string
+  page: 'playground' | 'historik' | 'leads' | 'to-call' | 'brev'
+  filters: Record<string, string | string[] | boolean | number | null | undefined>
+  is_default: boolean
+  created_at: string
+  updated_at: string
+}

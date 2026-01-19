@@ -99,6 +99,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Settings2 } from 'lucide-react'
+import { FilterPresets } from '@/components/ui/filter-presets'
 
 // Mapping from Swedish display values to database values
 const CALL_RESULT_MAP: Record<string, string> = {
@@ -189,6 +190,7 @@ interface CurrentFilters {
   dateFrom?: string
   dateTo?: string
   search?: string
+  sort?: string
 }
 
 interface ActivePreferences {
@@ -245,6 +247,13 @@ const PROSPECT_TYPES = [
   { value: 'nyköpt_bil', label: 'Nyköpt bil' },
   { value: 'låg_miltal', label: 'Låg körsträcka' },
   { value: 'alla', label: 'Alla typer' },
+]
+
+const SORT_OPTIONS = [
+  { value: 'newest', label: 'Senaste först' },
+  { value: 'oldest', label: 'Äldsta först' },
+  { value: 'name_asc', label: 'Namn A-Ö' },
+  { value: 'name_desc', label: 'Namn Ö-A' },
 ]
 
 // Lead status types for filtering
@@ -482,6 +491,25 @@ export function PlaygroundView({
     setSearchValue('')
     startTransition(() => {
       router.push('/playground')
+    })
+  }, [router])
+
+  // Load preset filters and apply them to URL
+  const loadPresetFilters = useCallback((filters: Record<string, string | string[] | boolean | number | null | undefined>) => {
+    const params = new URLSearchParams()
+
+    if (filters.county) params.set('county', String(filters.county))
+    if (filters.prospectType || filters.prospect_type) params.set('prospect_type', String(filters.prospectType || filters.prospect_type))
+    if (filters.dateFrom || filters.date_from) params.set('date_from', String(filters.dateFrom || filters.date_from))
+    if (filters.dateTo || filters.date_to) params.set('date_to', String(filters.dateTo || filters.date_to))
+    if (filters.search) {
+      params.set('search', String(filters.search))
+      setSearchValue(String(filters.search))
+    }
+    if (filters.sort) params.set('sort', String(filters.sort))
+
+    startTransition(() => {
+      router.push(`/playground?${params.toString()}`)
     })
   }, [router])
 
@@ -1921,6 +1949,23 @@ export function PlaygroundView({
             />
           </div>
 
+          {/* Sort selector */}
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+            {SORT_OPTIONS.map((sort) => (
+              <Button
+                key={sort.value}
+                variant={(currentFilters.sort || 'newest') === sort.value ? "default" : "ghost"}
+                size="sm"
+                onClick={() => updateFilter('sort', sort.value)}
+                className={cn(
+                  (currentFilters.sort || 'newest') === sort.value && "bg-white shadow-sm"
+                )}
+              >
+                {sort.label}
+              </Button>
+            ))}
+          </div>
+
           {/* Clear filters */}
           {activeFilterCount > 0 && (
             <Button
@@ -1933,6 +1978,13 @@ export function PlaygroundView({
               Rensa filter
             </Button>
           )}
+
+          {/* Filter presets */}
+          <FilterPresets
+            page="playground"
+            currentFilters={currentFilters as { [key: string]: string | string[] | boolean | number | null | undefined }}
+            onLoadPreset={loadPresetFilters}
+          />
         </div>
 
         {/* Active filters badges */}
