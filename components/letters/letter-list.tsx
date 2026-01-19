@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -85,6 +85,28 @@ export function LetterList({ leads, counts, currentFilter, letterCost }: LetterL
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
   const [leadToDelete, setLeadToDelete] = useState<Lead | null>(null)
+  const [fromPlayground, setFromPlayground] = useState(false)
+
+  // Check for leads sent from playground via localStorage
+  useEffect(() => {
+    const storedIds = localStorage.getItem('brevLeadIds')
+    if (storedIds) {
+      try {
+        const leadIds: string[] = JSON.parse(storedIds)
+        // Filter to only include IDs that exist in current leads
+        const validIds = leadIds.filter(id => leads.some(l => l.id === id))
+        if (validIds.length > 0) {
+          setSelectedLeads(new Set(validIds))
+          setFromPlayground(true)
+          toast.info(`${validIds.length} leads förvalda från playground`)
+        }
+        // Clear localStorage after reading
+        localStorage.removeItem('brevLeadIds')
+      } catch {
+        localStorage.removeItem('brevLeadIds')
+      }
+    }
+  }, [leads])
 
   const filters = [
     { key: 'not_sent', label: 'Ej skickat', count: counts.notSent, icon: Clock },

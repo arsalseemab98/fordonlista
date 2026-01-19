@@ -601,6 +601,34 @@ export function PlaygroundView({
     router.push('/brev?filter=not_sent')
   }, [selectedLeads, router])
 
+  // Send selected leads to To-Call page (activate and navigate)
+  const handleSendToCall = useCallback(async () => {
+    if (selectedLeads.size === 0) {
+      toast.error('Inga leads valda')
+      return
+    }
+
+    setIsActivating(true)
+
+    try {
+      const result = await bulkActivateLeads(Array.from(selectedLeads), 'new')
+
+      if (result.success) {
+        toast.success(`${result.activatedCount} leads skickade till ringlistan!`)
+        clearSelection()
+        // Navigate to to-call page
+        router.push('/to-call')
+      } else {
+        toast.error(result.error || 'Kunde inte aktivera')
+      }
+    } catch (error) {
+      console.error('Send to call error:', error)
+      toast.error('Något gick fel')
+    } finally {
+      setIsActivating(false)
+    }
+  }, [selectedLeads, clearSelection, router])
+
   // Open call log dialog
   const openCallDialog = useCallback((lead: Lead, quickResult?: string) => {
     setCallDialogLead(lead)
@@ -1517,6 +1545,21 @@ export function PlaygroundView({
                 >
                   <Mail className="h-4 w-4 mr-2" />
                   Skicka till brev
+                </Button>
+
+                {/* Send to Ring/Call */}
+                <Button
+                  onClick={handleSendToCall}
+                  disabled={isActivating}
+                  variant="outline"
+                  className="border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                >
+                  {isActivating ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Phone className="h-4 w-4 mr-2" />
+                  )}
+                  Skicka till ring
                 </Button>
 
                 {/* Separator */}
