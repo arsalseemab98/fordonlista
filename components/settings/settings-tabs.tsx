@@ -383,10 +383,32 @@ function GeneralSettings({ preferences }: { preferences: Preferences | null }) {
         </div>
         </div>
 
-        <Button onClick={handleSave} disabled={isSaving} className="gap-2">
-          <Save className="h-4 w-4" />
-          {isSaving ? 'Sparar...' : 'Spara inställningar'}
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={handleSave} disabled={isSaving} className="gap-2">
+            <Save className="h-4 w-4" />
+            {isSaving ? 'Sparar...' : 'Spara inställningar'}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setPreferredMakes([])
+              setExcludedMakes([])
+              setPreferredModels([])
+              setExcludedModels([])
+              setMinMileage(0)
+              setMaxMileage(200000)
+              setMinYear(2010)
+              setMaxYear(new Date().getFullYear())
+              setPreferDeregistered(false)
+              setLetterCost(12.00)
+              toast.info('Filter återställda - klicka Spara för att bekräfta')
+            }}
+            className="gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            Rensa filter
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )
