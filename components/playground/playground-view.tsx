@@ -58,6 +58,8 @@ import {
   PhoneMissed,
   Clock,
   MoreHorizontal,
+  FileText,
+  MailCheck,
   MessageSquare,
   CalendarPlus,
   Eye,
@@ -172,6 +174,9 @@ interface Lead {
   data_period_start?: string
   data_period_end?: string
   letter_sent?: boolean | null
+  letter_sent_date?: string | null
+  sent_to_call_at?: string | null
+  sent_to_brev_at?: string | null
   extra_data?: Record<string, string | number | boolean | null> | null
   created_at: string
   vehicles: Vehicle[]
@@ -2240,6 +2245,7 @@ export function PlaygroundView({
                   <TableHead className="w-[120px]">Län</TableHead>
                   <TableHead className="w-[150px]">Prospekt-typ</TableHead>
                   <TableHead className="w-[130px]">Status</TableHead>
+                  <TableHead className="w-[130px]">Aktivitet</TableHead>
                   {/* Car.info columns */}
                   <TableHead className="w-[80px] text-center">
                     <Tooltip>
@@ -2487,6 +2493,79 @@ export function PlaygroundView({
                             </Badge>
                           )
                         })()}
+                      </TableCell>
+
+                      {/* Activity indicators - same as historik */}
+                      <TableCell>
+                        <div className="flex flex-wrap items-center gap-1">
+                          {/* Sent to call list */}
+                          {lead.sent_to_call_at && (
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Badge
+                                  variant="outline"
+                                  className="gap-1 bg-blue-50 text-blue-700 border-blue-200 text-xs"
+                                >
+                                  <Send className="h-3 w-3" />
+                                  Ring
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Till ringlistan {lead.sent_to_call_at ? new Date(lead.sent_to_call_at).toLocaleDateString('sv-SE') : ''}
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                          {/* Actually called */}
+                          {lead.call_logs && lead.call_logs.length > 0 && (
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Badge
+                                  variant="outline"
+                                  className="gap-1 bg-green-50 text-green-700 border-green-200 text-xs"
+                                >
+                                  <PhoneCall className="h-3 w-3" />
+                                  {lead.call_logs.length}x
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Ringd {lead.call_logs.length} gånger
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                          {/* Sent to brev list */}
+                          {lead.sent_to_brev_at && (
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Badge
+                                  variant="outline"
+                                  className="gap-1 bg-orange-50 text-orange-700 border-orange-200 text-xs"
+                                >
+                                  <FileText className="h-3 w-3" />
+                                  Brev
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Till brevlistan {lead.sent_to_brev_at ? new Date(lead.sent_to_brev_at).toLocaleDateString('sv-SE') : ''}
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                          {/* Letter actually sent */}
+                          {lead.letter_sent && (
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Badge
+                                  variant="outline"
+                                  className="gap-1 bg-amber-50 text-amber-700 border-amber-200 text-xs"
+                                >
+                                  <MailCheck className="h-3 w-3" />
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Brev skickat {lead.letter_sent_date ? new Date(lead.letter_sent_date).toLocaleDateString('sv-SE') : ''}
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
                       </TableCell>
 
                       {/* Car.info columns */}

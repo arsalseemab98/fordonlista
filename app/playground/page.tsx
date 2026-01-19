@@ -39,6 +39,9 @@ export default async function PlaygroundPage({
           county,
           prospect_type,
           letter_sent,
+          letter_sent_date,
+          sent_to_call_at,
+          sent_to_brev_at,
           extra_data,
           created_at,
           vehicles (
@@ -68,7 +71,7 @@ export default async function PlaygroundPage({
             result
           )
         `)
-        .eq('status', 'pending_review')
+        .in('status', ['pending_review', 'new'])
         .order('created_at', { ascending: false })
         .limit(200)
 
@@ -83,7 +86,7 @@ export default async function PlaygroundPage({
     supabase
       .from('leads')
       .select('county, prospect_type')
-      .eq('status', 'pending_review'),
+      .in('status', ['pending_review', 'new']),
     // Get user preferences for filtering
     getPreferences()
   ])

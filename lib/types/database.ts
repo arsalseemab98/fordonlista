@@ -38,6 +38,12 @@ export interface Lead {
   updated_at: string
   last_called_at: string | null
   follow_up_date: string | null
+  // Letter tracking
+  letter_sent: boolean | null
+  letter_sent_date: string | null
+  // Timestamps for when lead was sent to call/brev list
+  sent_to_call_at: string | null
+  sent_to_brev_at: string | null
 }
 
 export interface Vehicle {

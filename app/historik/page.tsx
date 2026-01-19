@@ -28,7 +28,9 @@ export default async function HistorikPage({
     { count: totalCount },
     { count: calledCount },
     { count: letterSentCount },
-    { count: pendingCount }
+    { count: pendingCount },
+    { count: sentToCallCount },
+    { count: sentToBrevCount }
   ] = await Promise.all([
     // Total leads count
     supabase
@@ -48,7 +50,17 @@ export default async function HistorikPage({
     supabase
       .from('leads')
       .select('id', { count: 'exact', head: true })
-      .eq('status', 'pending_review')
+      .eq('status', 'pending_review'),
+    // Leads sent to call list (has sent_to_call_at timestamp)
+    supabase
+      .from('leads')
+      .select('id', { count: 'exact', head: true })
+      .not('sent_to_call_at', 'is', null),
+    // Leads sent to brev list (has sent_to_brev_at timestamp)
+    supabase
+      .from('leads')
+      .select('id', { count: 'exact', head: true })
+      .not('sent_to_brev_at', 'is', null)
   ])
 
   // Get unique called lead count (since call_logs can have multiple entries per lead)
@@ -72,6 +84,9 @@ export default async function HistorikPage({
           county,
           prospect_type,
           letter_sent,
+          letter_sent_date,
+          sent_to_call_at,
+          sent_to_brev_at,
           extra_data,
           created_at,
           vehicles (
@@ -92,6 +107,7 @@ export default async function HistorikPage({
             besiktning_till,
             "senaste_avställning",
             "senaste_påställning",
+            senaste_agarbyte,
             antal_foretagsannonser,
             antal_privatannonser
           ),
@@ -128,10 +144,10 @@ export default async function HistorikPage({
   // Filter based on selected filter
   let leads = allLeads || []
 
-  if (filter === 'called') {
-    leads = leads.filter(lead => lead.call_logs && lead.call_logs.length > 0)
-  } else if (filter === 'letter_sent') {
-    leads = leads.filter(lead => lead.letter_sent === true)
+  if (filter === 'ring') {
+    leads = leads.filter(lead => !!lead.sent_to_call_at)
+  } else if (filter === 'brev') {
+    leads = leads.filter(lead => !!lead.sent_to_brev_at)
   } else if (filter === 'pending') {
     leads = leads.filter(lead => lead.status === 'pending_review')
   }
@@ -191,6 +207,8 @@ export default async function HistorikPage({
           calledCount={uniqueCalledCount}
           letterSentCount={letterSentCount || 0}
           pendingCount={pendingCount || 0}
+          sentToCallCount={sentToCallCount || 0}
+          sentToBrevCount={sentToBrevCount || 0}
           currentFilter={filter}
           currentSearch={search}
           currentLimit={limitParam}

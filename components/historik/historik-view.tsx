@@ -43,6 +43,13 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   Phone,
   Mail,
   Search,
@@ -62,13 +69,18 @@ import {
   AlertTriangle,
   Database,
   MapPin,
-  ChevronDown
+  ChevronDown,
+  Send,
+  FileText,
+  MoreHorizontal,
+  ArrowRight
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { format, formatDistanceToNow } from 'date-fns'
 import { sv } from 'date-fns/locale'
 import { deleteLead, bulkDeleteLeads } from '@/app/actions/leads'
+import { bulkActivateLeads } from '@/app/actions/vehicles'
 
 interface Vehicle {
   id: string
@@ -87,6 +99,7 @@ interface Vehicle {
   besiktning_till?: string
   senaste_avställning?: string
   senaste_påställning?: string
+  senaste_agarbyte?: string
   antal_foretagsannonser?: number
   antal_privatannonser?: number
 }
@@ -108,6 +121,9 @@ interface Lead {
   county?: string
   prospect_type?: string
   letter_sent?: boolean | null
+  letter_sent_date?: string | null
+  sent_to_call_at?: string | null
+  sent_to_brev_at?: string | null
   extra_data?: Record<string, unknown>
   created_at: string
   vehicles: Vehicle[]
@@ -121,6 +137,8 @@ interface HistorikViewProps {
   calledCount: number
   letterSentCount: number
   pendingCount: number
+  sentToCallCount: number
+  sentToBrevCount: number
   currentFilter: string
   currentSearch?: string
   currentLimit: string
@@ -137,8 +155,8 @@ const ROW_LIMITS = [
 
 const FILTER_TABS = [
   { value: 'all', label: 'Alla', icon: Database },
-  { value: 'called', label: 'Ringda', icon: PhoneCall },
-  { value: 'letter_sent', label: 'Brev skickat', icon: MailCheck },
+  { value: 'ring', label: 'Ring', icon: PhoneCall },
+  { value: 'brev', label: 'Brev', icon: FileText },
   { value: 'pending', label: 'Pending', icon: Filter },
 ]
 
@@ -168,6 +186,8 @@ export function HistorikView({
   calledCount,
   letterSentCount,
   pendingCount,
+  sentToCallCount,
+  sentToBrevCount,
   currentFilter,
   currentSearch,
   currentLimit,
@@ -363,18 +383,38 @@ export function HistorikView({
         <Card
           className={cn(
             "cursor-pointer transition-all hover:shadow-md",
-            currentFilter === 'all' && "ring-2 ring-blue-500"
+            currentFilter === 'all' && "ring-2 ring-gray-500"
           )}
           onClick={() => updateFilter('filter', 'all')}
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Totalt i databasen</p>
+                <p className="text-sm text-gray-500">Alla</p>
                 <p className="text-2xl font-bold text-gray-900">{totalCount}</p>
               </div>
+              <div className="h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center">
+                <Database className="h-6 w-6 text-gray-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card
+          className={cn(
+            "cursor-pointer transition-all hover:shadow-md",
+            currentFilter === 'ring' && "ring-2 ring-blue-500"
+          )}
+          onClick={() => updateFilter('filter', 'ring')}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-500">Ring</p>
+                <p className="text-2xl font-bold text-blue-600">{sentToCallCount}</p>
+              </div>
               <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                <Database className="h-6 w-6 text-blue-600" />
+                <PhoneCall className="h-6 w-6 text-blue-600" />
               </div>
             </div>
           </CardContent>
@@ -383,38 +423,18 @@ export function HistorikView({
         <Card
           className={cn(
             "cursor-pointer transition-all hover:shadow-md",
-            currentFilter === 'called' && "ring-2 ring-green-500"
+            currentFilter === 'brev' && "ring-2 ring-orange-500"
           )}
-          onClick={() => updateFilter('filter', 'called')}
+          onClick={() => updateFilter('filter', 'brev')}
         >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Ringda leads</p>
-                <p className="text-2xl font-bold text-green-600">{calledCount}</p>
+                <p className="text-sm text-gray-500">Brev</p>
+                <p className="text-2xl font-bold text-orange-600">{sentToBrevCount}</p>
               </div>
-              <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-                <PhoneCall className="h-6 w-6 text-green-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card
-          className={cn(
-            "cursor-pointer transition-all hover:shadow-md",
-            currentFilter === 'letter_sent' && "ring-2 ring-amber-500"
-          )}
-          onClick={() => updateFilter('filter', 'letter_sent')}
-        >
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Brev skickat</p>
-                <p className="text-2xl font-bold text-amber-600">{letterSentCount}</p>
-              </div>
-              <div className="h-12 w-12 rounded-full bg-amber-100 flex items-center justify-center">
-                <MailCheck className="h-6 w-6 text-amber-600" />
+              <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
+                <FileText className="h-6 w-6 text-orange-600" />
               </div>
             </div>
           </CardContent>
@@ -430,7 +450,7 @@ export function HistorikView({
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Pending review</p>
+                <p className="text-sm text-gray-500">Pending</p>
                 <p className="text-2xl font-bold text-purple-600">{pendingCount}</p>
               </div>
               <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
@@ -639,6 +659,42 @@ export function HistorikView({
               Avmarkera alla
             </Button>
             <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                const result = await bulkActivateLeads(Array.from(selectedIds), 'new', 'call')
+                if (result.success) {
+                  toast.success(`${selectedIds.size} leads skickade till ringlistan`)
+                  clearSelection()
+                  router.refresh()
+                } else {
+                  toast.error(result.error || 'Kunde inte skicka till ringlistan')
+                }
+              }}
+              className="gap-2 text-blue-600 border-blue-200 hover:bg-blue-50"
+            >
+              <Send className="h-4 w-4" />
+              Skicka till ring
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                const result = await bulkActivateLeads(Array.from(selectedIds), 'new', 'brev')
+                if (result.success) {
+                  toast.success(`${selectedIds.size} leads skickade till brevlistan`)
+                  clearSelection()
+                  router.refresh()
+                } else {
+                  toast.error(result.error || 'Kunde inte skicka till brevlistan')
+                }
+              }}
+              className="gap-2 text-orange-600 border-orange-200 hover:bg-orange-50"
+            >
+              <FileText className="h-4 w-4" />
+              Skicka till brev
+            </Button>
+            <Button
               variant="destructive"
               size="sm"
               onClick={() => setShowBulkDeleteDialog(true)}
@@ -684,13 +740,19 @@ export function HistorikView({
                   <TableHead className="w-[90px]">Miltal</TableHead>
                   <TableHead>Ägare</TableHead>
                   <TableHead className="w-[100px]">Län</TableHead>
+                  <TableHead className="w-[120px]">Prospekt-typ</TableHead>
+                  <TableHead className="w-[100px]">Status</TableHead>
+                  <TableHead className="w-[120px]">Aktivitet</TableHead>
                   <TableHead className="w-[60px] text-center">Ägare</TableHead>
                   <TableHead className="w-[70px] text-center">Värd. F</TableHead>
                   <TableHead className="w-[70px] text-center">Värd. P</TableHead>
                   <TableHead className="w-[80px] text-center">Besikt.</TableHead>
                   <TableHead className="w-[80px] text-center">Avställd</TableHead>
+                  <TableHead className="w-[80px] text-center">Påställd</TableHead>
+                  <TableHead className="w-[80px] text-center">Ägarbyte</TableHead>
+                  <TableHead className="w-[60px] text-center">Företag</TableHead>
+                  <TableHead className="w-[60px] text-center">Privat</TableHead>
                   <TableHead className="w-[50px] text-center">Trafik</TableHead>
-                  <TableHead className="w-[120px]">Aktivitet</TableHead>
                   <TableHead className="w-[100px] text-center">Åtgärder</TableHead>
                 </TableRow>
               </TableHeader>
@@ -785,6 +847,112 @@ export function HistorikView({
                         </span>
                       </TableCell>
 
+                      {/* Prospekt-typ */}
+                      <TableCell>
+                        {lead.prospect_type ? (
+                          <Badge variant="outline" className="text-xs">
+                            {lead.prospect_type === 'avställda' && 'Avställda'}
+                            {lead.prospect_type === 'nyköpt_bil' && 'Nyköpt bil'}
+                            {lead.prospect_type === 'låg_miltal' && 'Låg miltal'}
+                            {lead.prospect_type === 'alla' && 'Alla'}
+                            {!['avställda', 'nyköpt_bil', 'låg_miltal', 'alla'].includes(lead.prospect_type) && lead.prospect_type}
+                          </Badge>
+                        ) : (
+                          <span className="text-gray-400 text-sm">-</span>
+                        )}
+                      </TableCell>
+
+                      {/* Status */}
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-xs",
+                            lead.status === 'new' && "bg-blue-50 text-blue-700 border-blue-200",
+                            lead.status === 'pending_review' && "bg-yellow-50 text-yellow-700 border-yellow-200",
+                            lead.status === 'to_call' && "bg-purple-50 text-purple-700 border-purple-200",
+                            lead.status === 'called' && "bg-green-50 text-green-700 border-green-200",
+                            lead.status === 'interested' && "bg-emerald-50 text-emerald-700 border-emerald-200",
+                            lead.status === 'booked' && "bg-teal-50 text-teal-700 border-teal-200",
+                            lead.status === 'bought' && "bg-cyan-50 text-cyan-700 border-cyan-200",
+                            lead.status === 'not_interested' && "bg-gray-50 text-gray-700 border-gray-200",
+                            lead.status === 'do_not_call' && "bg-red-50 text-red-700 border-red-200",
+                            lead.status === 'callback' && "bg-orange-50 text-orange-700 border-orange-200",
+                            lead.status === 'no_answer' && "bg-slate-50 text-slate-700 border-slate-200"
+                          )}
+                        >
+                          {lead.status === 'new' && 'Ny'}
+                          {lead.status === 'pending_review' && 'Granskas'}
+                          {lead.status === 'to_call' && 'Att ringa'}
+                          {lead.status === 'called' && 'Ringd'}
+                          {lead.status === 'interested' && 'Intresserad'}
+                          {lead.status === 'booked' && 'Bokad'}
+                          {lead.status === 'bought' && 'Köpt'}
+                          {lead.status === 'not_interested' && 'Ej intresserad'}
+                          {lead.status === 'do_not_call' && 'Ring ej'}
+                          {lead.status === 'callback' && 'Återkom'}
+                          {lead.status === 'no_answer' && 'Inget svar'}
+                          {!['new', 'pending_review', 'to_call', 'called', 'interested', 'booked', 'bought', 'not_interested', 'do_not_call', 'callback', 'no_answer'].includes(lead.status) && lead.status}
+                        </Badge>
+                      </TableCell>
+
+                      {/* Activity indicators - moved to match playground */}
+                      <TableCell>
+                        <div className="flex flex-wrap items-center gap-1">
+                          {lead.sent_to_call_at && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <Badge variant="outline" className="gap-1 bg-blue-50 text-blue-700 border-blue-200 text-xs">
+                                    <Send className="h-3 w-3" />
+                                    Ring
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>Till ringlistan {formatDate(lead.sent_to_call_at)}</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                          {callCount > 0 && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <Badge variant="outline" className="gap-1 bg-green-50 text-green-700 border-green-200 text-xs">
+                                    <PhoneCall className="h-3 w-3" />
+                                    {callCount}x
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>Ringd {callCount} gånger</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                          {lead.sent_to_brev_at && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <Badge variant="outline" className="gap-1 bg-orange-50 text-orange-700 border-orange-200 text-xs">
+                                    <FileText className="h-3 w-3" />
+                                    Brev
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>Till brevlistan {formatDate(lead.sent_to_brev_at)}</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                          {lead.letter_sent && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <Badge variant="outline" className="gap-1 bg-amber-50 text-amber-700 border-amber-200 text-xs">
+                                    <MailCheck className="h-3 w-3" />
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>Brev skickat {lead.letter_sent_date ? formatDate(lead.letter_sent_date) : ''}</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </div>
+                      </TableCell>
+
                       {/* Antal ägare */}
                       <TableCell className="text-center">
                         <span className="text-sm text-gray-600">
@@ -820,6 +988,34 @@ export function HistorikView({
                         </span>
                       </TableCell>
 
+                      {/* Påställd */}
+                      <TableCell className="text-center">
+                        <span className="text-sm text-gray-600">
+                          {formatDate(primaryVehicle?.senaste_påställning)}
+                        </span>
+                      </TableCell>
+
+                      {/* Ägarbyte */}
+                      <TableCell className="text-center">
+                        <span className="text-sm text-gray-600">
+                          {formatDate(primaryVehicle?.senaste_agarbyte)}
+                        </span>
+                      </TableCell>
+
+                      {/* Företag annonser */}
+                      <TableCell className="text-center">
+                        <span className="text-sm text-gray-600">
+                          {primaryVehicle?.antal_foretagsannonser ?? '-'}
+                        </span>
+                      </TableCell>
+
+                      {/* Privat annonser */}
+                      <TableCell className="text-center">
+                        <span className="text-sm text-gray-600">
+                          {primaryVehicle?.antal_privatannonser ?? '-'}
+                        </span>
+                      </TableCell>
+
                       {/* Trafik */}
                       <TableCell className="text-center">
                         {primaryVehicle?.in_traffic !== undefined ? (
@@ -835,47 +1031,6 @@ export function HistorikView({
                         ) : (
                           <span className="text-gray-400 text-xs">-</span>
                         )}
-                      </TableCell>
-
-                      {/* Activity indicators */}
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          {callCount > 0 && (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger>
-                                  <Badge
-                                    variant="outline"
-                                    className="gap-1 bg-green-50 text-green-700 border-green-200 text-xs"
-                                  >
-                                    <PhoneCall className="h-3 w-3" />
-                                    {callCount}x
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  Ringd {callCount} gånger
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
-                          {lead.letter_sent && (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger>
-                                  <Badge
-                                    variant="outline"
-                                    className="gap-1 bg-amber-50 text-amber-700 border-amber-200 text-xs"
-                                  >
-                                    <Mail className="h-3 w-3" />
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  Brev skickat
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
-                        </div>
                       </TableCell>
 
                       {/* Actions */}
@@ -928,6 +1083,52 @@ export function HistorikView({
                               <TooltipContent>Radera lead</TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
+
+                          {/* More actions dropdown */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreHorizontal className="h-4 w-4 text-gray-500" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={async () => {
+                                  const result = await bulkActivateLeads([lead.id], 'new', 'call')
+                                  if (result.success) {
+                                    toast.success('Skickad till ringlistan')
+                                    router.refresh()
+                                  } else {
+                                    toast.error(result.error || 'Kunde inte skicka')
+                                  }
+                                }}
+                              >
+                                <Send className="h-4 w-4 mr-2 text-blue-600" />
+                                Skicka till ring
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={async () => {
+                                  const result = await bulkActivateLeads([lead.id], 'new', 'brev')
+                                  if (result.success) {
+                                    toast.success('Skickad till brevlistan')
+                                    router.refresh()
+                                  } else {
+                                    toast.error(result.error || 'Kunde inte skicka')
+                                  }
+                                }}
+                              >
+                                <FileText className="h-4 w-4 mr-2 text-orange-600" />
+                                Skicka till brev
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => router.push(`/leads/${lead.id}`)}
+                              >
+                                <ArrowRight className="h-4 w-4 mr-2" />
+                                Gå till leads
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </TableCell>
                     </TableRow>
