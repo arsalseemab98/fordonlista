@@ -68,6 +68,13 @@ export async function saveCarInfoToVehicle(vehicleId: string, carInfo: CarInfoDa
            h.event.toLowerCase().includes('garbyte')
   }).map(h => ({ date: h.date, event: h.event })) || []
 
+  // FIX: If senaste_agarbyte is not set but we found ägarbyte events in history,
+  // use the first match (most recent) as the senaste_agarbyte value
+  if (!carInfo.senaste_agarbyte && agarbyteMatches.length > 0) {
+    carInfo.senaste_agarbyte = agarbyteMatches[0].date
+    console.log(`[VEHICLES] Fixed senaste_agarbyte for ${carInfo.reg_number}: ${agarbyteMatches[0].date} (from ${agarbyteMatches.length} matches)`)
+  }
+
   await supabase.from('activity_logs').insert({
     action: 'carinfo_save_attempt',
     entity_type: 'vehicle',
