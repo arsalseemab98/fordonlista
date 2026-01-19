@@ -600,7 +600,7 @@ export function PlaygroundView({
 
     try {
       // Activate leads first (brev page only shows non-pending_review leads)
-      const result = await bulkActivateLeads(Array.from(selectedLeads), 'new')
+      const result = await bulkActivateLeads(Array.from(selectedLeads), 'new', 'brev')
 
       if (result.success) {
         // Store selected leads in localStorage for brev page to pre-select
@@ -629,7 +629,7 @@ export function PlaygroundView({
     setIsActivating(true)
 
     try {
-      const result = await bulkActivateLeads(Array.from(selectedLeads), 'new')
+      const result = await bulkActivateLeads(Array.from(selectedLeads), 'new', 'call')
 
       if (result.success) {
         toast.success(`${result.activatedCount} leads skickade till ringlistan!`)

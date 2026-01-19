@@ -202,7 +202,8 @@ export async function activateLead(leadId: string, targetStatus: 'new' | 'to_cal
 // Bulk activate leads
 export async function bulkActivateLeads(
   leadIds: string[],
-  targetStatus: 'new' | 'to_call' = 'new'
+  targetStatus: 'new' | 'to_call' = 'new',
+  actionType?: 'call' | 'brev'
 ) {
   const supabase = await createClient()
 
@@ -210,12 +211,24 @@ export async function bulkActivateLeads(
     return { success: false, error: 'Inga leads valda' }
   }
 
+  const now = new Date().toISOString()
+
+  // Build update object with optional timestamp based on action type
+  const updateData: Record<string, string | null> = {
+    status: targetStatus,
+    updated_at: now
+  }
+
+  // Add timestamp for tracking when lead was sent to call or brev
+  if (actionType === 'call') {
+    updateData.sent_to_call_at = now
+  } else if (actionType === 'brev') {
+    updateData.sent_to_brev_at = now
+  }
+
   const { error, count } = await supabase
     .from('leads')
-    .update({
-      status: targetStatus,
-      updated_at: new Date().toISOString()
-    })
+    .update(updateData)
     .in('id', leadIds)
 
   if (error) {
