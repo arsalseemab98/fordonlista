@@ -589,17 +589,35 @@ export function PlaygroundView({
     }
   }, [selectedLeads, bulkCounties, bulkProspectTypes, bulkDateFrom, bulkDateTo, clearSelection, router])
 
-  // Send selected leads to Brev page
-  const handleSendToBrev = useCallback(() => {
+  // Send selected leads to Brev page (activate first, then navigate)
+  const handleSendToBrev = useCallback(async () => {
     if (selectedLeads.size === 0) {
       toast.error('Inga leads valda')
       return
     }
-    // Store selected leads in localStorage for brev page
-    localStorage.setItem('brevLeadIds', JSON.stringify(Array.from(selectedLeads)))
-    toast.success(`${selectedLeads.size} leads markerade för brevutskick`)
-    router.push('/brev?filter=not_sent')
-  }, [selectedLeads, router])
+
+    setIsActivating(true)
+
+    try {
+      // Activate leads first (brev page only shows non-pending_review leads)
+      const result = await bulkActivateLeads(Array.from(selectedLeads), 'new')
+
+      if (result.success) {
+        // Store selected leads in localStorage for brev page to pre-select
+        localStorage.setItem('brevLeadIds', JSON.stringify(Array.from(selectedLeads)))
+        toast.success(`${result.activatedCount} leads skickade till brevlistan!`)
+        clearSelection()
+        router.push('/brev?filter=not_sent')
+      } else {
+        toast.error(result.error || 'Kunde inte aktivera')
+      }
+    } catch (error) {
+      console.error('Send to brev error:', error)
+      toast.error('Något gick fel')
+    } finally {
+      setIsActivating(false)
+    }
+  }, [selectedLeads, clearSelection, router])
 
   // Send selected leads to To-Call page (activate and navigate)
   const handleSendToCall = useCallback(async () => {
@@ -1540,10 +1558,15 @@ export function PlaygroundView({
                 {/* Send to Brev */}
                 <Button
                   onClick={handleSendToBrev}
+                  disabled={isActivating}
                   variant="outline"
                   className="border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
                 >
-                  <Mail className="h-4 w-4 mr-2" />
+                  {isActivating ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Mail className="h-4 w-4 mr-2" />
+                  )}
                   Skicka till brev
                 </Button>
 
