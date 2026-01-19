@@ -195,6 +195,7 @@ interface ActivePreferences {
   maxMileage: number
   minYear: number
   maxYear: number
+  filtersEnabled: boolean
 }
 
 interface PlaygroundViewProps {
@@ -1290,14 +1291,16 @@ export function PlaygroundView({
 
   // Check if there are active preference filters
   const hasPreferenceFilters =
-    (activePreferences?.preferredMakes?.length ?? 0) > 0 ||
-    (activePreferences?.excludedMakes?.length ?? 0) > 0 ||
-    (activePreferences?.preferredModels?.length ?? 0) > 0 ||
-    (activePreferences?.excludedModels?.length ?? 0) > 0 ||
-    (activePreferences?.minMileage ?? 0) > 0 ||
-    (activePreferences?.maxMileage ?? 999999) < 999999 ||
-    (activePreferences?.minYear ?? 0) > 0 ||
-    (activePreferences?.maxYear ?? new Date().getFullYear()) < new Date().getFullYear()
+    (activePreferences?.filtersEnabled !== false) && (
+      (activePreferences?.preferredMakes?.length ?? 0) > 0 ||
+      (activePreferences?.excludedMakes?.length ?? 0) > 0 ||
+      (activePreferences?.preferredModels?.length ?? 0) > 0 ||
+      (activePreferences?.excludedModels?.length ?? 0) > 0 ||
+      (activePreferences?.minMileage ?? 0) > 0 ||
+      (activePreferences?.maxMileage ?? 999999) < 999999 ||
+      (activePreferences?.minYear ?? 0) > 0 ||
+      (activePreferences?.maxYear ?? new Date().getFullYear()) < new Date().getFullYear()
+    )
 
   // Get display labels for filter values
   const getCountyLabel = (value?: string) => {

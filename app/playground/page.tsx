@@ -123,18 +123,21 @@ export default async function PlaygroundPage({
     })
   }
 
-  // Apply preferred/excluded makes filtering from settings
-  const preferredMakes = preferences.preferred_makes || []
-  const excludedMakes = preferences.excluded_makes || []
-  const preferredModels = preferences.preferred_models || []
-  const excludedModels = preferences.excluded_models || []
-  const minMileage = preferences.min_mileage || 0
-  const maxMileage = preferences.max_mileage || 999999
-  const minYear = preferences.min_year || 0
-  const maxYear = preferences.max_year || new Date().getFullYear()
+  // Check if filters are enabled
+  const filtersEnabled = preferences.filters_enabled ?? true
 
-  // Filter by preferred makes (if any are specified)
-  if (preferredMakes.length > 0) {
+  // Apply preferred/excluded makes filtering from settings (only if filters are enabled)
+  const preferredMakes = filtersEnabled ? (preferences.preferred_makes || []) : []
+  const excludedMakes = filtersEnabled ? (preferences.excluded_makes || []) : []
+  const preferredModels = filtersEnabled ? (preferences.preferred_models || []) : []
+  const excludedModels = filtersEnabled ? (preferences.excluded_models || []) : []
+  const minMileage = filtersEnabled ? (preferences.min_mileage || 0) : 0
+  const maxMileage = filtersEnabled ? (preferences.max_mileage || 999999) : 999999
+  const minYear = filtersEnabled ? (preferences.min_year || 0) : 0
+  const maxYear = filtersEnabled ? (preferences.max_year || new Date().getFullYear()) : new Date().getFullYear()
+
+  // Filter by preferred makes (if any are specified and filters are enabled)
+  if (filtersEnabled && preferredMakes.length > 0) {
     const preferredLower = preferredMakes.map((m: string) => m.toLowerCase())
     filteredLeads = filteredLeads.filter(lead => {
       // Lead must have at least one vehicle with a preferred make
@@ -145,7 +148,7 @@ export default async function PlaygroundPage({
   }
 
   // Filter out excluded makes
-  if (excludedMakes.length > 0) {
+  if (filtersEnabled && excludedMakes.length > 0) {
     const excludedLower = excludedMakes.map((m: string) => m.toLowerCase())
     filteredLeads = filteredLeads.filter(lead => {
       // Lead must NOT have any vehicle with an excluded make
@@ -156,7 +159,7 @@ export default async function PlaygroundPage({
   }
 
   // Filter by preferred models (if any are specified)
-  if (preferredModels.length > 0) {
+  if (filtersEnabled && preferredModels.length > 0) {
     const preferredLower = preferredModels.map((m: string) => m.toLowerCase())
     filteredLeads = filteredLeads.filter(lead => {
       return lead.vehicles?.some((v: { model?: string }) =>
@@ -166,7 +169,7 @@ export default async function PlaygroundPage({
   }
 
   // Filter out excluded models
-  if (excludedModels.length > 0) {
+  if (filtersEnabled && excludedModels.length > 0) {
     const excludedLower = excludedModels.map((m: string) => m.toLowerCase())
     filteredLeads = filteredLeads.filter(lead => {
       return !lead.vehicles?.some((v: { model?: string }) =>
@@ -176,7 +179,7 @@ export default async function PlaygroundPage({
   }
 
   // Filter by mileage range
-  if (minMileage > 0 || maxMileage < 999999) {
+  if (filtersEnabled && (minMileage > 0 || maxMileage < 999999)) {
     filteredLeads = filteredLeads.filter(lead => {
       return lead.vehicles?.some((v: { mileage?: number }) => {
         if (v.mileage === undefined || v.mileage === null) return true // Keep vehicles without mileage data
@@ -186,7 +189,7 @@ export default async function PlaygroundPage({
   }
 
   // Filter by year range (min and max year)
-  if (minYear > 0 || maxYear < new Date().getFullYear()) {
+  if (filtersEnabled && (minYear > 0 || maxYear < new Date().getFullYear())) {
     filteredLeads = filteredLeads.filter(lead => {
       return lead.vehicles?.some((v: { year?: number }) => {
         if (v.year === undefined || v.year === null) return true // Keep vehicles without year data
@@ -234,7 +237,8 @@ export default async function PlaygroundPage({
             minMileage,
             maxMileage,
             minYear,
-            maxYear
+            maxYear,
+            filtersEnabled
           }}
         />
       </div>
