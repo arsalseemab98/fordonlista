@@ -311,15 +311,6 @@ export function PlaygroundView({
 
   const leads = initialLeads.filter(lead => !hiddenLeadIds.has(lead.id))
 
-  // Filter leads by activity status for display
-  const filteredLeads = useMemo(() => {
-    if (activityFilter === 'all') return leads
-    return leads.filter(lead => {
-      const { status } = getLeadStatus(lead)
-      return status === activityFilter
-    })
-  }, [leads, activityFilter])
-
   // Bulk selection state
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set())
   const [isSaving, setIsSaving] = useState(false)
@@ -383,6 +374,15 @@ export function PlaygroundView({
 
   // Activity filter for display (default: no_activity = orörda leads)
   const [activityFilter, setActivityFilter] = useState<string>('no_activity')
+
+  // Filter leads by activity status for display
+  const filteredLeads = useMemo(() => {
+    if (activityFilter === 'all') return leads
+    return leads.filter(lead => {
+      const { status } = getLeadStatus(lead)
+      return status === activityFilter
+    })
+  }, [leads, activityFilter])
 
   // Bulk delete state
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
