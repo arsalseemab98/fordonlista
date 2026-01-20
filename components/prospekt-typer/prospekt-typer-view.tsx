@@ -53,6 +53,7 @@ interface ProspektStats {
   daysDuration: number | null
   sentToCallCount: number
   sentToBrevCount: number
+  latestCreatedAt: string | null
 }
 
 interface LeadDetail {
@@ -507,6 +508,7 @@ export function ProspektTyperView({
                 <TableHead>Period start</TableHead>
                 <TableHead>Period slut</TableHead>
                 <TableHead className="text-center">Dagar</TableHead>
+                <TableHead className="text-center">Inlagt</TableHead>
                 <TableHead className="text-right">Antal</TableHead>
                 <TableHead className="text-center">Ring</TableHead>
                 <TableHead className="text-center">Brev</TableHead>
@@ -516,7 +518,7 @@ export function ProspektTyperView({
             <TableBody>
               {stats.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center text-muted-foreground">
                     Ingen data att visa
                   </TableCell>
                 </TableRow>
@@ -542,6 +544,15 @@ export function ProspektTyperView({
                       {stat.daysDuration !== null ? (
                         <Badge variant="secondary" className="font-mono">
                           {stat.daysDuration} d
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {stat.latestCreatedAt ? (
+                        <Badge variant="outline" className="text-xs">
+                          {new Date(stat.latestCreatedAt).toLocaleDateString('sv-SE')}
                         </Badge>
                       ) : (
                         <span className="text-muted-foreground">-</span>

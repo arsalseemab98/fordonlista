@@ -19,6 +19,7 @@ interface ProspektStats {
   daysDuration: number | null
   sentToCallCount: number
   sentToBrevCount: number
+  latestCreatedAt: string | null
 }
 
 // Lead data for detail view
@@ -91,6 +92,10 @@ export default async function ProspektTyperPage({
       existing.count++
       if (lead.sent_to_call_at) existing.sentToCallCount++
       if (lead.sent_to_brev_at) existing.sentToBrevCount++
+      // Track the latest created_at
+      if (lead.created_at && (!existing.latestCreatedAt || lead.created_at > existing.latestCreatedAt)) {
+        existing.latestCreatedAt = lead.created_at
+      }
     } else {
       statsMap.set(key, {
         prospect_type: lead.prospect_type,
@@ -99,7 +104,8 @@ export default async function ProspektTyperPage({
         count: 1,
         daysDuration: calculateDaysDifference(lead.data_period_start, lead.data_period_end),
         sentToCallCount: lead.sent_to_call_at ? 1 : 0,
-        sentToBrevCount: lead.sent_to_brev_at ? 1 : 0
+        sentToBrevCount: lead.sent_to_brev_at ? 1 : 0,
+        latestCreatedAt: lead.created_at
       })
     }
   })
