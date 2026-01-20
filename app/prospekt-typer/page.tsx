@@ -16,7 +16,21 @@ interface ProspektStats {
   data_period_start: string | null
   data_period_end: string | null
   count: number
-  daysDuration: number | null // NEW: Days between start and end
+  daysDuration: number | null
+  sentToCallCount: number
+  sentToBrevCount: number
+}
+
+// Lead data for detail view
+export interface LeadDetail {
+  id: string
+  owner_info: string | null
+  phone: string | null
+  prospect_type: string | null
+  data_period_start: string | null
+  sent_to_call_at: string | null
+  sent_to_brev_at: string | null
+  county: string | null
 }
 
 export default async function ProspektTyperPage({
@@ -36,7 +50,7 @@ export default async function ProspektTyperPage({
   // Fetch all leads with relevant fields for aggregation
   let query = supabase
     .from('leads')
-    .select('id, prospect_type, data_period_start, data_period_end, created_at, county, status')
+    .select('id, prospect_type, data_period_start, data_period_end, created_at, county, status, sent_to_call_at, sent_to_brev_at, owner_info, phone')
     .order('created_at', { ascending: false })
 
   // Apply filters
@@ -74,13 +88,17 @@ export default async function ProspektTyperPage({
 
     if (existing) {
       existing.count++
+      if (lead.sent_to_call_at) existing.sentToCallCount++
+      if (lead.sent_to_brev_at) existing.sentToBrevCount++
     } else {
       statsMap.set(key, {
         prospect_type: lead.prospect_type,
         data_period_start: lead.data_period_start,
         data_period_end: lead.data_period_end,
         count: 1,
-        daysDuration: calculateDaysDifference(lead.data_period_start, lead.data_period_end)
+        daysDuration: calculateDaysDifference(lead.data_period_start, lead.data_period_end),
+        sentToCallCount: lead.sent_to_call_at ? 1 : 0,
+        sentToBrevCount: lead.sent_to_brev_at ? 1 : 0
       })
     }
   })
@@ -107,16 +125,37 @@ export default async function ProspektTyperPage({
 
   // Summary by prospect type only (filter to only past periods)
   const pastLeads = allLeads.filter(l => isPastOrToday(l.data_period_start))
+
+  // Create lead details for modal view
+  const leadDetails: LeadDetail[] = pastLeads.map(l => ({
+    id: l.id,
+    owner_info: l.owner_info,
+    phone: l.phone,
+    prospect_type: l.prospect_type,
+    data_period_start: l.data_period_start,
+    sent_to_call_at: l.sent_to_call_at,
+    sent_to_brev_at: l.sent_to_brev_at,
+    county: l.county
+  }))
+
+  // Global sent counts
+  const totalSentToCall = pastLeads.filter(l => l.sent_to_call_at).length
+  const totalSentToBrev = pastLeads.filter(l => l.sent_to_brev_at).length
+
   const prospectTypeSummary = prospectTypes.map(type => ({
     type,
-    count: pastLeads.filter(l => l.prospect_type === type).length
+    count: pastLeads.filter(l => l.prospect_type === type).length,
+    sentToCallCount: pastLeads.filter(l => l.prospect_type === type && l.sent_to_call_at).length,
+    sentToBrevCount: pastLeads.filter(l => l.prospect_type === type && l.sent_to_brev_at).length
   })).sort((a, b) => b.count - a.count)
 
   // Summary by time period only (only past dates)
   const pastTimePeriods = timePeriods.filter(period => isPastOrToday(period))
   const periodSummary = pastTimePeriods.map(period => ({
     period,
-    count: pastLeads.filter(l => l.data_period_start === period).length
+    count: pastLeads.filter(l => l.data_period_start === period).length,
+    sentToCallCount: pastLeads.filter(l => l.data_period_start === period && l.sent_to_call_at).length,
+    sentToBrevCount: pastLeads.filter(l => l.data_period_start === period && l.sent_to_brev_at).length
   })).sort((a, b) => new Date(b.period).getTime() - new Date(a.period).getTime())
 
   return (
@@ -132,6 +171,9 @@ export default async function ProspektTyperPage({
           prospectTypeSummary={prospectTypeSummary}
           periodSummary={periodSummary}
           totalLeads={pastLeads.length}
+          totalSentToCall={totalSentToCall}
+          totalSentToBrev={totalSentToBrev}
+          leadDetails={leadDetails}
           availableProspectTypes={prospectTypes}
           availableTimePeriods={pastTimePeriods}
           periodGaps={periodGaps}
