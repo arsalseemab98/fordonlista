@@ -16,7 +16,8 @@ import {
   ChevronRight,
   Mail,
   FlaskConical,
-  History
+  History,
+  Layers
 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -28,6 +29,7 @@ const navigation = [
   { name: 'Playground', href: '/playground', icon: FlaskConical, description: 'Utforska & filtrera' },
   { name: 'Brevutskick', href: '/brev', icon: Mail, description: 'Exportera för brev' },
   { name: 'Historik', href: '/historik', icon: History, description: 'Ringda & brevskickade' },
+  { name: 'Prospekttyper', href: '/prospekt-typer', icon: Layers, description: 'Typer & perioder' },
   { name: 'Leads', href: '/leads', icon: Users, description: 'Alla kontakter' },
   { name: 'Fordon', href: '/vehicles', icon: Car, description: 'Fordonslista' },
   { name: 'Import', href: '/import', icon: Upload, description: 'Ladda upp Excel' },

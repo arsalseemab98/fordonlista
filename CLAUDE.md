@@ -22,6 +22,7 @@
 | `/leads/[id]` | Lead detail page with call logging |
 | `/brev` | Letter management - export CSV for mailing |
 | `/historik` | Call history and completed leads |
+| `/prospekt-typer` | Översikt av prospekttyper och tidsperioder med filtrering |
 | `/import` | Excel file import wizard |
 | `/settings` | App settings (letter cost, etc.) |
 | `/ai` | AI patterns and learning |

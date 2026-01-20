@@ -20,6 +20,7 @@
 - [x] History page for completed leads
 - [x] Settings page
 - [x] "Ingen anmärkning" filter på playground (default, visar orörda leads)
+- [x] Prospekttyper & perioder sida med filtrering (/prospekt-typer)
 
 ---
 

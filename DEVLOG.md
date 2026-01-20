@@ -5,6 +5,30 @@ Swedish vehicle lead management system for car dealers.
 
 ---
 
+## 2026-01-20 - Prospekttyper & Perioder Page
+
+**Type:** Feature
+
+**Description:**
+Ny sida för att se och filtrera prospekttyper och tidsperioder.
+
+**Features:**
+- Översiktskort (totalt antal leads, perioder, kombinationer)
+- Filter för prospekttyp och datumintervall
+- Sammanfattning per prospekttyp med antal och andel
+- Sammanfattning per tidsperiod
+- Detaljerad tabell med alla kombinationer
+
+**Files Created:**
+- `app/prospekt-typer/page.tsx` - Server component
+- `components/prospekt-typer/prospekt-typer-view.tsx` - Client view
+
+**Files Changed:**
+- `components/layout/sidebar.tsx` - Added navigation link
+- `CLAUDE.md` - Added page documentation
+
+---
+
 ## 2026-01-20 - TypeScript Build Error Fix
 
 **Type:** Bugfix
