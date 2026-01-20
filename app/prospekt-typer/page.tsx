@@ -137,6 +137,9 @@ export default async function ProspektTyperPage({
   // Summary by prospect type only (filter to only past periods)
   const pastLeads = allLeads.filter(l => isPastOrToday(l.data_period_start))
 
+  // Exclude archive leads from summary cards (only show active leads in totals)
+  const activeLeads = pastLeads.filter(l => l.status !== 'prospekt_archive')
+
   // Create lead details for modal view
   const leadDetails: LeadDetail[] = pastLeads.map(l => ({
     id: l.id,
@@ -150,24 +153,28 @@ export default async function ProspektTyperPage({
     created_at: l.created_at
   }))
 
-  // Global sent counts
-  const totalSentToCall = pastLeads.filter(l => l.sent_to_call_at).length
-  const totalSentToBrev = pastLeads.filter(l => l.sent_to_brev_at).length
+  // Global sent counts (exclude archive leads)
+  const totalSentToCall = activeLeads.filter(l => l.sent_to_call_at).length
+  const totalSentToBrev = activeLeads.filter(l => l.sent_to_brev_at).length
 
-  const prospectTypeSummary = prospectTypes.map(type => ({
+  // Get unique prospect types from active leads only
+  const activeProspectTypes = [...new Set(activeLeads.map(l => l.prospect_type).filter(Boolean))] as string[]
+
+  const prospectTypeSummary = activeProspectTypes.map(type => ({
     type,
-    count: pastLeads.filter(l => l.prospect_type === type).length,
-    sentToCallCount: pastLeads.filter(l => l.prospect_type === type && l.sent_to_call_at).length,
-    sentToBrevCount: pastLeads.filter(l => l.prospect_type === type && l.sent_to_brev_at).length
+    count: activeLeads.filter(l => l.prospect_type === type).length,
+    sentToCallCount: activeLeads.filter(l => l.prospect_type === type && l.sent_to_call_at).length,
+    sentToBrevCount: activeLeads.filter(l => l.prospect_type === type && l.sent_to_brev_at).length
   })).sort((a, b) => b.count - a.count)
 
-  // Summary by time period only (only past dates)
-  const pastTimePeriods = timePeriods.filter(period => isPastOrToday(period))
+  // Summary by time period only (only past dates, exclude archive)
+  const activeTimePeriods = [...new Set(activeLeads.map(l => l.data_period_start).filter(Boolean))] as string[]
+  const pastTimePeriods = activeTimePeriods.filter(period => isPastOrToday(period))
   const periodSummary = pastTimePeriods.map(period => ({
     period,
-    count: pastLeads.filter(l => l.data_period_start === period).length,
-    sentToCallCount: pastLeads.filter(l => l.data_period_start === period && l.sent_to_call_at).length,
-    sentToBrevCount: pastLeads.filter(l => l.data_period_start === period && l.sent_to_brev_at).length
+    count: activeLeads.filter(l => l.data_period_start === period).length,
+    sentToCallCount: activeLeads.filter(l => l.data_period_start === period && l.sent_to_call_at).length,
+    sentToBrevCount: activeLeads.filter(l => l.data_period_start === period && l.sent_to_brev_at).length
   })).sort((a, b) => new Date(b.period).getTime() - new Date(a.period).getTime())
 
   return (
@@ -182,11 +189,11 @@ export default async function ProspektTyperPage({
           stats={stats}
           prospectTypeSummary={prospectTypeSummary}
           periodSummary={periodSummary}
-          totalLeads={pastLeads.length}
+          totalLeads={activeLeads.length}
           totalSentToCall={totalSentToCall}
           totalSentToBrev={totalSentToBrev}
           leadDetails={leadDetails}
-          availableProspectTypes={prospectTypes}
+          availableProspectTypes={activeProspectTypes}
           availableTimePeriods={pastTimePeriods}
           periodGaps={periodGaps}
           currentFilters={{
