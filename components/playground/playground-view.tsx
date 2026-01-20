@@ -58,7 +58,6 @@ import {
   PhoneMissed,
   Clock,
   MoreHorizontal,
-  FileText,
   MailCheck,
   MessageSquare,
   CalendarPlus,
@@ -2588,26 +2587,9 @@ export function PlaygroundView({
                         })()}
                       </TableCell>
 
-                      {/* Activity indicators - same as historik */}
+                      {/* Activity indicators */}
                       <TableCell>
                         <div className="flex flex-wrap items-center gap-1">
-                          {/* Sent to call list */}
-                          {lead.sent_to_call_at && (
-                            <Tooltip>
-                              <TooltipTrigger>
-                                <Badge
-                                  variant="outline"
-                                  className="gap-1 bg-blue-50 text-blue-700 border-blue-200 text-xs"
-                                >
-                                  <Send className="h-3 w-3" />
-                                  Ring
-                                </Badge>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                Till ringlistan {lead.sent_to_call_at ? new Date(lead.sent_to_call_at).toLocaleDateString('sv-SE') : ''}
-                              </TooltipContent>
-                            </Tooltip>
-                          )}
                           {/* Actually called */}
                           {lead.call_logs && lead.call_logs.length > 0 && (
                             <Tooltip>
@@ -2622,23 +2604,6 @@ export function PlaygroundView({
                               </TooltipTrigger>
                               <TooltipContent>
                                 Ringd {lead.call_logs.length} gånger
-                              </TooltipContent>
-                            </Tooltip>
-                          )}
-                          {/* Sent to brev list */}
-                          {lead.sent_to_brev_at && (
-                            <Tooltip>
-                              <TooltipTrigger>
-                                <Badge
-                                  variant="outline"
-                                  className="gap-1 bg-orange-50 text-orange-700 border-orange-200 text-xs"
-                                >
-                                  <FileText className="h-3 w-3" />
-                                  Brev
-                                </Badge>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                Till brevlistan {lead.sent_to_brev_at ? new Date(lead.sent_to_brev_at).toLocaleDateString('sv-SE') : ''}
                               </TooltipContent>
                             </Tooltip>
                           )}
