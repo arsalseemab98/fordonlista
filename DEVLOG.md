@@ -5,7 +5,7 @@ Swedish vehicle lead management system for car dealers.
 
 ---
 
-## 2026-01-20 - Prospekt Archive Status & Historical Data
+## 2026-01-20 - Prospekt Archive Status & Historical Data (Updated)
 
 **Type:** Feature
 
@@ -16,28 +16,56 @@ Lagt till ny status `prospekt_archive` för att spara historiska Ring/Brev-data 
 - Ny `LeadStatus`: `prospekt_archive`
 - Historik-sidan exkluderar prospekt_archive leads
 - Leads-sidan exkluderar prospekt_archive leads (om inte explicit filtrerat)
-- 8 arkiv-leads skapade för historisk statistik (4 perioder × 2 län)
+- "Inlagt" kolumn (created_at) tillagt i Detaljerad översikt och detalj-modal
+- 26 arkiv-leads skapade för historisk statistik (7 perioder × 5 län)
 
-**Inserted Archive Data:**
+**Inserted Archive Data (26 leads):**
 | Län | Period Start | Period Slut | Skickad |
 |-----|--------------|-------------|---------|
 | Norrbotten | 2025-10-06 | 2025-10-20 | 2025-10-27 |
 | Västerbotten | 2025-10-06 | 2025-10-20 | 2025-10-27 |
 | Norrbotten | 2025-10-20 | 2025-10-27 | 2025-11-01 |
 | Västerbotten | 2025-10-20 | 2025-10-27 | 2025-11-01 |
+| Västernorrland | 2025-10-20 | 2025-10-27 | 2025-11-01 |
+| Jämtland | 2025-10-20 | 2025-10-27 | 2025-11-01 |
 | Norrbotten | 2025-10-27 | 2025-11-03 | 2025-11-10 |
 | Västerbotten | 2025-10-27 | 2025-11-03 | 2025-11-10 |
+| Västernorrland | 2025-10-27 | 2025-11-03 | 2025-11-10 |
+| Jämtland | 2025-10-27 | 2025-11-03 | 2025-11-10 |
 | Norrbotten | 2025-11-03 | 2025-11-10 | 2025-11-13 |
 | Västerbotten | 2025-11-03 | 2025-11-10 | 2025-11-13 |
+| Västernorrland | 2025-11-03 | 2025-11-10 | 2025-11-13 |
+| Jämtland | 2025-11-03 | 2025-11-10 | 2025-11-13 |
+| Norrbotten | 2025-11-10 | 2025-11-17 | 2025-11-20 |
+| Västerbotten | 2025-11-10 | 2025-11-17 | 2025-11-20 |
+| Västernorrland | 2025-11-10 | 2025-11-17 | 2025-11-20 |
+| Jämtland | 2025-11-10 | 2025-11-17 | 2025-11-20 |
+| Gävleborg | 2025-11-10 | 2025-11-17 | 2025-11-20 |
+| Norrbotten | 2025-11-17 | 2025-11-24 | 2025-11-27 |
+| Västerbotten | 2025-11-17 | 2025-11-24 | 2025-11-27 |
+| Västernorrland | 2025-11-17 | 2025-11-24 | 2025-11-27 |
+| Jämtland | 2025-11-17 | 2025-11-24 | 2025-11-27 |
+| Gävleborg | 2025-11-17 | 2025-11-24 | 2025-11-27 |
+| Västernorrland | 2025-09-07 | 2025-10-20 | 2025-10-27 |
+| Jämtland | 2025-09-07 | 2025-10-20 | 2025-10-27 |
+
+**Län (5 st):**
+- Norrbotten
+- Västerbotten
+- Västernorrland
+- Jämtland
+- Gävleborg
 
 **Files Changed:**
 - `lib/types/database.ts` - Added `prospekt_archive` to LeadStatus
 - `app/historik/page.tsx` - Exclude prospekt_archive from counts and query
 - `app/leads/page.tsx` - Exclude prospekt_archive from default view
+- `app/prospekt-typer/page.tsx` - Added latestCreatedAt tracking and created_at to LeadDetail
+- `components/prospekt-typer/prospekt-typer-view.tsx` - Added "Inlagt" column to both tables
 
 **Database Changes:**
 - Updated `leads_status_check` constraint to include `prospekt_archive`
-- Inserted 8 leads with status `prospekt_archive`
+- Inserted 26 leads with status `prospekt_archive`, prospect_type `nyköpt_bil`
 
 ---
 

@@ -15,11 +15,12 @@ interface ProspektStats {
   prospect_type: string | null
   data_period_start: string | null
   data_period_end: string | null
+  county: string | null
   count: number
   daysDuration: number | null
   sentToCallCount: number
   sentToBrevCount: number
-  latestCreatedAt: string | null
+  latestSentToBrevAt: string | null
 }
 
 // Lead data for detail view
@@ -81,31 +82,32 @@ export default async function ProspektTyperPage({
   const timePeriods = [...new Set(allLeads.map(l => l.data_period_start).filter(Boolean))] as string[]
   timePeriods.sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
 
-  // Aggregate stats by prospect_type and time period
+  // Aggregate stats by prospect_type, time period, and county
   const statsMap = new Map<string, ProspektStats>()
 
   allLeads.forEach(lead => {
-    const key = `${lead.prospect_type || 'Okänd'}|${lead.data_period_start || 'Ingen period'}`
+    const key = `${lead.prospect_type || 'Okänd'}|${lead.data_period_start || 'Ingen period'}|${lead.county || 'Okänt län'}`
     const existing = statsMap.get(key)
 
     if (existing) {
       existing.count++
       if (lead.sent_to_call_at) existing.sentToCallCount++
       if (lead.sent_to_brev_at) existing.sentToBrevCount++
-      // Track the latest created_at
-      if (lead.created_at && (!existing.latestCreatedAt || lead.created_at > existing.latestCreatedAt)) {
-        existing.latestCreatedAt = lead.created_at
+      // Track the latest sent_to_brev_at
+      if (lead.sent_to_brev_at && (!existing.latestSentToBrevAt || lead.sent_to_brev_at > existing.latestSentToBrevAt)) {
+        existing.latestSentToBrevAt = lead.sent_to_brev_at
       }
     } else {
       statsMap.set(key, {
         prospect_type: lead.prospect_type,
         data_period_start: lead.data_period_start,
         data_period_end: lead.data_period_end,
+        county: lead.county,
         count: 1,
         daysDuration: calculateDaysDifference(lead.data_period_start, lead.data_period_end),
         sentToCallCount: lead.sent_to_call_at ? 1 : 0,
         sentToBrevCount: lead.sent_to_brev_at ? 1 : 0,
-        latestCreatedAt: lead.created_at
+        latestSentToBrevAt: lead.sent_to_brev_at
       })
     }
   })
@@ -115,9 +117,11 @@ export default async function ProspektTyperPage({
   const stats = allStats
     .filter(stat => isPastOrToday(stat.data_period_start))
     .sort((a, b) => {
-      // Sort by period first (newest first), then by count
+      // Sort by period first (newest first), then by county, then by count
       const periodCompare = (b.data_period_start || '').localeCompare(a.data_period_start || '')
       if (periodCompare !== 0) return periodCompare
+      const countyCompare = (a.county || '').localeCompare(b.county || '')
+      if (countyCompare !== 0) return countyCompare
       return b.count - a.count
     })
 

@@ -49,11 +49,12 @@ interface ProspektStats {
   prospect_type: string | null
   data_period_start: string | null
   data_period_end: string | null
+  county: string | null
   count: number
   daysDuration: number | null
   sentToCallCount: number
   sentToBrevCount: number
-  latestCreatedAt: string | null
+  latestSentToBrevAt: string | null
 }
 
 interface LeadDetail {
@@ -505,10 +506,11 @@ export function ProspektTyperView({
             <TableHeader>
               <TableRow>
                 <TableHead>Prospekttyp</TableHead>
+                <TableHead>Län</TableHead>
                 <TableHead>Period start</TableHead>
                 <TableHead>Period slut</TableHead>
                 <TableHead className="text-center">Dagar</TableHead>
-                <TableHead className="text-center">Inlagt</TableHead>
+                <TableHead className="text-center">Brev skickat</TableHead>
                 <TableHead className="text-right">Antal</TableHead>
                 <TableHead className="text-center">Ring</TableHead>
                 <TableHead className="text-center">Brev</TableHead>
@@ -518,7 +520,7 @@ export function ProspektTyperView({
             <TableBody>
               {stats.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center text-muted-foreground">
                     Ingen data att visa
                   </TableCell>
                 </TableRow>
@@ -528,7 +530,7 @@ export function ProspektTyperView({
                     key={index}
                     className="cursor-pointer hover:bg-muted/50"
                     onDoubleClick={() => openDetailModal(
-                      `${getProspectTypeLabel(stat.prospect_type)} (${formatPeriod(stat.data_period_start)})`,
+                      `${getProspectTypeLabel(stat.prospect_type)} - ${stat.county || 'Okänt län'} (${formatPeriod(stat.data_period_start)})`,
                       'all',
                       { prospectType: stat.prospect_type || undefined, period: stat.data_period_start || undefined }
                     )}
@@ -536,6 +538,11 @@ export function ProspektTyperView({
                     <TableCell>
                       <Badge variant="outline">
                         {getProspectTypeLabel(stat.prospect_type)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">
+                        {stat.county || 'Okänt'}
                       </Badge>
                     </TableCell>
                     <TableCell>{formatPeriod(stat.data_period_start)}</TableCell>
@@ -550,9 +557,9 @@ export function ProspektTyperView({
                       )}
                     </TableCell>
                     <TableCell className="text-center">
-                      {stat.latestCreatedAt ? (
-                        <Badge variant="outline" className="text-xs">
-                          {new Date(stat.latestCreatedAt).toLocaleDateString('sv-SE')}
+                      {stat.latestSentToBrevAt ? (
+                        <Badge className="bg-green-100 text-green-700 text-xs">
+                          {new Date(stat.latestSentToBrevAt).toLocaleDateString('sv-SE')}
                         </Badge>
                       ) : (
                         <span className="text-muted-foreground">-</span>
