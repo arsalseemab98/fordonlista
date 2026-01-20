@@ -31,6 +31,7 @@ export interface LeadDetail {
   sent_to_call_at: string | null
   sent_to_brev_at: string | null
   county: string | null
+  created_at: string | null
 }
 
 export default async function ProspektTyperPage({
@@ -135,7 +136,8 @@ export default async function ProspektTyperPage({
     data_period_start: l.data_period_start,
     sent_to_call_at: l.sent_to_call_at,
     sent_to_brev_at: l.sent_to_brev_at,
-    county: l.county
+    county: l.county,
+    created_at: l.created_at
   }))
 
   // Global sent counts

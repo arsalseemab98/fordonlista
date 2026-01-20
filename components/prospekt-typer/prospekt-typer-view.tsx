@@ -64,6 +64,7 @@ interface LeadDetail {
   sent_to_call_at: string | null
   sent_to_brev_at: string | null
   county: string | null
+  created_at: string | null
 }
 
 interface ProspektTyperViewProps {
@@ -624,6 +625,7 @@ export function ProspektTyperView({
                   <TableHead>Län</TableHead>
                   <TableHead>Prospekttyp</TableHead>
                   <TableHead>Period</TableHead>
+                  <TableHead className="text-center">Inlagt</TableHead>
                   <TableHead className="text-center">Ring</TableHead>
                   <TableHead className="text-center">Brev</TableHead>
                 </TableRow>
@@ -631,7 +633,7 @@ export function ProspektTyperView({
               <TableBody>
                 {getFilteredLeads().length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                       Inga leads att visa
                     </TableCell>
                   </TableRow>
@@ -658,6 +660,15 @@ export function ProspektTyperView({
                       </TableCell>
                       <TableCell className="text-sm">
                         {formatPeriod(lead.data_period_start)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {lead.created_at ? (
+                          <Badge variant="secondary" className="text-xs">
+                            {new Date(lead.created_at).toLocaleDateString('sv-SE')}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-center">
                         {lead.sent_to_call_at ? (
