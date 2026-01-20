@@ -629,7 +629,11 @@ export function ProspektTyperView({
                   </TableRow>
                 ) : (
                   getFilteredLeads().slice(0, 100).map((lead) => (
-                    <TableRow key={lead.id}>
+                    <TableRow
+                      key={lead.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onDoubleClick={() => router.push(`/leads/${lead.id}`)}
+                    >
                       <TableCell className="font-medium">
                         {lead.owner_info || '-'}
                       </TableCell>
