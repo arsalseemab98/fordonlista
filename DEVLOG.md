@@ -5,6 +5,21 @@ Swedish vehicle lead management system for car dealers.
 
 ---
 
+## 2026-01-20 - TypeScript Build Error Fix
+
+**Type:** Bugfix
+
+**Description:**
+Fixat TypeScript-fel som blockerade Vercel-deploy. `filteredLeads` useMemo använde `activityFilter` innan den var deklarerad.
+
+**Ändring:**
+Flyttade `filteredLeads` useMemo från rad 315 till efter `activityFilter` state-deklaration (rad 385).
+
+**Files Changed:**
+- `components/playground/playground-view.tsx`
+
+---
+
 ## 2026-01-20 - Playground visar endast orörda leads
 
 **Type:** Bugfix
