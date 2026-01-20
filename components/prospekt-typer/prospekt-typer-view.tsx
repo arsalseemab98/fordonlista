@@ -29,14 +29,18 @@ import {
   X,
   TrendingUp,
   BarChart3,
-  RefreshCw
+  RefreshCw,
+  AlertTriangle,
+  Clock
 } from 'lucide-react'
+import { type PeriodGap } from '@/lib/time-period-utils'
 
 interface ProspektStats {
   prospect_type: string | null
   data_period_start: string | null
   data_period_end: string | null
   count: number
+  daysDuration: number | null
 }
 
 interface ProspektTyperViewProps {
@@ -46,6 +50,7 @@ interface ProspektTyperViewProps {
   totalLeads: number
   availableProspectTypes: string[]
   availableTimePeriods: string[]
+  periodGaps: PeriodGap[]
   currentFilters: {
     prospectType?: string
     dateFrom?: string
@@ -86,6 +91,7 @@ export function ProspektTyperView({
   totalLeads,
   availableProspectTypes,
   availableTimePeriods,
+  periodGaps,
   currentFilters
 }: ProspektTyperViewProps) {
   const router = useRouter()
@@ -177,6 +183,38 @@ export function ProspektTyperView({
           </CardContent>
         </Card>
       </div>
+
+      {/* Period Gaps Warning */}
+      {periodGaps.length > 0 && (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-amber-700">
+              <AlertTriangle className="h-5 w-5" />
+              Luckor i dataperioder ({periodGaps.length})
+            </CardTitle>
+            <CardDescription className="text-amber-600">
+              Dessa perioder saknar data och kan behöva kompletteras
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {periodGaps.map((gap, index) => (
+                <div key={index} className="flex items-center justify-between p-3 bg-white rounded-lg border border-amber-200">
+                  <div className="flex items-center gap-3">
+                    <Clock className="h-4 w-4 text-amber-600" />
+                    <span className="font-medium">
+                      {formatPeriod(gap.gapStart)} — {formatPeriod(gap.gapEnd)}
+                    </span>
+                  </div>
+                  <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300">
+                    {gap.daysMissing} dagar saknas
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters */}
       <Card>
@@ -327,6 +365,7 @@ export function ProspektTyperView({
                 <TableHead>Prospekttyp</TableHead>
                 <TableHead>Period start</TableHead>
                 <TableHead>Period slut</TableHead>
+                <TableHead className="text-center">Dagar</TableHead>
                 <TableHead className="text-right">Antal leads</TableHead>
                 <TableHead className="text-right">Andel</TableHead>
               </TableRow>
@@ -334,7 +373,7 @@ export function ProspektTyperView({
             <TableBody>
               {stats.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground">
                     Ingen data att visa
                   </TableCell>
                 </TableRow>
@@ -348,6 +387,15 @@ export function ProspektTyperView({
                     </TableCell>
                     <TableCell>{formatPeriod(stat.data_period_start)}</TableCell>
                     <TableCell>{formatPeriod(stat.data_period_end)}</TableCell>
+                    <TableCell className="text-center">
+                      {stat.daysDuration !== null ? (
+                        <Badge variant="secondary" className="font-mono">
+                          {stat.daysDuration} d
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right font-medium">
                       {stat.count.toLocaleString('sv-SE')}
                     </TableCell>

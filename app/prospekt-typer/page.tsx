@@ -1,6 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { ProspektTyperView } from '@/components/prospekt-typer/prospekt-typer-view'
+import {
+  calculateDaysDifference,
+  findMissingPeriods,
+  isPastOrToday,
+  type PeriodGap
+} from '@/lib/time-period-utils'
 
 // Revalidate every 60 seconds
 export const revalidate = 60
@@ -10,6 +16,7 @@ interface ProspektStats {
   data_period_start: string | null
   data_period_end: string | null
   count: number
+  daysDuration: number | null // NEW: Days between start and end
 }
 
 export default async function ProspektTyperPage({
@@ -72,28 +79,44 @@ export default async function ProspektTyperPage({
         prospect_type: lead.prospect_type,
         data_period_start: lead.data_period_start,
         data_period_end: lead.data_period_end,
-        count: 1
+        count: 1,
+        daysDuration: calculateDaysDifference(lead.data_period_start, lead.data_period_end)
       })
     }
   })
 
-  const stats = Array.from(statsMap.values()).sort((a, b) => {
-    // Sort by period first (newest first), then by count
-    const periodCompare = (b.data_period_start || '').localeCompare(a.data_period_start || '')
-    if (periodCompare !== 0) return periodCompare
-    return b.count - a.count
-  })
+  // Filter to only show past dates (not future)
+  const allStats = Array.from(statsMap.values())
+  const stats = allStats
+    .filter(stat => isPastOrToday(stat.data_period_start))
+    .sort((a, b) => {
+      // Sort by period first (newest first), then by count
+      const periodCompare = (b.data_period_start || '').localeCompare(a.data_period_start || '')
+      if (periodCompare !== 0) return periodCompare
+      return b.count - a.count
+    })
 
-  // Summary by prospect type only
+  // Find gaps between periods (only for past periods)
+  const uniquePeriods = [...new Set(
+    allLeads
+      .filter(l => l.data_period_start && l.data_period_end && isPastOrToday(l.data_period_start))
+      .map(l => JSON.stringify({ start: l.data_period_start, end: l.data_period_end }))
+  )].map(p => JSON.parse(p) as { start: string; end: string })
+
+  const periodGaps: PeriodGap[] = findMissingPeriods(uniquePeriods)
+
+  // Summary by prospect type only (filter to only past periods)
+  const pastLeads = allLeads.filter(l => isPastOrToday(l.data_period_start))
   const prospectTypeSummary = prospectTypes.map(type => ({
     type,
-    count: allLeads.filter(l => l.prospect_type === type).length
+    count: pastLeads.filter(l => l.prospect_type === type).length
   })).sort((a, b) => b.count - a.count)
 
-  // Summary by time period only
-  const periodSummary = timePeriods.map(period => ({
+  // Summary by time period only (only past dates)
+  const pastTimePeriods = timePeriods.filter(period => isPastOrToday(period))
+  const periodSummary = pastTimePeriods.map(period => ({
     period,
-    count: allLeads.filter(l => l.data_period_start === period).length
+    count: pastLeads.filter(l => l.data_period_start === period).length
   })).sort((a, b) => new Date(b.period).getTime() - new Date(a.period).getTime())
 
   return (
@@ -108,9 +131,10 @@ export default async function ProspektTyperPage({
           stats={stats}
           prospectTypeSummary={prospectTypeSummary}
           periodSummary={periodSummary}
-          totalLeads={allLeads.length}
+          totalLeads={pastLeads.length}
           availableProspectTypes={prospectTypes}
-          availableTimePeriods={timePeriods}
+          availableTimePeriods={pastTimePeriods}
+          periodGaps={periodGaps}
           currentFilters={{
             prospectType: prospectTypeParam,
             dateFrom,
