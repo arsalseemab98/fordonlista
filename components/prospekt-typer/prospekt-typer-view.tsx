@@ -78,6 +78,24 @@ interface CostByPeriod {
   cost: number
 }
 
+interface CostByYear {
+  year: string
+  brevCount: number
+  cost: number
+}
+
+interface CostByMonth {
+  month: string
+  brevCount: number
+  cost: number
+}
+
+interface CostByDate {
+  date: string
+  brevCount: number
+  cost: number
+}
+
 interface ProspektTyperViewProps {
   stats: ProspektStats[]
   prospectTypeSummary: { type: string; count: number; sentToCallCount: number; sentToBrevCount: number }[]
@@ -97,9 +115,12 @@ interface ProspektTyperViewProps {
   }
   // Cost analysis props
   letterCost: number
-  archiveBrevCount: number
-  archiveTotalCost: number
+  totalBrevCount: number
+  totalBrevCost: number
   costByPeriod: CostByPeriod[]
+  costByYear: CostByYear[]
+  costByMonth: CostByMonth[]
+  costByDate: CostByDate[]
 }
 
 // Prospect type labels in Swedish
@@ -141,9 +162,12 @@ export function ProspektTyperView({
   periodGaps,
   currentFilters,
   letterCost,
-  archiveBrevCount,
-  archiveTotalCost,
-  costByPeriod
+  totalBrevCount,
+  totalBrevCost,
+  costByPeriod,
+  costByYear,
+  costByMonth,
+  costByDate
 }: ProspektTyperViewProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -163,6 +187,9 @@ export function ProspektTyperView({
     prospectType?: string
     period?: string
   }>({})
+
+  // Cost view filter state
+  const [costViewType, setCostViewType] = useState<'period' | 'year' | 'month' | 'date'>('period')
 
   // Get filtered leads for modal
   const getFilteredLeads = () => {
@@ -359,22 +386,22 @@ export function ProspektTyperView({
       </div>
 
       {/* Cost Analysis Section */}
-      {archiveBrevCount > 0 && (
+      {totalBrevCount > 0 && (
         <Card className="border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-purple-700">
               <Coins className="h-5 w-5" />
-              Kostnadsanalys - Brev (Historik)
+              Kostnadsanalys - Brev
             </CardTitle>
             <CardDescription className="text-purple-600">
-              Baserat på arkiverade leads med skickade brev • Brevkostnad: {letterCost} kr/st
+              {includeArchive ? 'Alla leads (inkl. arkiv)' : 'Aktiva leads'} • Brevkostnad: {letterCost} kr/st
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-3 mb-4">
               <div className="p-4 bg-white rounded-lg border border-purple-200">
                 <p className="text-sm text-muted-foreground">Antal brev skickade</p>
-                <p className="text-3xl font-bold text-purple-700">{archiveBrevCount.toLocaleString('sv-SE')}</p>
+                <p className="text-3xl font-bold text-purple-700">{totalBrevCount.toLocaleString('sv-SE')}</p>
               </div>
               <div className="p-4 bg-white rounded-lg border border-purple-200">
                 <p className="text-sm text-muted-foreground">Kostnad per brev</p>
@@ -382,14 +409,51 @@ export function ProspektTyperView({
               </div>
               <div className="p-4 bg-white rounded-lg border border-purple-200">
                 <p className="text-sm text-muted-foreground">Total kostnad</p>
-                <p className="text-3xl font-bold text-purple-700">{archiveTotalCost.toLocaleString('sv-SE')} kr</p>
+                <p className="text-3xl font-bold text-purple-700">{totalBrevCost.toLocaleString('sv-SE')} kr</p>
               </div>
             </div>
 
-            {costByPeriod.length > 0 && (
+            {/* Cost View Tabs */}
+            <div className="flex gap-2 mb-4">
+              <Button
+                variant={costViewType === 'period' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setCostViewType('period')}
+                className={costViewType === 'period' ? 'bg-purple-600 hover:bg-purple-700' : ''}
+              >
+                Per Period
+              </Button>
+              <Button
+                variant={costViewType === 'year' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setCostViewType('year')}
+                className={costViewType === 'year' ? 'bg-purple-600 hover:bg-purple-700' : ''}
+              >
+                Per År
+              </Button>
+              <Button
+                variant={costViewType === 'month' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setCostViewType('month')}
+                className={costViewType === 'month' ? 'bg-purple-600 hover:bg-purple-700' : ''}
+              >
+                Per Månad
+              </Button>
+              <Button
+                variant={costViewType === 'date' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setCostViewType('date')}
+                className={costViewType === 'date' ? 'bg-purple-600 hover:bg-purple-700' : ''}
+              >
+                Per Datum
+              </Button>
+            </div>
+
+            {/* Cost by Period */}
+            {costViewType === 'period' && costByPeriod.length > 0 && (
               <div className="space-y-2">
-                <p className="text-sm font-medium text-purple-700">Kostnad per period</p>
-                <div className="grid gap-2">
+                <p className="text-sm font-medium text-purple-700">Kostnad per dataperiod</p>
+                <div className="grid gap-2 max-h-[300px] overflow-y-auto">
                   {costByPeriod.map((item) => (
                     <div key={item.period} className="flex items-center justify-between p-3 bg-white rounded-lg border border-purple-100">
                       <div className="flex items-center gap-3">
@@ -401,6 +465,80 @@ export function ProspektTyperView({
                   ))}
                 </div>
               </div>
+            )}
+
+            {/* Cost by Year */}
+            {costViewType === 'year' && costByYear.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-purple-700">Kostnad per år (baserat på skickdatum)</p>
+                <div className="grid gap-2">
+                  {costByYear.map((item) => (
+                    <div key={item.year} className="flex items-center justify-between p-3 bg-white rounded-lg border border-purple-100">
+                      <div className="flex items-center gap-3">
+                        <Badge variant="secondary" className="text-lg px-3">{item.year}</Badge>
+                        <span className="text-sm text-muted-foreground">{item.brevCount} brev</span>
+                      </div>
+                      <span className="font-semibold text-purple-700 text-lg">{item.cost.toLocaleString('sv-SE')} kr</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Cost by Month */}
+            {costViewType === 'month' && costByMonth.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-purple-700">Kostnad per månad (baserat på skickdatum)</p>
+                <div className="grid gap-2 max-h-[300px] overflow-y-auto">
+                  {costByMonth.map((item) => {
+                    const [year, month] = item.month.split('-')
+                    const monthName = new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString('sv-SE', { month: 'long', year: 'numeric' })
+                    return (
+                      <div key={item.month} className="flex items-center justify-between p-3 bg-white rounded-lg border border-purple-100">
+                        <div className="flex items-center gap-3">
+                          <Badge variant="secondary" className="capitalize">{monthName}</Badge>
+                          <span className="text-sm text-muted-foreground">{item.brevCount} brev</span>
+                        </div>
+                        <span className="font-semibold text-purple-700">{item.cost.toLocaleString('sv-SE')} kr</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Cost by Date */}
+            {costViewType === 'date' && costByDate.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-purple-700">Kostnad per datum (baserat på skickdatum)</p>
+                <div className="grid gap-2 max-h-[300px] overflow-y-auto">
+                  {costByDate.map((item) => (
+                    <div key={item.date} className="flex items-center justify-between p-3 bg-white rounded-lg border border-purple-100">
+                      <div className="flex items-center gap-3">
+                        <Badge variant="secondary">
+                          {new Date(item.date).toLocaleDateString('sv-SE', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                        </Badge>
+                        <span className="text-sm text-muted-foreground">{item.brevCount} brev</span>
+                      </div>
+                      <span className="font-semibold text-purple-700">{item.cost.toLocaleString('sv-SE')} kr</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Empty state */}
+            {costViewType === 'period' && costByPeriod.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">Ingen data att visa per period</p>
+            )}
+            {costViewType === 'year' && costByYear.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">Ingen data att visa per år</p>
+            )}
+            {costViewType === 'month' && costByMonth.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">Ingen data att visa per månad</p>
+            )}
+            {costViewType === 'date' && costByDate.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">Ingen data att visa per datum</p>
             )}
           </CardContent>
         </Card>

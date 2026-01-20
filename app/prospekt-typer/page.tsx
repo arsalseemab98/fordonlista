@@ -224,21 +224,52 @@ export default async function ProspektTyperPage({
     sentToBrevCount: displayLeads.filter(l => l.data_period_start === period && l.sent_to_brev_at).length
   })).sort((a, b) => new Date(b.period).getTime() - new Date(a.period).getTime())
 
-  // Calculate archive-only brev stats for cost analysis
-  const archiveBrevCount = archiveLeads.filter(l => l.sent_to_brev_at).length
-  const archiveTotalCost = archiveBrevCount * letterCost
+  // Calculate brev stats for cost analysis based on displayLeads (respects archive toggle)
+  const displayBrevLeads = displayLeads.filter(l => l.sent_to_brev_at)
+  const totalBrevCount = displayBrevLeads.length
+  const totalBrevCost = totalBrevCount * letterCost
 
-  // Cost analysis per period (archive data only - historical costs)
-  const archiveTimePeriods = [...new Set(archiveLeads.map(l => l.data_period_start).filter(Boolean))] as string[]
-  const costByPeriod = archiveTimePeriods.map(period => {
-    const periodLeads = archiveLeads.filter(l => l.data_period_start === period)
-    const brevCount = periodLeads.filter(l => l.sent_to_brev_at).length
+  // Cost analysis per data period
+  const costDisplayPeriods = [...new Set(displayBrevLeads.map(l => l.data_period_start).filter(Boolean))] as string[]
+  const costByPeriod = costDisplayPeriods.map(period => {
+    const periodLeads = displayBrevLeads.filter(l => l.data_period_start === period)
     return {
       period,
-      brevCount,
-      cost: brevCount * letterCost
+      brevCount: periodLeads.length,
+      cost: periodLeads.length * letterCost
     }
   }).filter(p => p.brevCount > 0).sort((a, b) => new Date(b.period).getTime() - new Date(a.period).getTime())
+
+  // Cost analysis per year (based on sent_to_brev_at date)
+  const costByYear = displayBrevLeads.reduce((acc, lead) => {
+    const year = new Date(lead.sent_to_brev_at!).getFullYear().toString()
+    if (!acc[year]) acc[year] = { year, brevCount: 0, cost: 0 }
+    acc[year].brevCount++
+    acc[year].cost = acc[year].brevCount * letterCost
+    return acc
+  }, {} as Record<string, { year: string; brevCount: number; cost: number }>)
+  const costByYearArray = Object.values(costByYear).sort((a, b) => b.year.localeCompare(a.year))
+
+  // Cost analysis per month (based on sent_to_brev_at date)
+  const costByMonth = displayBrevLeads.reduce((acc, lead) => {
+    const date = new Date(lead.sent_to_brev_at!)
+    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+    if (!acc[monthKey]) acc[monthKey] = { month: monthKey, brevCount: 0, cost: 0 }
+    acc[monthKey].brevCount++
+    acc[monthKey].cost = acc[monthKey].brevCount * letterCost
+    return acc
+  }, {} as Record<string, { month: string; brevCount: number; cost: number }>)
+  const costByMonthArray = Object.values(costByMonth).sort((a, b) => b.month.localeCompare(a.month))
+
+  // Cost analysis per date (based on sent_to_brev_at date)
+  const costByDate = displayBrevLeads.reduce((acc, lead) => {
+    const dateKey = new Date(lead.sent_to_brev_at!).toISOString().split('T')[0]
+    if (!acc[dateKey]) acc[dateKey] = { date: dateKey, brevCount: 0, cost: 0 }
+    acc[dateKey].brevCount++
+    acc[dateKey].cost = acc[dateKey].brevCount * letterCost
+    return acc
+  }, {} as Record<string, { date: string; brevCount: number; cost: number }>)
+  const costByDateArray = Object.values(costByDate).sort((a, b) => b.date.localeCompare(a.date))
 
   return (
     <div className="flex flex-col">
@@ -267,9 +298,12 @@ export default async function ProspektTyperPage({
           }}
           // Cost analysis props
           letterCost={letterCost}
-          archiveBrevCount={archiveBrevCount}
-          archiveTotalCost={archiveTotalCost}
+          totalBrevCount={totalBrevCount}
+          totalBrevCost={totalBrevCost}
           costByPeriod={costByPeriod}
+          costByYear={costByYearArray}
+          costByMonth={costByMonthArray}
+          costByDate={costByDateArray}
         />
       </div>
     </div>
