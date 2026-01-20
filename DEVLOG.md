@@ -5,6 +5,42 @@ Swedish vehicle lead management system for car dealers.
 
 ---
 
+## 2026-01-20 - Prospekt Archive Status & Historical Data
+
+**Type:** Feature
+
+**Description:**
+Lagt till ny status `prospekt_archive` för att spara historiska Ring/Brev-data som ENDAST visas på Prospekt-typer sidan. Dessa leads exkluderas automatiskt från Historik, Leads och To-call sidorna.
+
+**Features:**
+- Ny `LeadStatus`: `prospekt_archive`
+- Historik-sidan exkluderar prospekt_archive leads
+- Leads-sidan exkluderar prospekt_archive leads (om inte explicit filtrerat)
+- 8 arkiv-leads skapade för historisk statistik (4 perioder × 2 län)
+
+**Inserted Archive Data:**
+| Län | Period Start | Period Slut | Skickad |
+|-----|--------------|-------------|---------|
+| Norrbotten | 2025-10-06 | 2025-10-20 | 2025-10-27 |
+| Västerbotten | 2025-10-06 | 2025-10-20 | 2025-10-27 |
+| Norrbotten | 2025-10-20 | 2025-10-27 | 2025-11-01 |
+| Västerbotten | 2025-10-20 | 2025-10-27 | 2025-11-01 |
+| Norrbotten | 2025-10-27 | 2025-11-03 | 2025-11-10 |
+| Västerbotten | 2025-10-27 | 2025-11-03 | 2025-11-10 |
+| Norrbotten | 2025-11-03 | 2025-11-10 | 2025-11-13 |
+| Västerbotten | 2025-11-03 | 2025-11-10 | 2025-11-13 |
+
+**Files Changed:**
+- `lib/types/database.ts` - Added `prospekt_archive` to LeadStatus
+- `app/historik/page.tsx` - Exclude prospekt_archive from counts and query
+- `app/leads/page.tsx` - Exclude prospekt_archive from default view
+
+**Database Changes:**
+- Updated `leads_status_check` constraint to include `prospekt_archive`
+- Inserted 8 leads with status `prospekt_archive`
+
+---
+
 ## 2026-01-20 - Double-Click Navigation in Prospekt Page
 
 **Type:** Enhancement

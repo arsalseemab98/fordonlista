@@ -77,8 +77,8 @@ async function getLeads(filters: {
   if (filters.status && filters.status !== 'all') {
     query = query.eq('status', filters.status)
   } else {
-    // By default, exclude pending_review (playground only)
-    query = query.neq('status', 'pending_review')
+    // By default, exclude pending_review (playground only) and prospekt_archive
+    query = query.neq('status', 'pending_review').neq('status', 'prospekt_archive')
   }
 
   // Filter by completion reason

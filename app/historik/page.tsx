@@ -54,16 +54,18 @@ export default async function HistorikPage({
       .from('leads')
       .select('id', { count: 'exact', head: true })
       .eq('status', 'pending_review'),
-    // Leads sent to call list (has sent_to_call_at timestamp)
+    // Leads sent to call list (has sent_to_call_at timestamp) - exclude prospekt_archive
     supabase
       .from('leads')
       .select('id', { count: 'exact', head: true })
-      .not('sent_to_call_at', 'is', null),
-    // Leads sent to brev list (has sent_to_brev_at timestamp)
+      .not('sent_to_call_at', 'is', null)
+      .neq('status', 'prospekt_archive'),
+    // Leads sent to brev list (has sent_to_brev_at timestamp) - exclude prospekt_archive
     supabase
       .from('leads')
       .select('id', { count: 'exact', head: true })
       .not('sent_to_brev_at', 'is', null)
+      .neq('status', 'prospekt_archive')
   ])
 
   // Get unique called lead count (since call_logs can have multiple entries per lead)
@@ -124,6 +126,7 @@ export default async function HistorikPage({
           )
         `)
         .order('created_at', { ascending: false })
+        .neq('status', 'prospekt_archive') // Exclude prospekt archive leads
 
       // Apply county filter if selected
       if (selectedCounties.length > 0) {

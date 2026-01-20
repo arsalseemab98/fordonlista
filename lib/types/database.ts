@@ -10,6 +10,7 @@ export type LeadStatus =
   | 'do_not_call'
   | 'callback'
   | 'no_answer'
+  | 'prospekt_archive'
 
 export type CallResult =
   | 'no_answer'
