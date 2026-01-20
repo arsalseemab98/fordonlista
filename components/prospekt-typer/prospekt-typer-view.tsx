@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Users,
   Calendar,
@@ -41,7 +42,9 @@ import {
   Clock,
   Phone,
   Mail,
-  Eye
+  Eye,
+  Coins,
+  Archive
 } from 'lucide-react'
 import { type PeriodGap } from '@/lib/time-period-utils'
 
@@ -69,6 +72,12 @@ interface LeadDetail {
   created_at: string | null
 }
 
+interface CostByPeriod {
+  period: string
+  brevCount: number
+  cost: number
+}
+
 interface ProspektTyperViewProps {
   stats: ProspektStats[]
   prospectTypeSummary: { type: string; count: number; sentToCallCount: number; sentToBrevCount: number }[]
@@ -84,7 +93,13 @@ interface ProspektTyperViewProps {
     prospectType?: string
     dateFrom?: string
     dateTo?: string
+    includeArchive?: boolean
   }
+  // Cost analysis props
+  letterCost: number
+  archiveBrevCount: number
+  archiveTotalCost: number
+  costByPeriod: CostByPeriod[]
 }
 
 // Prospect type labels in Swedish
@@ -124,7 +139,11 @@ export function ProspektTyperView({
   availableProspectTypes,
   availableTimePeriods,
   periodGaps,
-  currentFilters
+  currentFilters,
+  letterCost,
+  archiveBrevCount,
+  archiveTotalCost,
+  costByPeriod
 }: ProspektTyperViewProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -134,6 +153,7 @@ export function ProspektTyperView({
   const [selectedProspectType, setSelectedProspectType] = useState<string>(currentFilters.prospectType || 'all')
   const [dateFrom, setDateFrom] = useState(currentFilters.dateFrom || '')
   const [dateTo, setDateTo] = useState(currentFilters.dateTo || '')
+  const [includeArchive, setIncludeArchive] = useState(currentFilters.includeArchive || false)
 
   // Detail modal state
   const [detailModalOpen, setDetailModalOpen] = useState(false)
@@ -201,24 +221,69 @@ export function ProspektTyperView({
       params.delete('date_to')
     }
 
+    if (includeArchive) {
+      params.set('include_archive', 'true')
+    } else {
+      params.delete('include_archive')
+    }
+
     startTransition(() => {
       router.push(`/prospekt-typer?${params.toString()}`)
     })
-  }, [selectedProspectType, dateFrom, dateTo, searchParams, router])
+  }, [selectedProspectType, dateFrom, dateTo, includeArchive, searchParams, router])
 
   const clearFilters = useCallback(() => {
     setSelectedProspectType('all')
     setDateFrom('')
     setDateTo('')
+    setIncludeArchive(false)
     startTransition(() => {
       router.push('/prospekt-typer')
     })
   }, [router])
 
-  const hasActiveFilters = selectedProspectType !== 'all' || dateFrom || dateTo
+  const hasActiveFilters = selectedProspectType !== 'all' || dateFrom || dateTo || includeArchive
+
+  // Toggle archive handler - immediately update URL
+  const handleArchiveToggle = useCallback((checked: boolean) => {
+    setIncludeArchive(checked)
+    const params = new URLSearchParams(searchParams.toString())
+    if (checked) {
+      params.set('include_archive', 'true')
+    } else {
+      params.delete('include_archive')
+    }
+    startTransition(() => {
+      router.push(`/prospekt-typer?${params.toString()}`)
+    })
+  }, [searchParams, router])
 
   return (
     <div className="space-y-6">
+      {/* Archive Toggle */}
+      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border">
+        <div className="flex items-center gap-3">
+          <Archive className="h-5 w-5 text-gray-500" />
+          <div>
+            <p className="font-medium">Inkludera arkiverade leads</p>
+            <p className="text-sm text-muted-foreground">
+              Visa även leads med status &quot;prospekt_archive&quot; i statistiken
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Label htmlFor="archive-toggle" className="text-sm text-muted-foreground">
+            {includeArchive ? 'På' : 'Av'}
+          </Label>
+          <Switch
+            id="archive-toggle"
+            checked={includeArchive}
+            onCheckedChange={handleArchiveToggle}
+            disabled={isPending}
+          />
+        </div>
+      </div>
+
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-5">
         <Card>
@@ -292,6 +357,54 @@ export function ProspektTyperView({
           </CardContent>
         </Card>
       </div>
+
+      {/* Cost Analysis Section */}
+      {archiveBrevCount > 0 && (
+        <Card className="border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-purple-700">
+              <Coins className="h-5 w-5" />
+              Kostnadsanalys - Brev (Historik)
+            </CardTitle>
+            <CardDescription className="text-purple-600">
+              Baserat på arkiverade leads med skickade brev • Brevkostnad: {letterCost} kr/st
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-3 mb-4">
+              <div className="p-4 bg-white rounded-lg border border-purple-200">
+                <p className="text-sm text-muted-foreground">Antal brev skickade</p>
+                <p className="text-3xl font-bold text-purple-700">{archiveBrevCount.toLocaleString('sv-SE')}</p>
+              </div>
+              <div className="p-4 bg-white rounded-lg border border-purple-200">
+                <p className="text-sm text-muted-foreground">Kostnad per brev</p>
+                <p className="text-3xl font-bold text-purple-700">{letterCost} kr</p>
+              </div>
+              <div className="p-4 bg-white rounded-lg border border-purple-200">
+                <p className="text-sm text-muted-foreground">Total kostnad</p>
+                <p className="text-3xl font-bold text-purple-700">{archiveTotalCost.toLocaleString('sv-SE')} kr</p>
+              </div>
+            </div>
+
+            {costByPeriod.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-purple-700">Kostnad per period</p>
+                <div className="grid gap-2">
+                  {costByPeriod.map((item) => (
+                    <div key={item.period} className="flex items-center justify-between p-3 bg-white rounded-lg border border-purple-100">
+                      <div className="flex items-center gap-3">
+                        <Badge variant="secondary">{formatPeriod(item.period)}</Badge>
+                        <span className="text-sm text-muted-foreground">{item.brevCount} brev</span>
+                      </div>
+                      <span className="font-semibold text-purple-700">{item.cost.toLocaleString('sv-SE')} kr</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Period Gaps Warning */}
       {periodGaps.length > 0 && (

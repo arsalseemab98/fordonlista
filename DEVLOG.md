@@ -5,6 +5,31 @@ Swedish vehicle lead management system for car dealers.
 
 ---
 
+## 2026-01-20 - Archive Toggle & Cost Analysis
+
+**Type:** Feature
+
+**Description:**
+Lagt till arkiv-toggle och kostnadsanalys på Prospekt-typer sidan.
+
+**Features:**
+- **Arkiv-toggle:** Switch högst upp på sidan för att inkludera/exkludera `prospekt_archive` status
+- **Kostnadsanalys:** Visar total kostnad för brev baserat på arkiverade leads
+- **Brevkostnad från preferences:** Hämtar `letter_cost` från preferences-tabellen (default 12 kr)
+- **Kostnad per period:** Visar nedbrytning av kostnader per tidsperiod
+
+**UI-komponenter:**
+- Archive toggle med on/off label
+- Kostnadsanalys-kort i lila/indigo gradient
+- Kort för antal brev, kostnad per brev, total kostnad
+- Lista över kostnad per period
+
+**Files Changed:**
+- `app/prospekt-typer/page.tsx` - Added includeArchive param, letter_cost fetch, cost calculations
+- `components/prospekt-typer/prospekt-typer-view.tsx` - Added Switch, cost analysis UI, archive toggle handler
+
+---
+
 ## 2026-01-20 - Prospekt Archive Status & Historical Data (Updated)
 
 **Type:** Feature
