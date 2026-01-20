@@ -5,6 +5,31 @@ Swedish vehicle lead management system for car dealers.
 
 ---
 
+## 2026-01-20 - Prospekt Page Enhancements
+
+**Type:** Enhancement
+
+**Description:**
+Förbättrad prospekt-sida med:
+- Visning av antal dagar mellan period start och slut
+- Detektering av luckor (gaps) mellan dataperioder
+- Filter som endast visar historiska datum (ej framtida)
+
+**Features:**
+- "Dagar" kolumn i detaljerad tabell med badge
+- Varningskort i amber/orange för saknade perioder
+- Utility-funktioner för datumberäkningar
+- Automatisk filtrering av framtida datum
+
+**Files Created:**
+- `lib/time-period-utils.ts` - Utility functions (calculateDaysDifference, findMissingPeriods, isPastOrToday)
+
+**Files Changed:**
+- `app/prospekt-typer/page.tsx` - Added gap detection and days calculation
+- `components/prospekt-typer/prospekt-typer-view.tsx` - Added gaps card and days column
+
+---
+
 ## 2026-01-20 - Prospekttyper & Perioder Page
 
 **Type:** Feature

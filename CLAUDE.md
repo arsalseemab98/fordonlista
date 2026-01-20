@@ -22,7 +22,7 @@
 | `/leads/[id]` | Lead detail page with call logging |
 | `/brev` | Letter management - export CSV for mailing |
 | `/historik` | Call history and completed leads |
-| `/prospekt-typer` | Översikt av prospekttyper och tidsperioder med filtrering |
+| `/prospekt-typer` | Prospekttyper & perioder - visar dagar, luckor, endast historik |
 | `/import` | Excel file import wizard |
 | `/settings` | App settings (letter cost, etc.) |
 | `/ai` | AI patterns and learning |
@@ -109,6 +109,21 @@ type LeadStatus =
   | 'do_not_call'      // Ring ej
   | 'callback'         // Ring tillbaka
   | 'no_answer'        // Inget svar
+```
+
+## Prospekt-typer Page
+Översikt av prospekttyper och tidsperioder.
+
+### Features
+- **Dagar-kolumn:** Visar antal dagar mellan period start och slut
+- **Luckor-varning:** Amber/orange kort visar saknade perioder mellan importer
+- **Endast historik:** Framtida datum filtreras bort automatiskt
+
+### Utility Functions (`lib/time-period-utils.ts`)
+```typescript
+calculateDaysDifference(startDate, endDate) // Antal dagar (inkl. båda)
+findMissingPeriods(periods)                  // Hitta luckor mellan perioder
+isPastOrToday(dateString)                    // Är datum i det förflutna?
 ```
 
 ## Call Results (samtal-resultat)
