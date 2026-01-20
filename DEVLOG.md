@@ -5,20 +5,22 @@ Swedish vehicle lead management system for car dealers.
 
 ---
 
-## 2026-01-20 - Detail Modal Double-Click Navigation
+## 2026-01-20 - Double-Click Navigation in Prospekt Page
 
 **Type:** Enhancement
 
 **Description:**
-Lagt till dubbelklick-funktion i detail modal för att öppna lead-detaljsida.
+Lagt till dubbelklick-funktion på två ställen:
+1. **Detaljerad översikt-tabellen** - Dubbelklick öppnar detalj-modal
+2. **Detalj-modal** - Dubbelklick öppnar lead-detaljsida (`/leads/[id]`)
 
 **Features:**
-- Dubbelklick på rad öppnar `/leads/[id]`
-- Cursor ändras till pointer för att visa klickbarhet
-- Hover-effekt för bättre UX
+- Dubbelklick på rad i huvudtabellen → Öppnar detalj-modal med alla leads för den kombinationen
+- Dubbelklick på rad i detalj-modal → Öppnar lead-detaljsida
+- Cursor pointer och hover-effekt för bättre UX
 
 **Files Changed:**
-- `components/prospekt-typer/prospekt-typer-view.tsx` - Added onDoubleClick handler
+- `components/prospekt-typer/prospekt-typer-view.tsx` - Added onDoubleClick handlers
 
 ---
 

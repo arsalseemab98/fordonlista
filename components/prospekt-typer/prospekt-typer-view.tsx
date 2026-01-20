@@ -521,7 +521,15 @@ export function ProspektTyperView({
                 </TableRow>
               ) : (
                 stats.map((stat, index) => (
-                  <TableRow key={index}>
+                  <TableRow
+                    key={index}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onDoubleClick={() => openDetailModal(
+                      `${getProspectTypeLabel(stat.prospect_type)} (${formatPeriod(stat.data_period_start)})`,
+                      'all',
+                      { prospectType: stat.prospect_type || undefined, period: stat.data_period_start || undefined }
+                    )}
+                  >
                     <TableCell>
                       <Badge variant="outline">
                         {getProspectTypeLabel(stat.prospect_type)}
