@@ -112,12 +112,26 @@ type LeadStatus =
 ```
 
 ## Prospekt-typer Page
-Översikt av prospekttyper och tidsperioder.
+Översikt av prospekttyper och tidsperioder med statistik för Ring/Brev.
 
 ### Features
 - **Dagar-kolumn:** Visar antal dagar mellan period start och slut
 - **Luckor-varning:** Amber/orange kort visar saknade perioder mellan importer
 - **Endast historik:** Framtida datum filtreras bort automatiskt
+- **Skickade till Ring/Brev:** Klickbara kort med totalsiffror
+- **Detaljvy:** Modal visar lista på leads vid klick
+
+### Sent Counts (Skickade)
+- Klicka på Ring/Brev-siffror för att visa detaljlista
+- Per prospekttyp: visar antal skickade med knappar
+- Per tidsperiod: visar antal skickade med knappar
+- Detaljerad tabell: Ring, Brev, Detaljer-kolumner
+
+### Detail Modal
+Visar följande fält för varje lead:
+- Ägare, telefon, län
+- Prospekttyp, period
+- Datum för Ring/Brev-skick
 
 ### Utility Functions (`lib/time-period-utils.ts`)
 ```typescript

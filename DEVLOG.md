@@ -5,6 +5,28 @@ Swedish vehicle lead management system for car dealers.
 
 ---
 
+## 2026-01-20 - Prospekt Page Sent Counts & Detail Modal
+
+**Type:** Enhancement
+
+**Description:**
+Lagt till statistik för skickade leads (Ring/Brev) med klickbar detaljvy.
+
+**Features:**
+- Nya kort: "Skickat till Ring" och "Skickat till Brev" med totalsiffror
+- Per prospekttyp: visar Ring/Brev-antal med knappar
+- Per tidsperiod: visar Ring/Brev-antal med knappar
+- Detaljerad tabell: nya kolumner för Ring, Brev, Detaljer (ögon-ikon)
+- Klickbar modal som visar lista på leads med:
+  - Ägare, telefon, län, prospekttyp, period
+  - Datum för när lead skickades till Ring/Brev
+
+**Files Changed:**
+- `app/prospekt-typer/page.tsx` - Added sent counts and lead details
+- `components/prospekt-typer/prospekt-typer-view.tsx` - Added modal and clickable counts
+
+---
+
 ## 2026-01-20 - Prospekt Page Enhancements
 
 **Type:** Enhancement
