@@ -5,6 +5,31 @@ Swedish vehicle lead management system for car dealers.
 
 ---
 
+## 2026-01-20 - Playground visar endast orörda leads
+
+**Type:** Bugfix
+
+**Description:**
+Fixat så playground ENDAST visar leads som inte har skickats till ring eller brev.
+Tidigare kunde samma lead visas i både playground OCH to-call/brev sidor.
+
+**Ändring i Supabase query:**
+```sql
+WHERE status IN ('pending_review', 'new')
+  AND sent_to_call_at IS NULL   -- Ej skickad till ring
+  AND sent_to_brev_at IS NULL   -- Ej skickad till brev
+```
+
+**Nytt flöde:**
+```
+IMPORT → PLAYGROUND (orörda) → Skicka till RING/BREV → Försvinner från playground
+```
+
+**Files Changed:**
+- `app/playground/page.tsx`
+
+---
+
 ## 2026-01-20 - "Ingen anmärkning" Filter Implementerat
 
 **Type:** Feature

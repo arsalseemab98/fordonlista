@@ -16,7 +16,7 @@
 ## Main Pages
 | Route | Description |
 |-------|-------------|
-| `/playground` | Huvudsida - visa leads med aktiviteter (Ring, Brev), status-filter, bulk actions |
+| `/playground` | Huvudsida - ENDAST orörda leads (ej skickade till ring/brev), bulk actions |
 | `/to-call` | Leads queue for calling (new, callback, no_answer statuses) |
 | `/leads` | All leads with status management |
 | `/leads/[id]` | Lead detail page with call logging |
@@ -27,14 +27,19 @@
 | `/ai` | AI patterns and learning |
 
 ## Playground Page - Detaljerad
-Visar leads med status `pending_review` eller `new`. Max 200 leads, uppdateras var 30 sek.
+Visar ENDAST orörda leads. Max 200 leads, uppdateras var 30 sek.
 
-### Aktiviteter (Activity Badges)
-| Ikon | Namn | Villkor | Databas-fält |
-|------|------|---------|--------------|
-| 📞 PhoneCall (grön) | Ring Nx | `call_logs.length > 0` | `call_logs` relation |
-| 📄 FileText (orange) | Brev | `sent_to_brev_at != null` | `sent_to_brev_at` |
-| ✉️ MailCheck (amber) | Brev skickat | `letter_sent === true` | `letter_sent` |
+### Query Filter
+```sql
+WHERE status IN ('pending_review', 'new')
+  AND sent_to_call_at IS NULL   -- Ej skickad till ring
+  AND sent_to_brev_at IS NULL   -- Ej skickad till brev
+```
+
+### Flöde
+```
+IMPORT → PLAYGROUND (orörda) → Skicka till RING/BREV → Försvinner från playground
+```
 
 ### Status Filter (UI)
 ```typescript
