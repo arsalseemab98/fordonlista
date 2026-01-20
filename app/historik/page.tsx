@@ -90,6 +90,7 @@ export default async function HistorikPage({
           letter_sent_date,
           sent_to_call_at,
           sent_to_brev_at,
+          data_period_start,
           extra_data,
           created_at,
           vehicles (

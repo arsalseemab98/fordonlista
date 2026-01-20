@@ -2338,6 +2338,12 @@ export function PlaygroundView({
                   <TableHead className="w-[150px]">Prospekt-typ</TableHead>
                   <TableHead className="w-[130px]">Status</TableHead>
                   <TableHead className="w-[130px]">Aktivitet</TableHead>
+                  <TableHead className="w-[100px]">
+                    <Tooltip>
+                      <TooltipTrigger className="cursor-help underline decoration-dotted">Datum</TooltipTrigger>
+                      <TooltipContent>Dataperiod start (importdatum)</TooltipContent>
+                    </Tooltip>
+                  </TableHead>
                   {/* Car.info columns */}
                   <TableHead className="w-[80px] text-center">
                     <Tooltip>
@@ -2624,6 +2630,15 @@ export function PlaygroundView({
                             </Tooltip>
                           )}
                         </div>
+                      </TableCell>
+
+                      {/* Datum column */}
+                      <TableCell>
+                        <span className="text-sm text-gray-600">
+                          {lead.data_period_start
+                            ? new Date(lead.data_period_start).toLocaleDateString('sv-SE')
+                            : '-'}
+                        </span>
                       </TableCell>
 
                       {/* Car.info columns */}
