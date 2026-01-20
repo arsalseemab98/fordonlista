@@ -259,13 +259,14 @@ const SORT_OPTIONS = [
 // Lead status types for filtering
 const LEAD_STATUS_TYPES = [
   { value: 'all', label: 'Alla' },
+  { value: 'no_activity', label: '⚪ Ingen anmärkning' },
   { value: 'new', label: '🟢 Ny' },
   { value: 'called', label: '🟡 Ringd' },
   { value: 'letter_sent', label: '🔴 Brev skickat' },
 ]
 
 // Helper function to determine lead status based on call history and letter status
-function getLeadStatus(lead: Lead): { status: 'new' | 'called' | 'letter_sent'; label: string; color: 'green' | 'amber' | 'red' } {
+function getLeadStatus(lead: Lead): { status: 'no_activity' | 'new' | 'called' | 'letter_sent'; label: string; color: 'gray' | 'green' | 'amber' | 'red' } {
   if (lead.letter_sent === true) {
     return { status: 'letter_sent', label: 'Brev skickat', color: 'red' }
   } else if (lead.call_logs && lead.call_logs.length > 0) {
@@ -275,6 +276,8 @@ function getLeadStatus(lead: Lead): { status: 'new' | 'called' | 'letter_sent'; 
       label: `Ringd ${callCount} ggr`,
       color: 'amber'
     }
+  } else if (!lead.sent_to_call_at && !lead.sent_to_brev_at) {
+    return { status: 'no_activity', label: 'Ingen anmärkning', color: 'gray' }
   } else {
     return { status: 'new', label: 'Ny', color: 'green' }
   }
@@ -307,6 +310,15 @@ export function PlaygroundView({
   const [hiddenLeadIds, setHiddenLeadIds] = useState<Set<string>>(new Set())
 
   const leads = initialLeads.filter(lead => !hiddenLeadIds.has(lead.id))
+
+  // Filter leads by activity status for display
+  const filteredLeads = useMemo(() => {
+    if (activityFilter === 'all') return leads
+    return leads.filter(lead => {
+      const { status } = getLeadStatus(lead)
+      return status === activityFilter
+    })
+  }, [leads, activityFilter])
 
   // Bulk selection state
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set())
@@ -368,6 +380,9 @@ export function PlaygroundView({
 
   // Status filter for bulk actions
   const [statusFilter, setStatusFilter] = useState<string>('all')
+
+  // Activity filter for display (default: no_activity = orörda leads)
+  const [activityFilter, setActivityFilter] = useState<string>('no_activity')
 
   // Bulk delete state
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
@@ -527,12 +542,12 @@ export function PlaygroundView({
 
   // Bulk selection handlers
   const toggleSelectAll = useCallback(() => {
-    if (selectedLeads.size === leads.length) {
+    if (selectedLeads.size === filteredLeads.length) {
       setSelectedLeads(new Set())
     } else {
-      setSelectedLeads(new Set(leads.map(l => l.id)))
+      setSelectedLeads(new Set(filteredLeads.map(l => l.id)))
     }
-  }, [leads, selectedLeads.size])
+  }, [filteredLeads, selectedLeads.size])
 
   const toggleSelectLead = useCallback((leadId: string) => {
     setSelectedLeads(prev => {
@@ -1392,8 +1407,8 @@ export function PlaygroundView({
     return PROSPECT_TYPES.find(p => p.value === value)?.label || value
   }
 
-  const isAllSelected = leads.length > 0 && selectedLeads.size === leads.length
-  const isSomeSelected = selectedLeads.size > 0 && selectedLeads.size < leads.length
+  const isAllSelected = filteredLeads.length > 0 && selectedLeads.size === filteredLeads.length
+  const isSomeSelected = selectedLeads.size > 0 && selectedLeads.size < filteredLeads.length
 
   return (
     <div className="space-y-6">
@@ -1855,6 +1870,25 @@ export function PlaygroundView({
             </PopoverContent>
           </Popover>
 
+          {/* Activity filter - show leads by status */}
+          <Select value={activityFilter} onValueChange={setActivityFilter}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="Välj status" />
+            </SelectTrigger>
+            <SelectContent>
+              {LEAD_STATUS_TYPES.map((type) => {
+                const count = type.value === 'all'
+                  ? leads.length
+                  : leads.filter(l => getLeadStatus(l).status === type.value).length
+                return (
+                  <SelectItem key={type.value} value={type.value}>
+                    {type.label} ({count})
+                  </SelectItem>
+                )
+              })}
+            </SelectContent>
+          </Select>
+
           {/* Prospect type filter - multi-select with checkboxes */}
           <Popover>
             <PopoverTrigger asChild>
@@ -2129,8 +2163,11 @@ export function PlaygroundView({
       <div className="flex items-center justify-between text-sm text-gray-500">
         <div className="flex items-center gap-4">
           <span>
-            Visar <strong className="text-gray-900">{leads.length}</strong> av{' '}
-            <strong className="text-gray-900">{totalCount}</strong> leads
+            Visar <strong className="text-gray-900">{filteredLeads.length}</strong>
+            {activityFilter !== 'all' && (
+              <> av <strong className="text-gray-900">{leads.length}</strong></>
+            )}
+            {' '}av <strong className="text-gray-900">{totalCount}</strong> leads
           </span>
           {selectedLeads.size > 0 && (
             <span className="text-blue-600 font-medium">
@@ -2266,11 +2303,15 @@ export function PlaygroundView({
       {/* Table */}
       <Card className={cn(showHidden && "border-amber-200")}>
         <CardContent className="p-0">
-          {leads.length === 0 ? (
+          {filteredLeads.length === 0 ? (
             <div className="text-center py-16 text-gray-500">
               <Car className="h-12 w-12 mx-auto text-gray-300 mb-4" />
               <p className="font-medium">Inga leads hittades</p>
-              <p className="text-sm mt-1">Prova att ändra dina filter</p>
+              <p className="text-sm mt-1">
+                {activityFilter !== 'all'
+                  ? `Inga leads med status "${LEAD_STATUS_TYPES.find(t => t.value === activityFilter)?.label}". Prova att ändra filter.`
+                  : 'Prova att ändra dina filter'}
+              </p>
             </div>
           ) : (
             <TooltipProvider delayDuration={200}>
@@ -2369,7 +2410,7 @@ export function PlaygroundView({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {leads.map((lead) => {
+                {filteredLeads.map((lead) => {
                   const primaryVehicle = lead.vehicles?.[0]
                   const isSelected = selectedLeads.has(lead.id)
 
