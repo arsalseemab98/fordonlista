@@ -59,16 +59,17 @@ interface DataImport {
   created_at: string
 }
 
-interface DataImportTrackerProps {
-  imports: DataImport[]
+interface ProspectTypeOption {
+  id: string
+  name: string
+  description: string | null
+  color: string
 }
 
-const FILTER_TYPES = [
-  { value: 'avställda', label: 'Avställda fordon' },
-  { value: 'nyköpt_bil', label: 'Nyköpt bil (kort innehavstid)' },
-  { value: 'låg_miltal', label: 'Låg körsträcka' },
-  { value: 'alla', label: 'Alla typer' },
-]
+interface DataImportTrackerProps {
+  imports: DataImport[]
+  prospectTypes: ProspectTypeOption[]
+}
 
 const SWEDISH_COUNTIES = [
   { value: 'alla', label: 'Hela Sverige' },
@@ -95,7 +96,7 @@ const SWEDISH_COUNTIES = [
   { value: 'östergötland', label: 'Östergötland' },
 ]
 
-export function DataImportTracker({ imports }: DataImportTrackerProps) {
+export function DataImportTracker({ imports, prospectTypes }: DataImportTrackerProps) {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -239,9 +240,15 @@ export function DataImportTracker({ imports }: DataImportTrackerProps) {
                       <SelectValue placeholder="Välj filtertyp" />
                     </SelectTrigger>
                     <SelectContent>
-                      {FILTER_TYPES.map(type => (
-                        <SelectItem key={type.value} value={type.value}>
-                          {type.label}
+                      {prospectTypes.map(type => (
+                        <SelectItem key={type.id} value={type.name}>
+                          <span className="flex items-center gap-2">
+                            <span
+                              className="w-2 h-2 rounded-full"
+                              style={{ backgroundColor: type.color }}
+                            />
+                            {type.description || type.name}
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -339,7 +346,7 @@ export function DataImportTracker({ imports }: DataImportTrackerProps) {
                   <TableCell>
                     {imp.filter_type && (
                       <Badge variant="secondary" className="text-xs">
-                        {FILTER_TYPES.find(f => f.value === imp.filter_type)?.label || imp.filter_type}
+                        {prospectTypes.find(f => f.name === imp.filter_type)?.description || imp.filter_type}
                       </Badge>
                     )}
                   </TableCell>

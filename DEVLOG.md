@@ -5,6 +5,66 @@ Swedish vehicle lead management system for car dealers.
 
 ---
 
+## 2026-01-21 - Prospect Type Management System
+
+**Type:** Feature
+
+**Description:**
+Lagt till möjlighet att skapa och hantera prospekttyper via UI. Prospekttyper sparas i en ny databastabell och kan skapas/raderas direkt från Prospekt-typer sidan.
+
+**Features:**
+- Ny `prospect_types` tabell i databasen med fält för id, name, description, color, is_active, sort_order
+- Server actions för CRUD-operationer: `getProspectTypes`, `createProspectType`, `deleteProspectType`, `updateProspectType`
+- Soft delete (is_active = false) för att bevara referensintegritet
+- Skydd mot radering av typer som används av leads
+- UI-kort för att visa och hantera prospekttyper med expanderbar sektion
+- Formulär för att skapa nya prospekttyper med namn, beskrivning och färg
+- Färgväljare (color picker) för visuell markering
+
+**Database Changes:**
+- Created `prospect_types` table
+- Inserted existing types: 'nyköpt_bil', 'avställd'
+- Added indexes for name and is_active
+
+**Files Created:**
+- `app/prospekt-typer/actions.ts` - Server actions för prospekttyper
+
+**Files Changed:**
+- `app/prospekt-typer/page.tsx` - Hämtar och skickar savedProspectTypes till view
+- `components/prospekt-typer/prospekt-typer-view.tsx` - UI för att hantera prospekttyper
+
+---
+
+## 2026-01-20 - Avställd Archive Data (212 leads)
+
+**Type:** Data
+
+**Description:**
+Lagt till 212 arkiv-leads med prospect_type `avställd` för historisk statistik.
+
+**Inserted Data Summary:**
+| Rad | Antal | Regioner | Period Start | Period Slut | Skickad |
+|-----|-------|----------|--------------|-------------|---------|
+| R1 | 15 | NB 8, VB 7 | 2025-10-06 | 2025-10-13 | 2025-10-15 |
+| R2 | 25 | NB 13, VB 12 | 2025-10-13 | 2025-10-20 | 2025-10-23 |
+| R3 | 40 | NB 13, VB 12, VN 8, JL 7 | 2025-10-20 | 2025-10-27 | 2025-10-31 |
+| R4 | 20 | NB 5, VB 5, VN 5, JL 5 | 2025-10-27 | 2025-11-03 | 2025-11-06 |
+| R8 | 40 | NB 14, VB 14, GB 12 | 2025-11-10 | 2025-11-17 | 2025-11-19 |
+| R9 | 42 | NB 14, VB 14, GB 14 | 2025-11-17 | 2025-11-24 | 2025-11-26 |
+| R11 | 30 | VN 15, JL 15 | 2025-10-01 | 2025-10-20 | 2025-10-20 |
+
+**Regioner:**
+- NB = Norrbotten
+- VB = Västerbotten
+- VN = Västernorrland
+- JL = Jämtland
+- GB = Gävleborg
+
+**Database Changes:**
+- Inserted 212 leads with status `prospekt_archive`, prospect_type `avställd`
+
+---
+
 ## 2026-01-20 - Archive Toggle & Cost Analysis (Enhanced)
 
 **Type:** Feature

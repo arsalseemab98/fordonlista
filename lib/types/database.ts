@@ -21,7 +21,8 @@ export type CallResult =
   | 'wrong_number'
   | 'call_back'
 
-export type ProspectType = 'avställda' | 'nyköpt_bil' | 'låg_miltal' | 'alla' | null
+// ProspectType is now dynamic - stored in prospect_types table
+export type ProspectType = string | null
 
 export interface Lead {
   id: string

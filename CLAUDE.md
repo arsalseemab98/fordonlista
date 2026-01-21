@@ -94,6 +94,7 @@ const LEAD_STATUS_TYPES = [
 - `column_mappings` - Excel column mapping rules
 - `value_patterns` - Value transformation rules
 - `preferences` - App settings
+- `prospect_types` - Prospect type categories (name, description, color)
 
 ## Lead Status (databas)
 ```typescript
@@ -120,6 +121,14 @@ type LeadStatus =
 - **Endast historik:** Framtida datum filtreras bort automatiskt
 - **Skickade till Ring/Brev:** Klickbara kort med totalsiffror
 - **Detaljvy:** Modal visar lista på leads vid klick
+- **Prospekttyp-hantering:** Skapa och radera prospekttyper med namn, beskrivning och färg
+
+### Prospect Type Management
+Sparade prospekttyper visas i ett expanderbart kort:
+- Namn (normaliseras till lowercase med understreck)
+- Beskrivning (valfri)
+- Färg (color picker)
+- Soft delete (skyddar mot radering av använda typer)
 
 ### Sent Counts (Skickade)
 - Klicka på Ring/Brev-siffror för att visa detaljlista

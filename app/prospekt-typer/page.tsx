@@ -7,6 +7,7 @@ import {
   isPastOrToday,
   type PeriodGap
 } from '@/lib/time-period-utils'
+import { getProspectTypes, type ProspectType } from './actions'
 
 // Revalidate every 60 seconds
 export const revalidate = 60
@@ -58,6 +59,9 @@ export default async function ProspektTyperPage({
     .single()
 
   const letterCost = preferences?.letter_cost ?? 12
+
+  // Fetch saved prospect types from database
+  const savedProspectTypes = await getProspectTypes()
 
   // Fetch all leads with relevant fields for aggregation
   let query = supabase
@@ -304,6 +308,8 @@ export default async function ProspektTyperPage({
           costByYear={costByYearArray}
           costByMonth={costByMonthArray}
           costByDate={costByDateArray}
+          // Prospect type management
+          savedProspectTypes={savedProspectTypes}
         />
       </div>
     </div>

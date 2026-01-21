@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { PlaygroundView } from '@/components/playground/playground-view'
 import { getPreferences } from '@/app/actions/settings'
+import { getProspectTypes } from '@/app/prospekt-typer/actions'
 
 // Revalidate every 30 seconds for better performance
 export const revalidate = 30
@@ -26,7 +27,7 @@ export default async function PlaygroundPage({
   const sortParam = typeof params.sort === 'string' ? params.sort : 'newest'
 
   // Run queries in parallel for better performance
-  const [leadsResult, filterOptionsResult, preferences] = await Promise.all([
+  const [leadsResult, filterOptionsResult, preferences, savedProspectTypes] = await Promise.all([
     // Main leads query - only select needed columns
     (async () => {
       let query = supabase
@@ -93,7 +94,9 @@ export default async function PlaygroundPage({
       .is('sent_to_call_at', null)
       .is('sent_to_brev_at', null),
     // Get user preferences for filtering
-    getPreferences()
+    getPreferences(),
+    // Get saved prospect types
+    getProspectTypes()
   ])
 
   const leads = leadsResult.data || []
@@ -259,6 +262,7 @@ export default async function PlaygroundPage({
             maxYear,
             filtersEnabled
           }}
+          savedProspectTypes={savedProspectTypes}
         />
       </div>
     </div>

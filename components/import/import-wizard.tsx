@@ -70,17 +70,21 @@ const SWEDISH_COUNTIES = [
   { value: 'östergötland', label: 'Östergötland' },
 ]
 
-const PROSPECT_TYPES = [
-  { value: '', label: 'Välj typ...' },
-  { value: 'avställda', label: 'Avställda fordon' },
-  { value: 'nyköpt_bil', label: 'Nyköpt bil (kort innehavstid)' },
-  { value: 'låg_miltal', label: 'Låg körsträcka' },
-  { value: 'alla', label: 'Alla typer' },
-]
+// ProspectType from database
+interface ProspectTypeOption {
+  id: string
+  name: string
+  description: string | null
+  color: string
+}
 
 type ImportStep = 'upload' | 'map' | 'review' | 'complete'
 
-export function ImportWizard() {
+interface ImportWizardProps {
+  prospectTypes: ProspectTypeOption[]
+}
+
+export function ImportWizard({ prospectTypes }: ImportWizardProps) {
   const [step, setStep] = useState<ImportStep>('upload')
   const [file, setFile] = useState<File | null>(null)
   const [parseResult, setParseResult] = useState<ParseResult | null>(null)
@@ -376,9 +380,16 @@ export function ImportWizard() {
                       <SelectValue placeholder="Välj typ..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {PROSPECT_TYPES.map(type => (
-                        <SelectItem key={type.value || 'empty'} value={type.value || 'none'}>
-                          {type.label}
+                      <SelectItem value="none">Välj typ...</SelectItem>
+                      {prospectTypes.map(type => (
+                        <SelectItem key={type.id} value={type.name}>
+                          <span className="flex items-center gap-2">
+                            <span
+                              className="w-2 h-2 rounded-full"
+                              style={{ backgroundColor: type.color }}
+                            />
+                            {type.description || type.name}
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>

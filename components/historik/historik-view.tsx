@@ -132,6 +132,13 @@ interface Lead {
   call_logs: CallLog[]
 }
 
+interface ProspectTypeOption {
+  id: string
+  name: string
+  description: string | null
+  color: string
+}
+
 interface HistorikViewProps {
   leads: Lead[]
   totalCount: number
@@ -148,6 +155,7 @@ interface HistorikViewProps {
   availableCounties: string[]
   currentCounty?: string
   availableExtraColumns?: string[]
+  savedProspectTypes: ProspectTypeOption[]
 }
 
 const ROW_LIMITS = [
@@ -204,7 +212,8 @@ export function HistorikView({
   currentSort,
   availableCounties,
   currentCounty,
-  availableExtraColumns = []
+  availableExtraColumns = [],
+  savedProspectTypes
 }: HistorikViewProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -911,11 +920,22 @@ export function HistorikView({
                       <TableCell>
                         {lead.prospect_type ? (
                           <Badge variant="outline" className="text-xs">
-                            {lead.prospect_type === 'avställda' && 'Avställda'}
-                            {lead.prospect_type === 'nyköpt_bil' && 'Nyköpt bil'}
-                            {lead.prospect_type === 'låg_miltal' && 'Låg miltal'}
-                            {lead.prospect_type === 'alla' && 'Alla'}
-                            {!['avställda', 'nyköpt_bil', 'låg_miltal', 'alla'].includes(lead.prospect_type) && lead.prospect_type}
+                            <span className="flex items-center gap-1.5">
+                              {(() => {
+                                const savedType = savedProspectTypes.find(t => t.name === lead.prospect_type)
+                                return (
+                                  <>
+                                    {savedType && (
+                                      <span
+                                        className="w-2 h-2 rounded-full"
+                                        style={{ backgroundColor: savedType.color }}
+                                      />
+                                    )}
+                                    {savedType?.description || lead.prospect_type}
+                                  </>
+                                )
+                              })()}
+                            </span>
                           </Badge>
                         ) : (
                           <span className="text-gray-400 text-sm">-</span>

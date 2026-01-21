@@ -204,6 +204,13 @@ interface ActivePreferences {
   filtersEnabled: boolean
 }
 
+interface ProspectTypeOption {
+  id: string
+  name: string
+  description: string | null
+  color: string
+}
+
 interface PlaygroundViewProps {
   leads: Lead[]
   totalCount: number
@@ -215,6 +222,7 @@ interface PlaygroundViewProps {
   availableExtraColumns: string[]
   currentFilters: CurrentFilters
   activePreferences?: ActivePreferences
+  savedProspectTypes: ProspectTypeOption[]
 }
 
 const SWEDISH_COUNTIES = [
@@ -239,13 +247,6 @@ const SWEDISH_COUNTIES = [
   { value: 'västra_götaland', label: 'Västra Götaland' },
   { value: 'örebro', label: 'Örebro' },
   { value: 'östergötland', label: 'Östergötland' },
-]
-
-const PROSPECT_TYPES = [
-  { value: 'avställda', label: 'Avställda fordon' },
-  { value: 'nyköpt_bil', label: 'Nyköpt bil' },
-  { value: 'låg_miltal', label: 'Låg körsträcka' },
-  { value: 'alla', label: 'Alla typer' },
 ]
 
 const SORT_OPTIONS = [
@@ -297,7 +298,8 @@ export function PlaygroundView({
   availableProspectTypes,
   availableExtraColumns,
   currentFilters,
-  activePreferences
+  activePreferences,
+  savedProspectTypes
 }: PlaygroundViewProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -1403,7 +1405,7 @@ export function PlaygroundView({
 
   const getProspectLabel = (value?: string) => {
     if (!value) return null
-    return PROSPECT_TYPES.find(p => p.value === value)?.label || value
+    return savedProspectTypes.find(p => p.name === value)?.description || value
   }
 
   const isAllSelected = filteredLeads.length > 0 && selectedLeads.size === filteredLeads.length
@@ -1543,19 +1545,23 @@ export function PlaygroundView({
                             Rensa ({bulkProspectTypes.length})
                           </Button>
                         )}
-                        {PROSPECT_TYPES.filter(t => t.value !== 'alla').map((type) => (
+                        {savedProspectTypes.map((type) => (
                           <label
-                            key={type.value}
+                            key={type.id}
                             className={cn(
                               "flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-gray-100",
-                              bulkProspectTypes.includes(type.value) && "bg-blue-50"
+                              bulkProspectTypes.includes(type.name) && "bg-blue-50"
                             )}
                           >
                             <Checkbox
-                              checked={bulkProspectTypes.includes(type.value)}
-                              onCheckedChange={() => toggleBulkProspectType(type.value)}
+                              checked={bulkProspectTypes.includes(type.name)}
+                              onCheckedChange={() => toggleBulkProspectType(type.name)}
                             />
-                            <span className="text-sm">{type.label}</span>
+                            <span
+                              className="w-2 h-2 rounded-full"
+                              style={{ backgroundColor: type.color }}
+                            />
+                            <span className="text-sm">{type.description || type.name}</span>
                           </label>
                         ))}
                       </div>
@@ -1931,10 +1937,11 @@ export function PlaygroundView({
                     Rensa filter ({selectedProspectTypes.length})
                   </Button>
                 )}
-                {(availableProspectTypes.length > 0 ? availableProspectTypes : PROSPECT_TYPES.filter(t => t.value !== 'alla').map(t => t.value)).map((type) => {
+                {(availableProspectTypes.length > 0 ? availableProspectTypes : savedProspectTypes.map(t => t.name)).map((type) => {
                   const typeValue = typeof type === 'string' ? type : type
                   const isSelected = selectedProspectTypes.includes(typeValue)
                   const count = leads.filter(l => l.prospect_type === typeValue).length
+                  const savedType = savedProspectTypes.find(t => t.name === typeValue)
                   return (
                     <label
                       key={typeValue}
@@ -1947,6 +1954,12 @@ export function PlaygroundView({
                         checked={isSelected}
                         onCheckedChange={() => toggleProspectType(typeValue)}
                       />
+                      {savedType && (
+                        <span
+                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: savedType.color }}
+                        />
+                      )}
                       <span className="flex-1 text-sm">{getProspectLabel(typeValue) || typeValue}</span>
                       {count > 0 && (
                         <Badge variant="secondary" className="text-xs px-1.5 py-0">
@@ -2540,9 +2553,15 @@ export function PlaygroundView({
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="none">-- Ingen --</SelectItem>
-                              {PROSPECT_TYPES.map((type) => (
-                                <SelectItem key={type.value} value={type.value}>
-                                  {type.label}
+                              {savedProspectTypes.map((type) => (
+                                <SelectItem key={type.id} value={type.name}>
+                                  <span className="flex items-center gap-2">
+                                    <span
+                                      className="w-2 h-2 rounded-full"
+                                      style={{ backgroundColor: type.color }}
+                                    />
+                                    {type.description || type.name}
+                                  </span>
                                 </SelectItem>
                               ))}
                             </SelectContent>

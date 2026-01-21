@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useTransition, useState } from 'react'
+import { useCallback, useTransition, useState, useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -44,9 +44,13 @@ import {
   Mail,
   Eye,
   Coins,
-  Archive
+  Archive,
+  Plus,
+  Trash2,
+  Settings
 } from 'lucide-react'
 import { type PeriodGap } from '@/lib/time-period-utils'
+import { createProspectType, deleteProspectType, type ProspectType } from '@/app/prospekt-typer/actions'
 
 interface ProspektStats {
   prospect_type: string | null
@@ -121,19 +125,17 @@ interface ProspektTyperViewProps {
   costByYear: CostByYear[]
   costByMonth: CostByMonth[]
   costByDate: CostByDate[]
+  // Prospect type management
+  savedProspectTypes: ProspectType[]
 }
 
-// Prospect type labels in Swedish
-const PROSPECT_TYPE_LABELS: Record<string, string> = {
-  'avställda': 'Avställda fordon',
-  'nyköpt_bil': 'Nyköpt bil',
-  'låg_miltal': 'Låg miltal',
-  'alla': 'Alla typer',
-}
-
-function getProspectTypeLabel(type: string | null): string {
-  if (!type) return 'Okänd typ'
-  return PROSPECT_TYPE_LABELS[type] || type
+// Helper function to create label from prospect types
+function createProspectTypeLabels(types: ProspectType[]): Record<string, string> {
+  const labels: Record<string, string> = {}
+  types.forEach(type => {
+    labels[type.name] = type.description || type.name
+  })
+  return labels
 }
 
 function formatPeriod(period: string | null): string {
@@ -167,7 +169,8 @@ export function ProspektTyperView({
   costByPeriod,
   costByYear,
   costByMonth,
-  costByDate
+  costByDate,
+  savedProspectTypes
 }: ProspektTyperViewProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -190,6 +193,26 @@ export function ProspektTyperView({
 
   // Cost view filter state
   const [costViewType, setCostViewType] = useState<'period' | 'year' | 'month' | 'date'>('period')
+
+  // Prospect type management state
+  const [manageTypesOpen, setManageTypesOpen] = useState(false)
+  const [newTypeName, setNewTypeName] = useState('')
+  const [newTypeDescription, setNewTypeDescription] = useState('')
+  const [newTypeColor, setNewTypeColor] = useState('#6366f1')
+  const [isCreating, setIsCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  // Create prospect type labels lookup from saved types
+  const prospectTypeLabels = useMemo(() => {
+    return createProspectTypeLabels(savedProspectTypes)
+  }, [savedProspectTypes])
+
+  // Get prospect type label from saved types
+  const getProspectTypeLabel = useCallback((type: string | null): string => {
+    if (!type) return 'Okänd typ'
+    return prospectTypeLabels[type] || type
+  }, [prospectTypeLabels])
 
   // Get filtered leads for modal
   const getFilteredLeads = () => {
@@ -271,6 +294,48 @@ export function ProspektTyperView({
 
   const hasActiveFilters = selectedProspectType !== 'all' || dateFrom || dateTo || includeArchive
 
+  // Handle create prospect type
+  const handleCreateType = async () => {
+    if (!newTypeName.trim()) {
+      setCreateError('Namn krävs')
+      return
+    }
+
+    setIsCreating(true)
+    setCreateError(null)
+
+    const formData = new FormData()
+    formData.set('name', newTypeName)
+    formData.set('description', newTypeDescription)
+    formData.set('color', newTypeColor)
+
+    const result = await createProspectType(formData)
+
+    if (result.success) {
+      setNewTypeName('')
+      setNewTypeDescription('')
+      setNewTypeColor('#6366f1')
+      // Refresh the page to get updated data
+      router.refresh()
+    } else {
+      setCreateError(result.error || 'Kunde inte skapa prospekttyp')
+    }
+
+    setIsCreating(false)
+  }
+
+  // Handle delete prospect type
+  const handleDeleteType = async (id: string) => {
+    setDeleteError(null)
+    const result = await deleteProspectType(id)
+
+    if (result.success) {
+      router.refresh()
+    } else {
+      setDeleteError(result.error || 'Kunde inte ta bort prospekttyp')
+    }
+  }
+
   // Toggle archive handler - immediately update URL
   const handleArchiveToggle = useCallback((checked: boolean) => {
     setIncludeArchive(checked)
@@ -310,6 +375,132 @@ export function ProspektTyperView({
           />
         </div>
       </div>
+
+      {/* Prospect Type Management Card */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Settings className="h-5 w-5 text-gray-500" />
+              <CardTitle className="text-lg">Prospekttyper</CardTitle>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setManageTypesOpen(!manageTypesOpen)}
+            >
+              {manageTypesOpen ? 'Stäng' : 'Hantera'}
+            </Button>
+          </div>
+          <CardDescription>
+            {savedProspectTypes.length} sparade prospekttyper
+          </CardDescription>
+        </CardHeader>
+        {manageTypesOpen && (
+          <CardContent className="pt-0">
+            {/* Saved Types List */}
+            <div className="space-y-2 mb-4">
+              {savedProspectTypes.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Inga sparade prospekttyper
+                </p>
+              ) : (
+                savedProspectTypes.map((type) => (
+                  <div
+                    key={type.id}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-4 h-4 rounded-full"
+                        style={{ backgroundColor: type.color }}
+                      />
+                      <div>
+                        <p className="font-medium">{type.name}</p>
+                        {type.description && (
+                          <p className="text-xs text-muted-foreground">{type.description}</p>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                      onClick={() => handleDeleteType(type.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {deleteError && (
+              <p className="text-sm text-red-500 mb-4">{deleteError}</p>
+            )}
+
+            {/* Create New Type Form */}
+            <div className="border-t pt-4">
+              <p className="text-sm font-medium mb-3">Skapa ny prospekttyp</p>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label htmlFor="type-name">Namn *</Label>
+                  <Input
+                    id="type-name"
+                    placeholder="T.ex. nyköpt_bil"
+                    value={newTypeName}
+                    onChange={(e) => setNewTypeName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="type-description">Beskrivning</Label>
+                  <Input
+                    id="type-description"
+                    placeholder="T.ex. Nyköpta bilar"
+                    value={newTypeDescription}
+                    onChange={(e) => setNewTypeDescription(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="type-color">Färg</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="type-color"
+                      type="color"
+                      value={newTypeColor}
+                      onChange={(e) => setNewTypeColor(e.target.value)}
+                      className="w-16 h-10 p-1 cursor-pointer"
+                    />
+                    <Input
+                      value={newTypeColor}
+                      onChange={(e) => setNewTypeColor(e.target.value)}
+                      className="flex-1"
+                      placeholder="#6366f1"
+                    />
+                  </div>
+                </div>
+
+                {createError && (
+                  <p className="text-sm text-red-500">{createError}</p>
+                )}
+
+                <Button
+                  onClick={handleCreateType}
+                  disabled={isCreating || !newTypeName.trim()}
+                  className="w-full"
+                >
+                  {isCreating ? (
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Plus className="h-4 w-4 mr-2" />
+                  )}
+                  Skapa prospekttyp
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        )}
+      </Card>
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-5">

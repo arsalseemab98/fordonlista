@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { HistorikView } from '@/components/historik/historik-view'
+import { getProspectTypes } from '@/app/prospekt-typer/actions'
 
 // Force dynamic rendering - always fetch fresh data
 export const dynamic = 'force-dynamic'
@@ -75,8 +76,8 @@ export default async function HistorikPage({
   const uniqueCalledCount = new Set(uniqueCalledLeads?.map(c => c.lead_id) || []).size
 
   // Fetch leads data for display (Supabase default limit is 1000)
-  // Run queries in parallel - leads + available counties for filter
-  const [leadsResult, countiesResult] = await Promise.all([
+  // Run queries in parallel - leads + available counties for filter + prospect types
+  const [leadsResult, countiesResult, savedProspectTypes] = await Promise.all([
     (async () => {
       let query = supabase
         .from('leads')
@@ -138,7 +139,9 @@ export default async function HistorikPage({
     // Get available counties for filter dropdown
     supabase
       .from('leads')
-      .select('county')
+      .select('county'),
+    // Get saved prospect types
+    getProspectTypes()
   ])
 
   const { data: allLeads, error } = leadsResult
@@ -233,6 +236,7 @@ export default async function HistorikPage({
           availableCounties={availableCounties}
           currentCounty={countyParam}
           availableExtraColumns={Array.from(extraColumns)}
+          savedProspectTypes={savedProspectTypes}
         />
       </div>
     </div>
