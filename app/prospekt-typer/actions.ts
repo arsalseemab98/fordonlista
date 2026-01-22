@@ -30,12 +30,12 @@ export async function getProspectTypes(): Promise<ProspectType[]> {
   return data || []
 }
 
-export async function createProspectType(formData: FormData): Promise<{ success: boolean; error?: string }> {
+export async function createProspectType(
+  data: { name: string; description?: string | null; color?: string }
+): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient()
 
-  const name = formData.get('name') as string
-  const description = formData.get('description') as string
-  const color = formData.get('color') as string || '#6366f1'
+  const { name, description, color = '#6366f1' } = data
 
   if (!name || name.trim().length === 0) {
     return { success: false, error: 'Namn krävs' }

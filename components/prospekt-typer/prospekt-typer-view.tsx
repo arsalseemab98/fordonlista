@@ -304,12 +304,11 @@ export function ProspektTyperView({
     setIsCreating(true)
     setCreateError(null)
 
-    const formData = new FormData()
-    formData.set('name', newTypeName)
-    formData.set('description', newTypeDescription)
-    formData.set('color', newTypeColor)
-
-    const result = await createProspectType(formData)
+    const result = await createProspectType({
+      name: newTypeName,
+      description: newTypeDescription || null,
+      color: newTypeColor
+    })
 
     if (result.success) {
       setNewTypeName('')

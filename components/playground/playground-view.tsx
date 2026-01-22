@@ -99,6 +99,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Settings2 } from 'lucide-react'
 import { FilterPresets } from '@/components/ui/filter-presets'
+import { createProspectType } from '@/app/prospekt-typer/actions'
+import { Plus } from 'lucide-react'
 
 // Mapping from Swedish display values to database values
 const CALL_RESULT_MAP: Record<string, string> = {
@@ -369,6 +371,13 @@ export function PlaygroundView({
   // Inline prospect type editing
   const [editingProspectTypeId, setEditingProspectTypeId] = useState<string | null>(null)
   const [isUpdatingProspectType, setIsUpdatingProspectType] = useState(false)
+
+  // Create new prospect type dialog state
+  const [createProspectTypeOpen, setCreateProspectTypeOpen] = useState(false)
+  const [newProspectTypeName, setNewProspectTypeName] = useState('')
+  const [newProspectTypeDescription, setNewProspectTypeDescription] = useState('')
+  const [newProspectTypeColor, setNewProspectTypeColor] = useState('#6366f1')
+  const [isCreatingProspectType, setIsCreatingProspectType] = useState(false)
 
   // Status filter for bulk actions
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -810,6 +819,38 @@ export function PlaygroundView({
       toast.error(result.error || 'Kunde inte ta bort')
     }
   }, [router])
+
+  // Create new prospect type
+  const handleCreateProspectType = useCallback(async () => {
+    if (!newProspectTypeName.trim()) {
+      toast.error('Namn krävs')
+      return
+    }
+
+    setIsCreatingProspectType(true)
+    try {
+      const result = await createProspectType({
+        name: newProspectTypeName.trim(),
+        description: newProspectTypeDescription.trim() || null,
+        color: newProspectTypeColor
+      })
+
+      if (result.success) {
+        toast.success(`Prospekttyp "${newProspectTypeName}" skapad!`)
+        setCreateProspectTypeOpen(false)
+        setNewProspectTypeName('')
+        setNewProspectTypeDescription('')
+        setNewProspectTypeColor('#6366f1')
+        router.refresh()
+      } else {
+        toast.error(result.error || 'Kunde inte skapa prospekttyp')
+      }
+    } catch (error) {
+      toast.error('Ett fel uppstod')
+    } finally {
+      setIsCreatingProspectType(false)
+    }
+  }, [newProspectTypeName, newProspectTypeDescription, newProspectTypeColor, router])
 
   // Fetch car info from car.info and save to database
   const handleFetchCarInfo = useCallback(async (lead: Lead, saveToDb: boolean = true) => {
@@ -1969,6 +2010,18 @@ export function PlaygroundView({
                     </label>
                   )
                 })}
+                {/* Add new prospect type button */}
+                <div className="border-t mt-2 pt-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                    onClick={() => setCreateProspectTypeOpen(true)}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Skapa ny typ
+                  </Button>
+                </div>
               </div>
             </PopoverContent>
           </Popover>
@@ -3037,6 +3090,82 @@ export function PlaygroundView({
                 <Check className="h-4 w-4 mr-2" />
               )}
               Spara
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Prospect Type Dialog */}
+      <Dialog open={createProspectTypeOpen} onOpenChange={setCreateProspectTypeOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Skapa ny prospekttyp</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="prospect-name">Namn *</Label>
+              <Input
+                id="prospect-name"
+                placeholder="T.ex. dödsbo"
+                value={newProspectTypeName}
+                onChange={(e) => setNewProspectTypeName(e.target.value)}
+              />
+              <p className="text-xs text-gray-500">Normaliseras automatiskt (ex: &quot;Dödsbo&quot; → &quot;dödsbo&quot;)</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="prospect-description">Beskrivning</Label>
+              <Input
+                id="prospect-description"
+                placeholder="T.ex. Dödsbo-fordon"
+                value={newProspectTypeDescription}
+                onChange={(e) => setNewProspectTypeDescription(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="prospect-color">Färg</Label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  id="prospect-color"
+                  value={newProspectTypeColor}
+                  onChange={(e) => setNewProspectTypeColor(e.target.value)}
+                  className="w-10 h-10 rounded cursor-pointer border"
+                />
+                <Input
+                  value={newProspectTypeColor}
+                  onChange={(e) => setNewProspectTypeColor(e.target.value)}
+                  className="w-24 font-mono text-sm"
+                />
+                <div
+                  className="w-6 h-6 rounded-full border"
+                  style={{ backgroundColor: newProspectTypeColor }}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCreateProspectTypeOpen(false)}
+              disabled={isCreatingProspectType}
+            >
+              Avbryt
+            </Button>
+            <Button
+              onClick={handleCreateProspectType}
+              disabled={isCreatingProspectType || !newProspectTypeName.trim()}
+            >
+              {isCreatingProspectType ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Skapar...
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Skapa
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
