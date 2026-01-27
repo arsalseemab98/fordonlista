@@ -33,12 +33,10 @@ export function Header({ title, description }: HeaderProps) {
 
       {/* Right Section */}
       <div className="flex items-center gap-4">
-        {/* Lead Search (reg.nr → lead status) */}
+        {/* Lead Search (reg.nr → lead status) - green */}
         <RegNrSearch />
 
-        <div className="h-6 w-px bg-gray-200" />
-
-        {/* Car.info Search (reg.nr → fordonsdata) */}
+        {/* Car.info Search (reg.nr → fordonsdata) - default */}
         <CarInfoSearch />
 
         {/* Notifications */}

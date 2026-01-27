@@ -98,23 +98,22 @@ export function RegNrSearch() {
     <>
       <div className="flex items-center gap-2">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
           <Input
             type="text"
             placeholder="Sök lead reg.nr..."
             value={query}
             onChange={(e) => setQuery(e.target.value.toUpperCase())}
             onKeyDown={handleKeyDown}
-            className="pl-9 w-[160px] md:w-[180px] h-9 uppercase font-mono"
+            className="pl-9 w-[160px] md:w-[180px] h-9 uppercase font-mono border-emerald-300 focus-visible:ring-emerald-400"
             maxLength={7}
           />
         </div>
         <Button
           size="sm"
-          variant="outline"
           onClick={handleSearch}
           disabled={isLoading || query.trim().length < 2}
-          className="h-9"
+          className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white"
           title="Sök lead via reg.nr"
         >
           {isLoading ? (
