@@ -269,6 +269,40 @@ const LEAD_STATUS_TYPES = [
   { value: 'letter_sent', label: '🔴 Brev skickat' },
 ]
 
+// Mileage filter types
+const MILEAGE_FILTER_TYPES = [
+  { value: 'all', label: 'Alla mil/år' },
+  { value: 'lagmil', label: 'Lågmil (<800)' },
+  { value: 'normal', label: 'Normal (800-2500)' },
+  { value: 'hogmil', label: 'Högmil (>2500)' },
+  { value: 'no_data', label: 'Ingen data' },
+]
+
+// Calculate mil/år for a vehicle
+function getVehicleMilPerYear(vehicle: Vehicle | undefined): number | null {
+  if (!vehicle) return null
+
+  if (vehicle.mileage_history && vehicle.mileage_history.length >= 2) {
+    const sorted = [...vehicle.mileage_history].sort((a, b) => a.date.localeCompare(b.date))
+    const oldest = sorted[0]
+    const newest = sorted[sorted.length - 1]
+    const diffKm = newest.mileage_km - oldest.mileage_km
+    const diffDays = (new Date(newest.date).getTime() - new Date(oldest.date).getTime()) / (1000 * 60 * 60 * 24)
+    if (diffDays > 30) {
+      return Math.round(((diffKm / diffDays) * 365) / 10)
+    }
+  }
+
+  if (vehicle.mileage && vehicle.year) {
+    const age = new Date().getFullYear() - vehicle.year
+    if (age > 0) {
+      return Math.round((vehicle.mileage / 10) / age)
+    }
+  }
+
+  return null
+}
+
 // Helper function to determine lead status based on call history and letter status
 function getLeadStatus(lead: Lead): { status: 'no_activity' | 'new' | 'called' | 'letter_sent'; label: string; color: 'gray' | 'green' | 'amber' | 'red' } {
   if (lead.letter_sent === true) {
@@ -387,14 +421,35 @@ export function PlaygroundView({
   // Activity filter for display (default: no_activity = orörda leads)
   const [activityFilter, setActivityFilter] = useState<string>('no_activity')
 
-  // Filter leads by activity status for display
+  // Mileage filter
+  const [mileageFilter, setMileageFilter] = useState<string>('all')
+
+  // Filter leads by activity status and mileage for display
   const filteredLeads = useMemo(() => {
-    if (activityFilter === 'all') return leads
-    return leads.filter(lead => {
-      const { status } = getLeadStatus(lead)
-      return status === activityFilter
-    })
-  }, [leads, activityFilter])
+    let result = leads
+
+    if (activityFilter !== 'all') {
+      result = result.filter(lead => {
+        const { status } = getLeadStatus(lead)
+        return status === activityFilter
+      })
+    }
+
+    if (mileageFilter !== 'all') {
+      result = result.filter(lead => {
+        const milPerYear = getVehicleMilPerYear(lead.vehicles?.[0])
+        switch (mileageFilter) {
+          case 'lagmil': return milPerYear !== null && milPerYear < 800
+          case 'normal': return milPerYear !== null && milPerYear >= 800 && milPerYear <= 2500
+          case 'hogmil': return milPerYear !== null && milPerYear > 2500
+          case 'no_data': return milPerYear === null
+          default: return true
+        }
+      })
+    }
+
+    return result
+  }, [leads, activityFilter, mileageFilter])
 
   // Bulk delete state
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
@@ -1927,6 +1982,34 @@ export function PlaygroundView({
             </SelectContent>
           </Select>
 
+          {/* Mileage filter - mil/år categories */}
+          <Select value={mileageFilter} onValueChange={setMileageFilter}>
+            <SelectTrigger className={cn("w-[180px]", mileageFilter !== 'all' && "border-blue-500 bg-blue-50")}>
+              <SelectValue placeholder="Mil/år" />
+            </SelectTrigger>
+            <SelectContent>
+              {MILEAGE_FILTER_TYPES.map((type) => {
+                const count = type.value === 'all'
+                  ? leads.length
+                  : leads.filter(l => {
+                      const milPerYear = getVehicleMilPerYear(l.vehicles?.[0])
+                      switch (type.value) {
+                        case 'lagmil': return milPerYear !== null && milPerYear < 800
+                        case 'normal': return milPerYear !== null && milPerYear >= 800 && milPerYear <= 2500
+                        case 'hogmil': return milPerYear !== null && milPerYear > 2500
+                        case 'no_data': return milPerYear === null
+                        default: return true
+                      }
+                    }).length
+                return (
+                  <SelectItem key={type.value} value={type.value}>
+                    {type.label} ({count})
+                  </SelectItem>
+                )
+              })}
+            </SelectContent>
+          </Select>
+
           {/* Prospect type filter - multi-select with checkboxes */}
           <Popover>
             <PopoverTrigger asChild>
@@ -2221,7 +2304,7 @@ export function PlaygroundView({
         <div className="flex items-center gap-4">
           <span>
             Visar <strong className="text-gray-900">{filteredLeads.length}</strong>
-            {activityFilter !== 'all' && (
+            {(activityFilter !== 'all' || mileageFilter !== 'all') && (
               <> av <strong className="text-gray-900">{leads.length}</strong></>
             )}
             {' '}av <strong className="text-gray-900">{totalCount}</strong> leads
@@ -2365,8 +2448,8 @@ export function PlaygroundView({
               <Car className="h-12 w-12 mx-auto text-gray-300 mb-4" />
               <p className="font-medium">Inga leads hittades</p>
               <p className="text-sm mt-1">
-                {activityFilter !== 'all'
-                  ? `Inga leads med status "${LEAD_STATUS_TYPES.find(t => t.value === activityFilter)?.label}". Prova att ändra filter.`
+                {activityFilter !== 'all' || mileageFilter !== 'all'
+                  ? `Inga leads matchar valda filter. Prova att ändra status eller mil/år-filter.`
                   : 'Prova att ändra dina filter'}
               </p>
             </div>
