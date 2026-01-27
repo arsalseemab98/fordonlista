@@ -36,10 +36,11 @@ export default async function HistorikPage({
     { count: sentToCallCount },
     { count: sentToBrevCount }
   ] = await Promise.all([
-    // Total leads count
+    // Total leads count (exclude soft-deleted)
     supabase
       .from('leads')
-      .select('id', { count: 'exact', head: true }),
+      .select('id', { count: 'exact', head: true })
+      .is('deleted_at', null),
     // Leads with call logs (using inner join)
     supabase
       .from('call_logs')
@@ -49,24 +50,28 @@ export default async function HistorikPage({
     supabase
       .from('leads')
       .select('id', { count: 'exact', head: true })
-      .eq('letter_sent', true),
+      .eq('letter_sent', true)
+      .is('deleted_at', null),
     // Leads with pending_review status
     supabase
       .from('leads')
       .select('id', { count: 'exact', head: true })
-      .eq('status', 'pending_review'),
+      .eq('status', 'pending_review')
+      .is('deleted_at', null),
     // Leads sent to call list (has sent_to_call_at timestamp) - exclude prospekt_archive
     supabase
       .from('leads')
       .select('id', { count: 'exact', head: true })
       .not('sent_to_call_at', 'is', null)
-      .neq('status', 'prospekt_archive'),
+      .neq('status', 'prospekt_archive')
+      .is('deleted_at', null),
     // Leads sent to brev list (has sent_to_brev_at timestamp) - exclude prospekt_archive
     supabase
       .from('leads')
       .select('id', { count: 'exact', head: true })
       .not('sent_to_brev_at', 'is', null)
       .neq('status', 'prospekt_archive')
+      .is('deleted_at', null)
   ])
 
   // Get unique called lead count (since call_logs can have multiple entries per lead)
@@ -128,6 +133,7 @@ export default async function HistorikPage({
         `)
         .order('created_at', { ascending: false })
         .neq('status', 'prospekt_archive') // Exclude prospekt archive leads
+        .is('deleted_at', null)
 
       // Apply county filter if selected
       if (selectedCounties.length > 0) {
@@ -139,7 +145,8 @@ export default async function HistorikPage({
     // Get available counties for filter dropdown
     supabase
       .from('leads')
-      .select('county'),
+      .select('county')
+      .is('deleted_at', null),
     // Get saved prospect types
     getProspectTypes()
   ])

@@ -76,6 +76,7 @@ export default async function PlaygroundPage({
         .in('status', ['pending_review', 'new'])
         .is('sent_to_call_at', null)  // Endast orörda leads - ej skickade till ring
         .is('sent_to_brev_at', null)  // Endast orörda leads - ej skickade till brev
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(200)
 
@@ -92,7 +93,8 @@ export default async function PlaygroundPage({
       .select('county, prospect_type')
       .in('status', ['pending_review', 'new'])
       .is('sent_to_call_at', null)
-      .is('sent_to_brev_at', null),
+      .is('sent_to_brev_at', null)
+      .is('deleted_at', null),
     // Get user preferences for filtering
     getPreferences(),
     // Get saved prospect types

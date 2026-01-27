@@ -21,6 +21,14 @@ interface Lead {
   }>
 }
 
+export interface BrevMonthlyStats {
+  month: string
+  lettersSent: number
+  cost: number
+  conversions: number
+  conversionRate: number
+}
+
 interface BrevPageProps {
   searchParams: Promise<{
     filter?: string
@@ -48,6 +56,7 @@ async function getLeadsForLetters(filter: string) {
       )
     `)
     .neq('status', 'pending_review')
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
 
   // Apply filters
@@ -63,23 +72,51 @@ async function getLeadsForLetters(filter: string) {
 
   if (error) {
     console.error('Error fetching leads for letters:', error)
-    return { leads: [], counts: { total: 0, noPhone: 0, notSent: 0, sent: 0 }, letterCost: 12.00 }
+    return { leads: [], counts: { total: 0, noPhone: 0, notSent: 0, sent: 0 }, letterCost: 12.00, monthlyStats: [] }
   }
 
-  // Get counts and preferences in parallel (exclude pending_review from all counts)
+  // Get counts, preferences, and analytics data in parallel (exclude pending_review from all counts)
   const [
     { count: totalCount },
     { count: noPhoneCount },
     { count: notSentCount },
     { count: sentCount },
-    { data: preferences }
+    { data: preferences },
+    { data: analyticsLeads }
   ] = await Promise.all([
-    supabase.from('leads').select('*', { count: 'exact', head: true }).neq('status', 'pending_review'),
-    supabase.from('leads').select('*', { count: 'exact', head: true }).neq('status', 'pending_review').or('phone.is.null,phone.eq.'),
-    supabase.from('leads').select('*', { count: 'exact', head: true }).neq('status', 'pending_review').or('letter_sent.is.null,letter_sent.eq.false'),
-    supabase.from('leads').select('*', { count: 'exact', head: true }).neq('status', 'pending_review').eq('letter_sent', true),
-    supabase.from('preferences').select('letter_cost').limit(1).maybeSingle()
+    supabase.from('leads').select('*', { count: 'exact', head: true }).neq('status', 'pending_review').is('deleted_at', null),
+    supabase.from('leads').select('*', { count: 'exact', head: true }).neq('status', 'pending_review').is('deleted_at', null).or('phone.is.null,phone.eq.'),
+    supabase.from('leads').select('*', { count: 'exact', head: true }).neq('status', 'pending_review').is('deleted_at', null).or('letter_sent.is.null,letter_sent.eq.false'),
+    supabase.from('leads').select('*', { count: 'exact', head: true }).neq('status', 'pending_review').is('deleted_at', null).eq('letter_sent', true),
+    supabase.from('preferences').select('letter_cost').limit(1).maybeSingle(),
+    supabase.from('leads').select('id, letter_sent_date, status').eq('letter_sent', true).is('deleted_at', null)
   ])
+
+  const letterCost = preferences?.letter_cost || 12.00
+
+  // Aggregate analytics by month
+  const monthMap = new Map<string, { sent: number; conversions: number }>()
+
+  analyticsLeads?.forEach((lead: { id: string; letter_sent_date: string | null; status: string }) => {
+    if (!lead.letter_sent_date) return
+    const month = lead.letter_sent_date.substring(0, 7) // "2025-01"
+    const entry = monthMap.get(month) || { sent: 0, conversions: 0 }
+    entry.sent++
+    if (['booked', 'interested', 'bought'].includes(lead.status)) {
+      entry.conversions++
+    }
+    monthMap.set(month, entry)
+  })
+
+  const monthlyStats: BrevMonthlyStats[] = Array.from(monthMap.entries())
+    .map(([month, d]) => ({
+      month,
+      lettersSent: d.sent,
+      cost: d.sent * letterCost,
+      conversions: d.conversions,
+      conversionRate: d.sent > 0 ? (d.conversions / d.sent) * 100 : 0,
+    }))
+    .sort((a, b) => b.month.localeCompare(a.month))
 
   return {
     leads: (data || []) as Lead[],
@@ -89,14 +126,15 @@ async function getLeadsForLetters(filter: string) {
       notSent: notSentCount || 0,
       sent: sentCount || 0
     },
-    letterCost: preferences?.letter_cost || 12.00
+    letterCost,
+    monthlyStats,
   }
 }
 
 export default async function BrevPage({ searchParams }: BrevPageProps) {
   const params = await searchParams
   const filter = params.filter || 'not_sent'
-  const { leads, counts, letterCost } = await getLeadsForLetters(filter)
+  const { leads, counts, letterCost, monthlyStats } = await getLeadsForLetters(filter)
 
   return (
     <div className="flex flex-col">
@@ -111,6 +149,7 @@ export default async function BrevPage({ searchParams }: BrevPageProps) {
           counts={counts}
           currentFilter={filter}
           letterCost={letterCost}
+          monthlyStats={monthlyStats}
         />
       </div>
     </div>

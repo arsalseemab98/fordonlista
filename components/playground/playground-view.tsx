@@ -74,7 +74,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { bulkUpdateLeadsMetadata, addCallLog, markLeadForLetter, removeLeadFromLetterList, updateLeadProspectType, deleteExtraDataColumn, bulkDeleteLeads, checkLeadsHistory, HistoryCheckResult } from '@/app/actions/leads'
+import { bulkUpdateLeadsMetadata, addCallLog, markLeadForLetter, removeLeadFromLetterList, updateLeadProspectType, deleteExtraDataColumn, bulkDeleteLeads, restoreLeads, checkLeadsHistory, HistoryCheckResult } from '@/app/actions/leads'
 import { saveCarInfoToVehicle, activateLead, bulkActivateLeads, bulkResetCarInfo, addManualVehicle, CarInfoData } from '@/app/actions/vehicles'
 import {
   Tooltip,
@@ -97,6 +97,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { DeleteConfirmDialog } from '@/components/ui/delete-confirm-dialog'
 import { Settings2 } from 'lucide-react'
 import { FilterPresets } from '@/components/ui/filter-presets'
 import { createProspectType } from '@/app/prospekt-typer/actions'
@@ -1179,10 +1180,23 @@ export function PlaygroundView({
       const result = await bulkDeleteLeads(leadsToDelete)
 
       if (result.success) {
-        toast.success(`${result.deletedCount} leads borttagna!`)
         clearSelection()
         setStatusFilter('all')
         router.refresh()
+        toast.success(`${result.deletedCount} leads flyttade till papperskorgen`, {
+          action: {
+            label: 'Ångra',
+            onClick: async () => {
+              const res = await restoreLeads(leadsToDelete)
+              if (res.success) {
+                toast.success(`${res.restoredCount} leads återställda`)
+                router.refresh()
+              } else {
+                toast.error('Kunde inte återställa')
+              }
+            }
+          }
+        })
       } else {
         toast.error(result.error || 'Kunde inte ta bort')
       }
@@ -1361,14 +1375,28 @@ export function PlaygroundView({
     setIsBulkDeleting(true)
 
     try {
-      const result = await bulkDeleteLeads(historyCheckResult.duplicateLeadIds)
+      const duplicateIds = historyCheckResult.duplicateLeadIds
+      const result = await bulkDeleteLeads(duplicateIds)
 
       if (result.success) {
-        toast.success(`${result.deletedCount} dubbletter borttagna!`)
         setHistoryCheckResult(null)
         setHistoryCheckDialogOpen(false)
         clearSelection()
         router.refresh()
+        toast.success(`${result.deletedCount} dubbletter flyttade till papperskorgen`, {
+          action: {
+            label: 'Ångra',
+            onClick: async () => {
+              const res = await restoreLeads(duplicateIds)
+              if (res.success) {
+                toast.success(`${res.restoredCount} leads återställda`)
+                router.refresh()
+              } else {
+                toast.error('Kunde inte återställa')
+              }
+            }
+          }
+        })
       } else {
         toast.error(result.error || 'Kunde inte ta bort')
       }
@@ -1762,51 +1790,14 @@ export function PlaygroundView({
       )}
 
       {/* Bulk Delete Confirmation Dialog */}
-      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-red-600">
-              <Trash2 className="h-5 w-5" />
-              Ta bort leads
-            </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              <p>
-                Är du säker på att du vill ta bort{' '}
-                <strong className="text-red-600">
-                  {statusFilter !== 'all'
-                    ? `${getSelectedCountByStatus(statusFilter)} leads (${LEAD_STATUS_TYPES.find(t => t.value === statusFilter)?.label})`
-                    : `${selectedLeads.size} leads`
-                  }
-                </strong>
-                ?
-              </p>
-              <p className="text-red-600 font-medium">
-                Detta kommer även ta bort alla tillhörande fordon och samtalsloggar. Denna åtgärd kan inte ångras!
-              </p>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isBulkDeleting}>Avbryt</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleBulkDelete}
-              disabled={isBulkDeleting}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {isBulkDeleting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Tar bort...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Ja, ta bort
-                </>
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteConfirmDialog
+        open={bulkDeleteDialogOpen}
+        onOpenChange={setBulkDeleteDialogOpen}
+        count={statusFilter !== 'all' ? getSelectedCountByStatus(statusFilter) : selectedLeads.size}
+        onConfirm={handleBulkDelete}
+        isDeleting={isBulkDeleting}
+        permanent
+      />
 
       {/* Filters */}
       <div className="space-y-4">

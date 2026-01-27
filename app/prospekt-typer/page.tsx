@@ -68,6 +68,7 @@ export default async function ProspektTyperPage({
     .from('leads')
     .select('id, prospect_type, data_period_start, data_period_end, created_at, county, status, sent_to_call_at, sent_to_brev_at, owner_info, phone')
     .order('created_at', { ascending: false })
+    .is('deleted_at', null)
 
   // Apply filters
   if (selectedProspectTypes.length > 0) {

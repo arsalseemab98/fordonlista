@@ -27,9 +27,9 @@ async function getStats() {
     { count: deregisteredVehicles },
     { count: callsToday }
   ] = await Promise.all([
-    supabase.from('leads').select('*', { count: 'exact', head: true }),
-    supabase.from('leads').select('*', { count: 'exact', head: true }).eq('status', 'new'),
-    supabase.from('leads').select('*', { count: 'exact', head: true }).eq('status', 'interested'),
+    supabase.from('leads').select('*', { count: 'exact', head: true }).is('deleted_at', null),
+    supabase.from('leads').select('*', { count: 'exact', head: true }).eq('status', 'new').is('deleted_at', null),
+    supabase.from('leads').select('*', { count: 'exact', head: true }).eq('status', 'interested').is('deleted_at', null),
     supabase.from('vehicles').select('*', { count: 'exact', head: true }),
     supabase.from('vehicles').select('*', { count: 'exact', head: true }).eq('in_traffic', false),
     supabase.from('call_logs').select('*', { count: 'exact', head: true }).gte('called_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())

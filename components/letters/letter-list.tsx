@@ -27,24 +27,18 @@ import {
   Calculator,
   Settings,
   Trash2,
-  AlertTriangle
+  BarChart3,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { markLetterSent } from '@/app/actions/letters'
 import { FilterPresets } from '@/components/ui/filter-presets'
-import { deleteLead, bulkDeleteLeads } from '@/app/actions/leads'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import { deleteLead, bulkDeleteLeads, restoreLeads } from '@/app/actions/leads'
+import { DeleteConfirmDialog } from '@/components/ui/delete-confirm-dialog'
+import { DeleteIconButton } from '@/components/ui/delete-icon-button'
 import { toast } from 'sonner'
-import { format } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 import { sv } from 'date-fns/locale'
 
 interface Vehicle {
@@ -65,6 +59,14 @@ interface Lead {
   vehicles: Vehicle[]
 }
 
+interface BrevMonthlyStats {
+  month: string
+  lettersSent: number
+  cost: number
+  conversions: number
+  conversionRate: number
+}
+
 interface LetterListProps {
   leads: Lead[]
   counts: {
@@ -75,9 +77,10 @@ interface LetterListProps {
   }
   currentFilter: string
   letterCost: number
+  monthlyStats: BrevMonthlyStats[]
 }
 
-export function LetterList({ leads, counts, currentFilter, letterCost }: LetterListProps) {
+export function LetterList({ leads, counts, currentFilter, letterCost, monthlyStats }: LetterListProps) {
   const router = useRouter()
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set())
   const [isExporting, setIsExporting] = useState(false)
@@ -87,6 +90,7 @@ export function LetterList({ leads, counts, currentFilter, letterCost }: LetterL
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
   const [leadToDelete, setLeadToDelete] = useState<Lead | null>(null)
   const [fromPlayground, setFromPlayground] = useState(false)
+  const [analyticsOpen, setAnalyticsOpen] = useState(false)
 
   // Check for leads sent from playground via localStorage
   useEffect(() => {
@@ -178,15 +182,29 @@ export function LetterList({ leads, counts, currentFilter, letterCost }: LetterL
   const handleDeleteConfirm = async () => {
     if (!leadToDelete) return
 
+    const deletedId = leadToDelete.id
     setIsDeleting(true)
-    const result = await deleteLead(leadToDelete.id)
+    const result = await deleteLead(deletedId)
     setIsDeleting(false)
     setDeleteDialogOpen(false)
     setLeadToDelete(null)
 
     if (result.success) {
-      toast.success('Lead borttagen')
       router.refresh()
+      toast.success('Flyttad till papperskorgen', {
+        action: {
+          label: 'Ångra',
+          onClick: async () => {
+            const res = await restoreLeads([deletedId])
+            if (res.success) {
+              toast.success('Lead återställd')
+              router.refresh()
+            } else {
+              toast.error('Kunde inte återställa')
+            }
+          }
+        }
+      })
     } else {
       toast.error(result.error || 'Kunde inte ta bort lead')
     }
@@ -201,15 +219,29 @@ export function LetterList({ leads, counts, currentFilter, letterCost }: LetterL
   }
 
   const handleBulkDeleteConfirm = async () => {
+    const deletedIds = Array.from(selectedLeads)
     setIsDeleting(true)
-    const result = await bulkDeleteLeads(Array.from(selectedLeads))
+    const result = await bulkDeleteLeads(deletedIds)
     setIsDeleting(false)
     setBulkDeleteDialogOpen(false)
 
     if (result.success) {
-      toast.success(`${selectedLeads.size} leads borttagna`)
       setSelectedLeads(new Set())
       router.refresh()
+      toast.success(`${deletedIds.length} leads flyttade till papperskorgen`, {
+        action: {
+          label: 'Ångra',
+          onClick: async () => {
+            const res = await restoreLeads(deletedIds)
+            if (res.success) {
+              toast.success(`${res.restoredCount} leads återställda`)
+              router.refresh()
+            } else {
+              toast.error('Kunde inte återställa')
+            }
+          }
+        }
+      })
     } else {
       toast.error(result.error || 'Kunde inte ta bort leads')
     }
@@ -307,6 +339,102 @@ export function LetterList({ leads, counts, currentFilter, letterCost }: LetterL
           onLoadPreset={loadPresetFilters}
         />
       </div>
+
+      {/* Monthly Analytics */}
+      {monthlyStats.length > 0 && (
+        <Card>
+          <CardHeader
+            className="cursor-pointer select-none py-4"
+            onClick={() => setAnalyticsOpen(!analyticsOpen)}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-blue-600" />
+                <CardTitle className="text-base">Brevkostnadsanalys</CardTitle>
+              </div>
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-muted-foreground">
+                  Totalt: {monthlyStats.reduce((s, m) => s + m.lettersSent, 0).toLocaleString('sv-SE')} brev
+                  {' · '}
+                  {monthlyStats.reduce((s, m) => s + m.cost, 0).toLocaleString('sv-SE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} kr
+                  {' · '}
+                  {monthlyStats.reduce((s, m) => s + m.conversions, 0)} konverteringar
+                </span>
+                {analyticsOpen ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+              </div>
+            </div>
+          </CardHeader>
+          {analyticsOpen && (
+            <CardContent className="pt-0">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50">
+                    <TableHead>Månad</TableHead>
+                    <TableHead className="text-right">Brev</TableHead>
+                    <TableHead className="text-right">Kostnad</TableHead>
+                    <TableHead className="text-right">Konv.</TableHead>
+                    <TableHead className="text-right">Konv.grad</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {monthlyStats.map(stat => (
+                    <TableRow key={stat.month}>
+                      <TableCell className="font-medium">
+                        {format(parseISO(stat.month + '-01'), 'MMM yyyy', { locale: sv })}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {stat.lettersSent.toLocaleString('sv-SE')}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {stat.cost.toLocaleString('sv-SE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} kr
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {stat.conversions}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge
+                          variant={stat.conversionRate > 0 ? 'default' : 'outline'}
+                          className={cn(
+                            stat.conversionRate >= 5 ? 'bg-green-100 text-green-700' :
+                            stat.conversionRate > 0 ? 'bg-amber-100 text-amber-700' :
+                            'text-gray-400'
+                          )}
+                        >
+                          {stat.conversionRate.toFixed(1)}%
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {/* Totals row */}
+                  <TableRow className="bg-gray-50 font-medium">
+                    <TableCell>Totalt</TableCell>
+                    <TableCell className="text-right">
+                      {monthlyStats.reduce((s, m) => s + m.lettersSent, 0).toLocaleString('sv-SE')}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {monthlyStats.reduce((s, m) => s + m.cost, 0).toLocaleString('sv-SE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} kr
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {monthlyStats.reduce((s, m) => s + m.conversions, 0)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {(() => {
+                        const totalSent = monthlyStats.reduce((s, m) => s + m.lettersSent, 0)
+                        const totalConv = monthlyStats.reduce((s, m) => s + m.conversions, 0)
+                        return totalSent > 0 ? ((totalConv / totalSent) * 100).toFixed(1) : '0.0'
+                      })()}%
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </CardContent>
+          )}
+        </Card>
+      )}
 
       {/* Cost Calculator */}
       <Card className="bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200">
@@ -501,14 +629,10 @@ export function LetterList({ leads, counts, currentFilter, letterCost }: LetterL
                       </TableCell>
                       <TableCell>
                         {vIndex === 0 && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
+                          <DeleteIconButton
                             onClick={() => handleDeleteClick(lead)}
                             className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          />
                         )}
                       </TableCell>
                     </TableRow>
@@ -539,62 +663,28 @@ export function LetterList({ leads, counts, currentFilter, letterCost }: LetterL
       </Card>
 
       {/* Single Delete Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-              Ta bort lead
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Är du säker på att du vill ta bort denna lead? Detta tar även bort alla
-              tillhörande fordon och samtalsloggar. Åtgärden kan inte ångras.
-              {leadToDelete && (
-                <div className="mt-3 p-3 bg-gray-50 rounded-lg">
-                  <p className="font-medium text-gray-900">{leadToDelete.owner_info || 'Okänd ägare'}</p>
-                  <p className="text-sm text-gray-600">{leadToDelete.vehicles.length} fordon</p>
-                </div>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Avbryt</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {isDeleting ? 'Tar bort...' : 'Ta bort'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        count={1}
+        onConfirm={handleDeleteConfirm}
+        isDeleting={isDeleting}
+        details={leadToDelete && (
+          <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+            <p className="font-medium text-gray-900">{leadToDelete.owner_info || 'Okänd ägare'}</p>
+            <p className="text-sm text-gray-600">{leadToDelete.vehicles.length} fordon</p>
+          </div>
+        )}
+      />
 
       {/* Bulk Delete Dialog */}
-      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-              Ta bort {selectedLeads.size} leads
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Är du säker på att du vill ta bort {selectedLeads.size} leads? Detta tar även bort alla
-              tillhörande fordon och samtalsloggar. Åtgärden kan inte ångras.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Avbryt</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleBulkDeleteConfirm}
-              disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {isDeleting ? 'Tar bort...' : `Ta bort ${selectedLeads.size} leads`}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteConfirmDialog
+        open={bulkDeleteDialogOpen}
+        onOpenChange={setBulkDeleteDialogOpen}
+        count={selectedLeads.size}
+        onConfirm={handleBulkDeleteConfirm}
+        isDeleting={isDeleting}
+      />
     </div>
   )
 }

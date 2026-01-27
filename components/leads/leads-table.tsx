@@ -1,10 +1,12 @@
 'use client'
 
+import { useState, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Table,
   TableBody,
@@ -13,6 +15,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { DeleteConfirmDialog } from '@/components/ui/delete-confirm-dialog'
+import { DeleteIconButton } from '@/components/ui/delete-icon-button'
 import {
   ChevronLeft,
   ChevronRight,
@@ -22,11 +26,14 @@ import {
   Clock,
   AlertCircle,
   Star,
-  ExternalLink
+  ExternalLink,
+  Trash2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatDistanceToNow } from 'date-fns'
 import { sv } from 'date-fns/locale'
+import { toast } from 'sonner'
+import { deleteLead, bulkDeleteLeads, restoreLeads } from '@/app/actions/leads'
 
 interface Vehicle {
   id: string
@@ -88,25 +95,159 @@ export function LeadsTable({ leads, totalPages, currentPage }: LeadsTableProps) 
   const router = useRouter()
   const searchParams = useSearchParams()
 
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [deleteLeadId, setDeleteLeadId] = useState<string | null>(null)
+  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+
   const goToPage = (page: number) => {
     const params = new URLSearchParams(searchParams.toString())
     params.set('page', page.toString())
     router.push(`/leads?${params.toString()}`)
   }
 
+  const toggleSelection = useCallback((leadId: string) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(leadId)) {
+        newSet.delete(leadId)
+      } else {
+        newSet.add(leadId)
+      }
+      return newSet
+    })
+  }, [])
+
+  const toggleSelectAll = useCallback(() => {
+    if (selectedIds.size === leads.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(leads.map(l => l.id)))
+    }
+  }, [leads, selectedIds.size])
+
+  const handleDeleteSingle = useCallback(async () => {
+    if (!deleteLeadId) return
+
+    const deletedId = deleteLeadId
+    setIsDeleting(true)
+    try {
+      const result = await deleteLead(deletedId)
+      if (result.success) {
+        setDeleteLeadId(null)
+        setSelectedIds(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(deletedId)
+          return newSet
+        })
+        router.refresh()
+        toast.success('Flyttad till papperskorgen', {
+          action: {
+            label: 'Ångra',
+            onClick: async () => {
+              const res = await restoreLeads([deletedId])
+              if (res.success) {
+                toast.success('Lead återställd')
+                router.refresh()
+              } else {
+                toast.error('Kunde inte återställa')
+              }
+            }
+          }
+        })
+      } else {
+        toast.error(result.error || 'Kunde inte radera lead')
+      }
+    } catch {
+      toast.error('Ett fel uppstod')
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [deleteLeadId, router])
+
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedIds.size === 0) return
+
+    const deletedIds = Array.from(selectedIds)
+    setIsDeleting(true)
+    try {
+      const result = await bulkDeleteLeads(deletedIds)
+      if (result.success) {
+        setShowBulkDeleteDialog(false)
+        setSelectedIds(new Set())
+        router.refresh()
+        toast.success(`${result.deletedCount} leads flyttade till papperskorgen`, {
+          action: {
+            label: 'Ångra',
+            onClick: async () => {
+              const res = await restoreLeads(deletedIds)
+              if (res.success) {
+                toast.success(`${res.restoredCount} leads återställda`)
+                router.refresh()
+              } else {
+                toast.error('Kunde inte återställa')
+              }
+            }
+          }
+        })
+      } else {
+        toast.error(result.error || 'Kunde inte radera leads')
+      }
+    } catch {
+      toast.error('Ett fel uppstod')
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [selectedIds, router])
+
   return (
     <div className="space-y-4">
+      {/* Selection bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
+          <span className="text-sm text-blue-700">
+            {selectedIds.size} lead{selectedIds.size > 1 ? 's' : ''} markerade
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedIds(new Set())}
+            >
+              Avmarkera
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setShowBulkDeleteDialog(true)}
+              className="gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              Radera {selectedIds.size}
+            </Button>
+          </div>
+        </div>
+      )}
+
       <Card>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow className="bg-gray-50">
+                <TableHead className="w-[50px]">
+                  <Checkbox
+                    checked={leads.length > 0 && selectedIds.size === leads.length}
+                    onCheckedChange={toggleSelectAll}
+                    aria-label="Välj alla"
+                  />
+                </TableHead>
                 <TableHead className="w-[200px]">Kontakt</TableHead>
                 <TableHead>Fordon</TableHead>
                 <TableHead className="w-[120px]">Miltal</TableHead>
                 <TableHead className="w-[100px]">Status</TableHead>
                 <TableHead className="w-[140px]">Senaste kontakt</TableHead>
-                <TableHead className="w-[80px]"></TableHead>
+                <TableHead className="w-[100px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -118,9 +259,22 @@ export function LeadsTable({ leads, totalPages, currentPage }: LeadsTableProps) 
                 return (
                   <TableRow
                     key={lead.id}
-                    className="hover:bg-gray-50 cursor-pointer"
+                    className={cn(
+                      "hover:bg-gray-50 cursor-pointer",
+                      selectedIds.has(lead.id) && "bg-blue-50"
+                    )}
                     onClick={() => router.push(`/leads/${lead.id}`)}
                   >
+                    {/* Checkbox */}
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedIds.has(lead.id)}
+                        onCheckedChange={() => toggleSelection(lead.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={`Välj ${lead.owner_info || 'lead'}`}
+                      />
+                    </TableCell>
+
                     {/* Contact info */}
                     <TableCell>
                       <div className="space-y-1">
@@ -218,16 +372,21 @@ export function LeadsTable({ leads, totalPages, currentPage }: LeadsTableProps) 
 
                     {/* Actions */}
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          router.push(`/leads/${lead.id}`)
-                        }}
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            router.push(`/leads/${lead.id}`)
+                          }}
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                        <DeleteIconButton
+                          onClick={() => setDeleteLeadId(lead.id)}
+                        />
+                      </div>
                     </TableCell>
                   </TableRow>
                 )
@@ -265,6 +424,24 @@ export function LeadsTable({ leads, totalPages, currentPage }: LeadsTableProps) 
           </div>
         </div>
       )}
+
+      {/* Single Delete Dialog */}
+      <DeleteConfirmDialog
+        open={!!deleteLeadId}
+        onOpenChange={(open) => !open && setDeleteLeadId(null)}
+        count={1}
+        onConfirm={handleDeleteSingle}
+        isDeleting={isDeleting}
+      />
+
+      {/* Bulk Delete Dialog */}
+      <DeleteConfirmDialog
+        open={showBulkDeleteDialog}
+        onOpenChange={setShowBulkDeleteDialog}
+        count={selectedIds.size}
+        onConfirm={handleBulkDelete}
+        isDeleting={isDeleting}
+      />
     </div>
   )
 }

@@ -29,14 +29,8 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import { DeleteConfirmDialog } from '@/components/ui/delete-confirm-dialog'
+import { DeleteIconButton } from '@/components/ui/delete-icon-button'
 import {
   Popover,
   PopoverContent,
@@ -66,7 +60,6 @@ import {
   PhoneCall,
   MailCheck,
   Trash2,
-  AlertTriangle,
   Database,
   MapPin,
   ChevronDown,
@@ -79,7 +72,7 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { format, formatDistanceToNow } from 'date-fns'
 import { sv } from 'date-fns/locale'
-import { deleteLead, bulkDeleteLeads } from '@/app/actions/leads'
+import { deleteLead, bulkDeleteLeads, restoreLeads } from '@/app/actions/leads'
 import { bulkActivateLeads } from '@/app/actions/vehicles'
 import { FilterPresets } from '@/components/ui/filter-presets'
 
@@ -350,18 +343,32 @@ export function HistorikView({
   const handleDeleteSingle = useCallback(async () => {
     if (!deleteLeadId) return
 
+    const deletedId = deleteLeadId
     setIsDeleting(true)
     try {
-      const result = await deleteLead(deleteLeadId)
+      const result = await deleteLead(deletedId)
       if (result.success) {
-        toast.success('Lead raderad')
         setDeleteLeadId(null)
         setSelectedIds(prev => {
           const newSet = new Set(prev)
-          newSet.delete(deleteLeadId)
+          newSet.delete(deletedId)
           return newSet
         })
         router.refresh()
+        toast.success('Flyttad till papperskorgen', {
+          action: {
+            label: 'Ångra',
+            onClick: async () => {
+              const res = await restoreLeads([deletedId])
+              if (res.success) {
+                toast.success('Lead återställd')
+                router.refresh()
+              } else {
+                toast.error('Kunde inte återställa')
+              }
+            }
+          }
+        })
       } else {
         toast.error(result.error || 'Kunde inte radera lead')
       }
@@ -375,14 +382,28 @@ export function HistorikView({
   const handleBulkDelete = useCallback(async () => {
     if (selectedIds.size === 0) return
 
+    const deletedIds = Array.from(selectedIds)
     setIsDeleting(true)
     try {
-      const result = await bulkDeleteLeads(Array.from(selectedIds))
+      const result = await bulkDeleteLeads(deletedIds)
       if (result.success) {
-        toast.success(`${result.deletedCount} leads raderade`)
         setShowBulkDeleteDialog(false)
         setSelectedIds(new Set())
         router.refresh()
+        toast.success(`${result.deletedCount} leads flyttade till papperskorgen`, {
+          action: {
+            label: 'Ångra',
+            onClick: async () => {
+              const res = await restoreLeads(deletedIds)
+              if (res.success) {
+                toast.success(`${res.restoredCount} leads återställda`)
+                router.refresh()
+              } else {
+                toast.error('Kunde inte återställa')
+              }
+            }
+          }
+        })
       } else {
         toast.error(result.error || 'Kunde inte radera leads')
       }
@@ -1155,21 +1176,10 @@ export function HistorikView({
                               <TooltipContent>Visa lead</TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
-                                  onClick={() => setDeleteLeadId(lead.id)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Radera lead</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                          <DeleteIconButton
+                            onClick={() => setDeleteLeadId(lead.id)}
+                            tooltip="Radera lead"
+                          />
 
                           {/* More actions dropdown */}
                           <DropdownMenu>
@@ -1331,80 +1341,22 @@ export function HistorikView({
       </Dialog>
 
       {/* Single Delete Confirmation Dialog */}
-      <AlertDialog open={!!deleteLeadId} onOpenChange={(open) => !open && setDeleteLeadId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-              Radera lead?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Är du säker på att du vill radera denna lead? Detta kommer också radera alla tillhörande fordon och samtalsloggar. Denna åtgärd kan inte ångras.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeleteLeadId(null)}
-              disabled={isDeleting}
-            >
-              Avbryt
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteSingle}
-              disabled={isDeleting}
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Raderar...
-                </>
-              ) : (
-                'Ja, radera'
-              )}
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteConfirmDialog
+        open={!!deleteLeadId}
+        onOpenChange={(open) => !open && setDeleteLeadId(null)}
+        count={1}
+        onConfirm={handleDeleteSingle}
+        isDeleting={isDeleting}
+      />
 
       {/* Bulk Delete Confirmation Dialog */}
-      <AlertDialog open={showBulkDeleteDialog} onOpenChange={setShowBulkDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-              Radera {selectedIds.size} leads?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Är du säker på att du vill radera <strong>{selectedIds.size}</strong> leads? Detta kommer också radera alla tillhörande fordon och samtalsloggar. Denna åtgärd kan inte ångras.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowBulkDeleteDialog(false)}
-              disabled={isDeleting}
-            >
-              Avbryt
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleBulkDelete}
-              disabled={isDeleting}
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Raderar...
-                </>
-              ) : (
-                `Ja, radera ${selectedIds.size} leads`
-              )}
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteConfirmDialog
+        open={showBulkDeleteDialog}
+        onOpenChange={setShowBulkDeleteDialog}
+        count={selectedIds.size}
+        onConfirm={handleBulkDelete}
+        isDeleting={isDeleting}
+      />
     </div>
   )
 }

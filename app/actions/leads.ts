@@ -270,86 +270,36 @@ export async function bulkUpdateLeadsMetadata(
 }
 
 export async function deleteLead(leadId: string) {
-  console.log('=== DELETE LEAD START ===')
-  console.log('Received leadId:', leadId)
-  console.log('leadId type:', typeof leadId)
-  console.log('leadId length:', leadId?.length)
-
   // Validate leadId
   if (!leadId || typeof leadId !== 'string' || leadId.trim() === '') {
-    console.error('VALIDATION FAILED - Invalid leadId:', leadId)
     return { success: false, error: 'Ogiltigt lead-ID' }
   }
 
-  console.log('Validation passed, creating Supabase client...')
   const supabase = await createClient()
-  console.log('Supabase client created')
 
   try {
-    // Delete associated vehicles first (cascade)
-    console.log('Attempting to delete vehicles for lead_id:', leadId)
-    const { error: vehicleError, count: vehicleCount } = await supabase
-      .from('vehicles')
-      .delete()
-      .eq('lead_id', leadId)
-      .select()
-
-    console.log('Vehicle delete result - error:', vehicleError, 'count:', vehicleCount)
-
-    if (vehicleError) {
-      console.error('Error deleting vehicles:', JSON.stringify(vehicleError, null, 2))
-      // Continue anyway - vehicles might not exist
-    }
-
-    // Delete associated call logs
-    console.log('Attempting to delete call_logs for lead_id:', leadId)
-    const { error: callLogError, count: callLogCount } = await supabase
-      .from('call_logs')
-      .delete()
-      .eq('lead_id', leadId)
-      .select()
-
-    console.log('Call log delete result - error:', callLogError, 'count:', callLogCount)
-
-    if (callLogError) {
-      console.error('Error deleting call logs:', JSON.stringify(callLogError, null, 2))
-      // Continue anyway - call logs might not exist
-    }
-
-    // Delete the lead
-    console.log('Attempting to delete lead with id:', leadId)
-    const { error, data } = await supabase
+    // Soft delete: set deleted_at timestamp instead of actually deleting
+    const { error } = await supabase
       .from('leads')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', leadId)
-      .select()
-
-    console.log('Lead delete result - error:', error, 'data:', data)
 
     if (error) {
-      console.error('Error deleting lead:', JSON.stringify(error, null, 2))
+      console.error('Error soft-deleting lead:', error)
       return { success: false, error: error.message }
     }
 
-    console.log('Delete successful, revalidating paths...')
     revalidatePath('/leads')
     revalidatePath('/playground')
     revalidatePath('/brev')
     revalidatePath('/to-call')
     revalidatePath('/historik')
+    revalidatePath('/papperskorg')
     revalidatePath('/')
 
-    console.log('=== DELETE LEAD SUCCESS ===')
     return { success: true }
   } catch (err) {
-    console.error('=== DELETE LEAD EXCEPTION ===')
-    console.error('Unexpected error deleting lead:', err)
-    console.error('Error type:', typeof err)
-    console.error('Error string:', String(err))
-    if (err instanceof Error) {
-      console.error('Error message:', err.message)
-      console.error('Error stack:', err.stack)
-    }
+    console.error('Unexpected error soft-deleting lead:', err)
     return { success: false, error: 'Ett oväntat fel uppstod' }
   }
 }
@@ -422,16 +372,11 @@ export async function deleteExtraDataColumn(columnName: string) {
 }
 
 export async function bulkDeleteLeads(leadIds: string[]) {
-  console.log('=== BULK DELETE START ===')
-  console.log('Total IDs received:', leadIds?.length)
-
   if (!leadIds || leadIds.length === 0) {
     return { success: false, error: 'Inga leads valda' }
   }
 
-  // Filter out any invalid IDs
   const validIds = leadIds.filter(id => id && typeof id === 'string' && id.trim() !== '')
-  console.log('Valid IDs after filter:', validIds.length)
 
   if (validIds.length === 0) {
     return { success: false, error: 'Inga giltiga lead-IDs' }
@@ -446,58 +391,143 @@ export async function bulkDeleteLeads(leadIds: string[]) {
   try {
     for (let i = 0; i < validIds.length; i += CHUNK_SIZE) {
       const chunk = validIds.slice(i, i + CHUNK_SIZE)
-      console.log(`Processing chunk ${Math.floor(i / CHUNK_SIZE) + 1}/${Math.ceil(validIds.length / CHUNK_SIZE)}, size: ${chunk.length}`)
 
-      // Delete associated vehicles first
-      const { error: vehicleError } = await supabase
-        .from('vehicles')
-        .delete()
-        .in('lead_id', chunk)
-
-      if (vehicleError) {
-        console.error('Error deleting vehicles in chunk:', vehicleError)
-        // Continue anyway
-      }
-
-      // Delete associated call logs
-      const { error: callLogError } = await supabase
-        .from('call_logs')
-        .delete()
-        .in('lead_id', chunk)
-
-      if (callLogError) {
-        console.error('Error deleting call logs in chunk:', callLogError)
-        // Continue anyway
-      }
-
-      // Delete the leads
+      // Soft delete: set deleted_at timestamp
       const { error, count } = await supabase
         .from('leads')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .in('id', chunk)
 
       if (error) {
-        console.error('Error deleting leads in chunk:', error)
-        // Continue with next chunk instead of failing completely
+        console.error('Error soft-deleting leads in chunk:', error)
       } else {
         totalDeleted += count || chunk.length
       }
     }
-
-    console.log('=== BULK DELETE SUCCESS ===')
-    console.log('Total deleted:', totalDeleted)
 
     revalidatePath('/leads')
     revalidatePath('/playground')
     revalidatePath('/brev')
     revalidatePath('/to-call')
     revalidatePath('/historik')
+    revalidatePath('/papperskorg')
     revalidatePath('/')
 
     return { success: true, deletedCount: totalDeleted }
   } catch (err) {
-    console.error('=== BULK DELETE EXCEPTION ===')
-    console.error('Unexpected error bulk deleting leads:', err)
+    console.error('Unexpected error bulk soft-deleting leads:', err)
+    return { success: false, error: 'Ett oväntat fel uppstod' }
+  }
+}
+
+export async function restoreLeads(leadIds: string[]) {
+  if (!leadIds || leadIds.length === 0) {
+    return { success: false, error: 'Inga leads valda' }
+  }
+
+  const supabase = await createClient()
+
+  const CHUNK_SIZE = 100
+  let totalRestored = 0
+
+  try {
+    for (let i = 0; i < leadIds.length; i += CHUNK_SIZE) {
+      const chunk = leadIds.slice(i, i + CHUNK_SIZE)
+
+      const { error, count } = await supabase
+        .from('leads')
+        .update({ deleted_at: null })
+        .in('id', chunk)
+
+      if (error) {
+        console.error('Error restoring leads in chunk:', error)
+      } else {
+        totalRestored += count || chunk.length
+      }
+    }
+
+    revalidatePath('/leads')
+    revalidatePath('/playground')
+    revalidatePath('/brev')
+    revalidatePath('/to-call')
+    revalidatePath('/historik')
+    revalidatePath('/papperskorg')
+    revalidatePath('/')
+
+    return { success: true, restoredCount: totalRestored }
+  } catch (err) {
+    console.error('Unexpected error restoring leads:', err)
+    return { success: false, error: 'Ett oväntat fel uppstod' }
+  }
+}
+
+export async function permanentlyDeleteLeads(leadIds: string[]) {
+  if (!leadIds || leadIds.length === 0) {
+    return { success: false, error: 'Inga leads valda' }
+  }
+
+  const supabase = await createClient()
+
+  const CHUNK_SIZE = 100
+  let totalDeleted = 0
+
+  try {
+    for (let i = 0; i < leadIds.length; i += CHUNK_SIZE) {
+      const chunk = leadIds.slice(i, i + CHUNK_SIZE)
+
+      // Delete associated vehicles first (cascade)
+      await supabase.from('vehicles').delete().in('lead_id', chunk)
+
+      // Delete associated call logs
+      await supabase.from('call_logs').delete().in('lead_id', chunk)
+
+      // Permanently delete the leads
+      const { error, count } = await supabase
+        .from('leads')
+        .delete()
+        .in('id', chunk)
+
+      if (error) {
+        console.error('Error permanently deleting leads:', error)
+      } else {
+        totalDeleted += count || chunk.length
+      }
+    }
+
+    revalidatePath('/papperskorg')
+    revalidatePath('/')
+
+    return { success: true, deletedCount: totalDeleted }
+  } catch (err) {
+    console.error('Unexpected error permanently deleting leads:', err)
+    return { success: false, error: 'Ett oväntat fel uppstod' }
+  }
+}
+
+export async function cleanupOldDeletedLeads() {
+  const supabase = await createClient()
+
+  try {
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+    // Find leads deleted more than 30 days ago
+    const { data: oldLeads, error: fetchError } = await supabase
+      .from('leads')
+      .select('id')
+      .not('deleted_at', 'is', null)
+      .lt('deleted_at', thirtyDaysAgo.toISOString())
+
+    if (fetchError || !oldLeads || oldLeads.length === 0) {
+      return { success: true, deletedCount: 0 }
+    }
+
+    const oldIds = oldLeads.map(l => l.id)
+    const result = await permanentlyDeleteLeads(oldIds)
+
+    return result
+  } catch (err) {
+    console.error('Unexpected error cleaning up old deleted leads:', err)
     return { success: false, error: 'Ett oväntat fel uppstod' }
   }
 }

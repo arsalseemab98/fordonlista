@@ -73,6 +73,9 @@ async function getLeads(filters: {
       )
     `, { count: 'exact' })
 
+  // Exclude soft-deleted leads
+  query = query.is('deleted_at', null)
+
   // Apply filters
   if (filters.status && filters.status !== 'all') {
     query = query.eq('status', filters.status)

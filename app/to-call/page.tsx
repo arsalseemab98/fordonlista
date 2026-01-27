@@ -70,6 +70,7 @@ async function getLeadsToCall(statusFilter?: string) {
       )
     `)
     .in('status', statusesToFetch)
+    .is('deleted_at', null)
     .order('created_at', { ascending: true })
     .limit(50)
 

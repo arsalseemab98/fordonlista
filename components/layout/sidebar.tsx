@@ -17,7 +17,8 @@ import {
   Mail,
   FlaskConical,
   History,
-  Layers
+  Layers,
+  Trash2
 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -37,6 +38,7 @@ const navigation = [
 ]
 
 const secondaryNav = [
+  { name: 'Papperskorg', href: '/papperskorg', icon: Trash2, description: 'Raderade leads (30 dagar)' },
   { name: 'Inställningar', href: '/settings', icon: Settings, description: 'Konfigurera systemet' },
 ]
 
