@@ -181,6 +181,7 @@ interface Lead {
   prospect_type?: string
   data_period_start?: string
   data_period_end?: string
+  bilprospekt_date?: string | null
   letter_sent?: boolean | null
   letter_sent_date?: string | null
   sent_to_call_at?: string | null
@@ -706,57 +707,55 @@ export function PlaygroundView({
       return
     }
 
-    const hasLeadMetadata = bulkCounties.length > 0 || bulkProspectTypes.length > 0 || !!bulkDateFrom || !!bulkDateTo
-    const hasBpDate = !!bulkBpDate
+    const hasLeadMetadata = bulkCounties.length > 0 || bulkProspectTypes.length > 0 || !!bulkDateFrom || !!bulkDateTo || !!bulkBpDate
 
     // Check if at least one value is set
-    if (!hasLeadMetadata && !hasBpDate) {
+    if (!hasLeadMetadata) {
       toast.error('Välj minst ett fält att uppdatera')
       return
     }
 
     setIsSaving(true)
 
-    // Save Bilprospekt date globally if set
-    if (hasBpDate) {
+    // Save Bilprospekt date globally too (for the gate check)
+    if (bulkBpDate) {
       const bpResult = await saveBilprospektDate(bulkBpDate)
       if (bpResult.success) {
         setBpDate(bulkBpDate)
-        toast.success('Bilprospekt-datum sparat')
-      } else {
-        toast.error('Kunde inte spara Bilprospekt-datum')
       }
     }
 
-    // Save lead metadata if any set
-    if (hasLeadMetadata) {
-      const metadata: {
-        county?: string | null
-        prospect_type?: string | null
-        data_period_start?: string | null
-        data_period_end?: string | null
-      } = {}
+    // Build metadata for per-lead update
+    const metadata: {
+      county?: string | null
+      prospect_type?: string | null
+      data_period_start?: string | null
+      data_period_end?: string | null
+      bilprospekt_date?: string | null
+    } = {}
 
-      if (bulkCounties.length > 0) {
-        metadata.county = bulkCounties.join(',')
-      }
-      if (bulkProspectTypes.length > 0) {
-        metadata.prospect_type = bulkProspectTypes.join(',')
-      }
-      if (bulkDateFrom) {
-        metadata.data_period_start = bulkDateFrom === 'clear' ? null : bulkDateFrom
-      }
-      if (bulkDateTo) {
-        metadata.data_period_end = bulkDateTo === 'clear' ? null : bulkDateTo
-      }
+    if (bulkCounties.length > 0) {
+      metadata.county = bulkCounties.join(',')
+    }
+    if (bulkProspectTypes.length > 0) {
+      metadata.prospect_type = bulkProspectTypes.join(',')
+    }
+    if (bulkDateFrom) {
+      metadata.data_period_start = bulkDateFrom === 'clear' ? null : bulkDateFrom
+    }
+    if (bulkDateTo) {
+      metadata.data_period_end = bulkDateTo === 'clear' ? null : bulkDateTo
+    }
+    if (bulkBpDate) {
+      metadata.bilprospekt_date = bulkBpDate
+    }
 
-      const result = await bulkUpdateLeadsMetadata(Array.from(selectedLeads), metadata)
+    const result = await bulkUpdateLeadsMetadata(Array.from(selectedLeads), metadata)
 
-      if (result.success) {
-        toast.success(`${result.updatedCount} leads uppdaterade`)
-      } else {
-        toast.error(result.error || 'Kunde inte uppdatera')
-      }
+    if (result.success) {
+      toast.success(`${result.updatedCount} leads uppdaterade`)
+    } else {
+      toast.error(result.error || 'Kunde inte uppdatera')
     }
 
     setIsSaving(false)
@@ -2672,10 +2671,16 @@ export function PlaygroundView({
                   <TableHead className="w-[150px]">Prospekt-typ</TableHead>
                   <TableHead className="w-[130px]">Status</TableHead>
                   <TableHead className="w-[130px]">Aktivitet</TableHead>
+                  <TableHead className="w-[100px]">
+                    <Tooltip>
+                      <TooltipTrigger className="cursor-help underline decoration-dotted">BP Datum</TooltipTrigger>
+                      <TooltipContent>Bilprospekt-datum (sparat per lead)</TooltipContent>
+                    </Tooltip>
+                  </TableHead>
                   <TableHead className="w-[170px]">
                     <Tooltip>
-                      <TooltipTrigger className="cursor-help underline decoration-dotted">Bilprospekt</TooltipTrigger>
-                      <TooltipContent>Bilprospekt dataperiod (från – till)</TooltipContent>
+                      <TooltipTrigger className="cursor-help underline decoration-dotted">Period</TooltipTrigger>
+                      <TooltipContent>Dataperiod (från – till)</TooltipContent>
                     </Tooltip>
                   </TableHead>
                   {/* Car.info columns */}
@@ -3062,7 +3067,18 @@ export function PlaygroundView({
                         </div>
                       </TableCell>
 
-                      {/* Bilprospekt datum column */}
+                      {/* BP Datum column (per-lead) */}
+                      <TableCell>
+                        {lead.bilprospekt_date ? (
+                          <span className="text-sm text-green-700 font-medium">
+                            {new Date(lead.bilprospekt_date).toLocaleDateString('sv-SE')}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-gray-400">-</span>
+                        )}
+                      </TableCell>
+
+                      {/* Period column */}
                       <TableCell>
                         <div className="flex flex-col gap-0.5">
                           {lead.data_period_start || lead.data_period_end ? (

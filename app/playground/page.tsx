@@ -45,6 +45,7 @@ export default async function PlaygroundPage({
           sent_to_call_at,
           sent_to_brev_at,
           extra_data,
+          bilprospekt_date,
           created_at,
           vehicles (
             id,

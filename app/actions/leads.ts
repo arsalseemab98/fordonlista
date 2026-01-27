@@ -175,6 +175,7 @@ export interface BulkUpdateMetadata {
   prospect_type?: string | null
   data_period_start?: string | null
   data_period_end?: string | null
+  bilprospekt_date?: string | null
 }
 
 export async function markLeadForLetter(leadId: string) {
@@ -250,6 +251,9 @@ export async function bulkUpdateLeadsMetadata(
   }
   if (metadata.data_period_end !== undefined) {
     updateData.data_period_end = metadata.data_period_end
+  }
+  if (metadata.bilprospekt_date !== undefined) {
+    updateData.bilprospekt_date = metadata.bilprospekt_date
   }
 
   const { error, count } = await supabase
