@@ -1969,7 +1969,7 @@ export function PlaygroundView({
                     Rensa filter ({selectedProspectTypes.length})
                   </Button>
                 )}
-                {(availableProspectTypes.length > 0 ? availableProspectTypes : savedProspectTypes.map(t => t.name)).map((type) => {
+                {[...new Set([...savedProspectTypes.map(t => t.name), ...availableProspectTypes])].map((type) => {
                   const typeValue = typeof type === 'string' ? type : type
                   const isSelected = selectedProspectTypes.includes(typeValue)
                   const count = leads.filter(l => l.prospect_type === typeValue).length

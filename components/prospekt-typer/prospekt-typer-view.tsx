@@ -929,7 +929,7 @@ export function ProspektTyperView({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Alla typer</SelectItem>
-                  {availableProspectTypes.map(type => (
+                  {[...new Set([...savedProspectTypes.map(t => t.name), ...availableProspectTypes])].map(type => (
                     <SelectItem key={type} value={type}>
                       {getProspectTypeLabel(type)}
                     </SelectItem>
