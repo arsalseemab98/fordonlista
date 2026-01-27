@@ -1,8 +1,9 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useTransition, useState, useMemo } from 'react'
+import React, { useCallback, useTransition, useState, useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -47,7 +48,12 @@ import {
   Archive,
   Plus,
   Trash2,
-  Settings
+  Settings,
+  Layers,
+  ListCollapse,
+  Send,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react'
 import { type PeriodGap } from '@/lib/time-period-utils'
 import { createProspectType, deleteProspectType, type ProspectType } from '@/app/prospekt-typer/actions'
@@ -203,10 +209,127 @@ export function ProspektTyperView({
   const [createError, setCreateError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
+  // Expanded groups state for Kompakt tab
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+
   // Create prospect type labels lookup from saved types
   const prospectTypeLabels = useMemo(() => {
     return createProspectTypeLabels(savedProspectTypes)
   }, [savedProspectTypes])
+
+  // Grouped stats: key = "type|period", value = array of county stats
+  const groupedStats = useMemo(() => {
+    const groups = new Map<string, {
+      prospectType: string | null
+      periodStart: string | null
+      periodEnd: string | null
+      daysDuration: number | null
+      counties: ProspektStats[]
+      totalCount: number
+      totalRing: number
+      totalBrev: number
+      latestSentToBrevAt: string | null
+    }>()
+
+    for (const stat of stats) {
+      const key = `${stat.prospect_type || ''}|${stat.data_period_start || ''}`
+      const existing = groups.get(key)
+      if (existing) {
+        existing.counties.push(stat)
+        existing.totalCount += stat.count
+        existing.totalRing += stat.sentToCallCount
+        existing.totalBrev += stat.sentToBrevCount
+        if (stat.latestSentToBrevAt) {
+          if (!existing.latestSentToBrevAt || stat.latestSentToBrevAt > existing.latestSentToBrevAt) {
+            existing.latestSentToBrevAt = stat.latestSentToBrevAt
+          }
+        }
+      } else {
+        groups.set(key, {
+          prospectType: stat.prospect_type,
+          periodStart: stat.data_period_start,
+          periodEnd: stat.data_period_end,
+          daysDuration: stat.daysDuration,
+          counties: [stat],
+          totalCount: stat.count,
+          totalRing: stat.sentToCallCount,
+          totalBrev: stat.sentToBrevCount,
+          latestSentToBrevAt: stat.latestSentToBrevAt,
+        })
+      }
+    }
+
+    return Array.from(groups.entries()).map(([key, value]) => ({ key, ...value }))
+  }, [stats])
+
+  // Mailing timeline: group leadDetails by sent_to_brev_at date
+  const mailingTimeline = useMemo(() => {
+    const byDate = new Map<string, Map<string, {
+      prospectType: string | null
+      period: string | null
+      counties: Map<string, number>
+      totalCount: number
+    }>>()
+    const unsent: Map<string, {
+      prospectType: string | null
+      period: string | null
+      counties: Map<string, number>
+      totalCount: number
+    }> = new Map()
+
+    for (const lead of leadDetails) {
+      const dateKey = lead.sent_to_brev_at
+        ? new Date(lead.sent_to_brev_at).toISOString().split('T')[0]
+        : null
+      const groupKey = `${lead.prospect_type || ''}|${lead.data_period_start || ''}`
+
+      const targetMap = dateKey ? (byDate.get(dateKey) || new Map()) : unsent
+      if (dateKey && !byDate.has(dateKey)) {
+        byDate.set(dateKey, targetMap)
+      }
+
+      const existing = targetMap.get(groupKey)
+      const county = lead.county || 'Okänt'
+      if (existing) {
+        existing.counties.set(county, (existing.counties.get(county) || 0) + 1)
+        existing.totalCount += 1
+      } else {
+        const countyMap = new Map<string, number>()
+        countyMap.set(county, 1)
+        targetMap.set(groupKey, {
+          prospectType: lead.prospect_type,
+          period: lead.data_period_start,
+          counties: countyMap,
+          totalCount: 1,
+        })
+      }
+    }
+
+    // Sort dates descending
+    const sortedDates = Array.from(byDate.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([date, entries]) => ({
+        date,
+        entries: Array.from(entries.values()),
+      }))
+
+    const unsentEntries = Array.from(unsent.values())
+
+    return { sortedDates, unsentEntries }
+  }, [leadDetails])
+
+  // Toggle expanded group
+  const toggleGroup = useCallback((key: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
+  }, [])
 
   // Get prospect type label from saved types
   const getProspectTypeLabel = useCallback((type: string | null): string => {
@@ -934,130 +1057,388 @@ export function ProspektTyperView({
         </Card>
       </div>
 
-      {/* Detailed Table */}
+      {/* Detailed Overview with Tabs */}
       <Card>
         <CardHeader>
           <CardTitle>Detaljerad översikt</CardTitle>
           <CardDescription>
-            Alla kombinationer av prospekttyp och tidsperiod
+            Alla kombinationer av prospekttyp, tidsperiod och län
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Prospekttyp</TableHead>
-                <TableHead>Län</TableHead>
-                <TableHead>Period start</TableHead>
-                <TableHead>Period slut</TableHead>
-                <TableHead className="text-center">Dagar</TableHead>
-                <TableHead className="text-center">Brev skickat</TableHead>
-                <TableHead className="text-right">Antal</TableHead>
-                <TableHead className="text-center">Ring</TableHead>
-                <TableHead className="text-center">Brev</TableHead>
-                <TableHead className="text-center">Detaljer</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {stats.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={10} className="text-center text-muted-foreground">
-                    Ingen data att visa
-                  </TableCell>
-                </TableRow>
+          <Tabs defaultValue="grouped">
+            <TabsList className="mb-4">
+              <TabsTrigger value="grouped" className="gap-1.5">
+                <Layers className="h-4 w-4" />
+                Grupperad
+              </TabsTrigger>
+              <TabsTrigger value="compact" className="gap-1.5">
+                <ListCollapse className="h-4 w-4" />
+                Kompakt
+              </TabsTrigger>
+              <TabsTrigger value="mailings" className="gap-1.5">
+                <Send className="h-4 w-4" />
+                Senaste utskick
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Tab 1: Grupperad */}
+            <TabsContent value="grouped">
+              {groupedStats.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">Ingen data att visa</p>
               ) : (
-                stats.map((stat, index) => (
-                  <TableRow
-                    key={index}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onDoubleClick={() => openDetailModal(
-                      `${getProspectTypeLabel(stat.prospect_type)} - ${stat.county || 'Okänt län'} (${formatPeriod(stat.data_period_start)})`,
-                      'all',
-                      { prospectType: stat.prospect_type || undefined, period: stat.data_period_start || undefined }
-                    )}
-                  >
-                    <TableCell>
-                      <Badge variant="outline">
-                        {getProspectTypeLabel(stat.prospect_type)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">
-                        {stat.county || 'Okänt'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{formatPeriod(stat.data_period_start)}</TableCell>
-                    <TableCell>{formatPeriod(stat.data_period_end)}</TableCell>
-                    <TableCell className="text-center">
-                      {stat.daysDuration !== null ? (
-                        <Badge variant="secondary" className="font-mono">
-                          {stat.daysDuration} d
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {stat.latestSentToBrevAt ? (
-                        <Badge className="bg-green-100 text-green-700 text-xs">
-                          {new Date(stat.latestSentToBrevAt).toLocaleDateString('sv-SE')}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {stat.count.toLocaleString('sv-SE')}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                        onClick={() => openDetailModal(
-                          `Ring - ${getProspectTypeLabel(stat.prospect_type)} (${formatPeriod(stat.data_period_start)})`,
-                          'ring',
-                          { prospectType: stat.prospect_type || undefined, period: stat.data_period_start || undefined }
+                <div className="space-y-0 border rounded-lg overflow-hidden">
+                  {groupedStats.map((group, groupIndex) => {
+                    const sentStatus = group.totalBrev === group.totalCount && group.totalCount > 0
+                      ? 'all'
+                      : group.totalBrev > 0
+                        ? 'partial'
+                        : 'none'
+                    return (
+                      <div key={group.key} className={groupIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                        {/* Group header */}
+                        <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-100/70">
+                          <div className="flex items-center gap-3">
+                            <Badge variant="outline" className="font-semibold">
+                              {getProspectTypeLabel(group.prospectType)}
+                            </Badge>
+                            <span className="text-sm text-muted-foreground">
+                              {formatPeriod(group.periodStart)}
+                            </span>
+                            {group.daysDuration !== null && (
+                              <Badge variant="secondary" className="font-mono text-xs">
+                                {group.daysDuration} d
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {group.latestSentToBrevAt && (
+                              <span className="text-xs text-muted-foreground">
+                                Brev: {new Date(group.latestSentToBrevAt).toLocaleDateString('sv-SE')}
+                              </span>
+                            )}
+                            <span className="text-lg">
+                              {sentStatus === 'all' ? '✅' : sentStatus === 'partial' ? '🟡' : '⬜'}
+                            </span>
+                          </div>
+                        </div>
+                        {/* County sub-rows */}
+                        {group.counties.map((stat, countyIndex) => (
+                          <div
+                            key={countyIndex}
+                            className="flex items-center justify-between px-4 py-2 border-b last:border-b-0 hover:bg-blue-50/30 cursor-pointer"
+                            onClick={() => openDetailModal(
+                              `${getProspectTypeLabel(stat.prospect_type)} - ${stat.county || 'Okänt län'} (${formatPeriod(stat.data_period_start)})`,
+                              'all',
+                              { prospectType: stat.prospect_type || undefined, period: stat.data_period_start || undefined }
+                            )}
+                          >
+                            <div className="flex items-center gap-3 pl-4">
+                              <Badge variant="secondary" className="text-xs">
+                                {stat.county || 'Okänt'}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-4 text-sm">
+                              <span className="font-medium w-16 text-right">{stat.count.toLocaleString('sv-SE')}</span>
+                              <span className="text-blue-600 w-20 text-right">
+                                <Phone className="h-3 w-3 inline mr-1" />
+                                {stat.sentToCallCount}
+                              </span>
+                              <span className="text-green-600 w-20 text-right">
+                                <Mail className="h-3 w-3 inline mr-1" />
+                                {stat.sentToBrevCount}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                        {/* Subtotal row */}
+                        {group.counties.length > 1 && (
+                          <div className="flex items-center justify-between px-4 py-2 border-b bg-gray-50/50 font-semibold">
+                            <div className="pl-4 text-sm text-muted-foreground">Totalt:</div>
+                            <div className="flex items-center gap-4 text-sm">
+                              <span className="w-16 text-right">{group.totalCount.toLocaleString('sv-SE')}</span>
+                              <span className="text-blue-600 w-20 text-right">
+                                <Phone className="h-3 w-3 inline mr-1" />
+                                {group.totalRing}
+                              </span>
+                              <span className="text-green-600 w-20 text-right">
+                                <Mail className="h-3 w-3 inline mr-1" />
+                                {group.totalBrev}
+                              </span>
+                            </div>
+                          </div>
                         )}
-                      >
-                        <Phone className="h-3 w-3 mr-1" />
-                        {stat.sentToCallCount}
-                      </Button>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
-                        onClick={() => openDetailModal(
-                          `Brev - ${getProspectTypeLabel(stat.prospect_type)} (${formatPeriod(stat.data_period_start)})`,
-                          'brev',
-                          { prospectType: stat.prospect_type || undefined, period: stat.data_period_start || undefined }
-                        )}
-                      >
-                        <Mail className="h-3 w-3 mr-1" />
-                        {stat.sentToBrevCount}
-                      </Button>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2"
-                        onClick={() => openDetailModal(
-                          `${getProspectTypeLabel(stat.prospect_type)} (${formatPeriod(stat.data_period_start)})`,
-                          'all',
-                          { prospectType: stat.prospect_type || undefined, period: stat.data_period_start || undefined }
-                        )}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
+                      </div>
+                    )
+                  })}
+                </div>
               )}
-            </TableBody>
-          </Table>
+            </TabsContent>
+
+            {/* Tab 2: Kompakt */}
+            <TabsContent value="compact">
+              {groupedStats.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">Ingen data att visa</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-8"></TableHead>
+                      <TableHead>Typ</TableHead>
+                      <TableHead>Period</TableHead>
+                      <TableHead>Län</TableHead>
+                      <TableHead className="text-right">Antal</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-center">Ring</TableHead>
+                      <TableHead className="text-center">Brev</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {groupedStats.map((group) => {
+                      const isExpanded = expandedGroups.has(group.key)
+                      const sentStatus = group.totalBrev === group.totalCount && group.totalCount > 0
+                        ? 'all'
+                        : group.totalBrev > 0
+                          ? 'partial'
+                          : 'none'
+                      return (
+                        <React.Fragment key={group.key}>
+                          <TableRow
+                            className="cursor-pointer hover:bg-muted/50"
+                            onClick={() => toggleGroup(group.key)}
+                          >
+                            <TableCell className="w-8 px-2">
+                              {isExpanded
+                                ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                : <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                              }
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">
+                                {getProspectTypeLabel(group.prospectType)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {formatPeriod(group.periodStart)}
+                              {group.daysDuration !== null && (
+                                <Badge variant="secondary" className="ml-2 font-mono text-xs">
+                                  {group.daysDuration} d
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <span className="text-sm text-muted-foreground">
+                                {group.counties.map(c => c.county || 'Okänt').join(', ')}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {group.totalCount.toLocaleString('sv-SE')}
+                            </TableCell>
+                            <TableCell>
+                              {sentStatus === 'all' ? (
+                                <Badge className="bg-green-100 text-green-700 border-green-200">
+                                  Skickat ({group.totalBrev})
+                                </Badge>
+                              ) : sentStatus === 'partial' ? (
+                                <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200">
+                                  Delvis ({group.totalBrev})
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary">
+                                  Ej skickat
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center text-blue-600">
+                              <Phone className="h-3 w-3 inline mr-1" />
+                              {group.totalRing}
+                            </TableCell>
+                            <TableCell className="text-center text-green-600">
+                              <Mail className="h-3 w-3 inline mr-1" />
+                              {group.totalBrev}
+                            </TableCell>
+                          </TableRow>
+                          {/* Expanded county rows */}
+                          {isExpanded && group.counties.map((stat, i) => (
+                            <TableRow
+                              key={`${group.key}-${i}`}
+                              className="bg-muted/30 hover:bg-muted/50 cursor-pointer"
+                              onClick={() => openDetailModal(
+                                `${getProspectTypeLabel(stat.prospect_type)} - ${stat.county || 'Okänt län'} (${formatPeriod(stat.data_period_start)})`,
+                                'all',
+                                { prospectType: stat.prospect_type || undefined, period: stat.data_period_start || undefined }
+                              )}
+                            >
+                              <TableCell></TableCell>
+                              <TableCell></TableCell>
+                              <TableCell></TableCell>
+                              <TableCell>
+                                <Badge variant="secondary" className="text-xs">
+                                  {stat.county || 'Okänt'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right text-sm">
+                                {stat.count.toLocaleString('sv-SE')}
+                              </TableCell>
+                              <TableCell>
+                                {stat.latestSentToBrevAt ? (
+                                  <Badge className="bg-green-100 text-green-700 text-xs">
+                                    {new Date(stat.latestSentToBrevAt).toLocaleDateString('sv-SE')}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-muted-foreground text-xs">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    openDetailModal(
+                                      `Ring - ${getProspectTypeLabel(stat.prospect_type)} (${formatPeriod(stat.data_period_start)})`,
+                                      'ring',
+                                      { prospectType: stat.prospect_type || undefined, period: stat.data_period_start || undefined }
+                                    )
+                                  }}
+                                >
+                                  {stat.sentToCallCount}
+                                </Button>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    openDetailModal(
+                                      `Brev - ${getProspectTypeLabel(stat.prospect_type)} (${formatPeriod(stat.data_period_start)})`,
+                                      'brev',
+                                      { prospectType: stat.prospect_type || undefined, period: stat.data_period_start || undefined }
+                                    )
+                                  }}
+                                >
+                                  {stat.sentToBrevCount}
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </React.Fragment>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </TabsContent>
+
+            {/* Tab 3: Senaste utskick */}
+            <TabsContent value="mailings">
+              {mailingTimeline.sortedDates.length === 0 && mailingTimeline.unsentEntries.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">Ingen data att visa</p>
+              ) : (
+                <div className="space-y-6">
+                  {mailingTimeline.sortedDates.map(({ date, entries }) => (
+                    <div key={date} className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-green-700">
+                        <Mail className="h-4 w-4" />
+                        {new Date(date).toLocaleDateString('sv-SE', { year: 'numeric', month: 'long', day: 'numeric' })}
+                      </div>
+                      <div className="space-y-1 pl-6">
+                        {entries.map((entry, i) => {
+                          const countyList = Array.from(entry.counties.entries())
+                          const cost = entry.totalCount * letterCost
+                          return (
+                            <div
+                              key={i}
+                              className="flex items-center justify-between p-2 rounded hover:bg-green-50 cursor-pointer text-sm"
+                              onClick={() => openDetailModal(
+                                `${getProspectTypeLabel(entry.prospectType)} (${formatPeriod(entry.period)})`,
+                                'brev',
+                                { prospectType: entry.prospectType || undefined, period: entry.period || undefined }
+                              )}
+                            >
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge variant="outline" className="text-xs">
+                                  {getProspectTypeLabel(entry.prospectType)}
+                                </Badge>
+                                <span className="text-muted-foreground">
+                                  ({formatPeriod(entry.period)}):
+                                </span>
+                                <span>
+                                  {countyList.map(([county, count], ci) => (
+                                    <span key={county}>
+                                      {ci > 0 && ' + '}
+                                      {county} ({count})
+                                    </span>
+                                  ))}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3 text-muted-foreground shrink-0 ml-2">
+                                <span className="font-medium text-foreground">
+                                  = {entry.totalCount} st
+                                </span>
+                                <span className="text-purple-600 font-medium">
+                                  {cost.toLocaleString('sv-SE')} kr
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Unsent section */}
+                  {mailingTimeline.unsentEntries.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-gray-500">
+                        <span className="text-lg">⬜</span>
+                        Ej skickade
+                      </div>
+                      <div className="space-y-1 pl-6">
+                        {mailingTimeline.unsentEntries.map((entry, i) => {
+                          const countyList = Array.from(entry.counties.entries())
+                          return (
+                            <div
+                              key={i}
+                              className="flex items-center justify-between p-2 rounded hover:bg-gray-50 cursor-pointer text-sm"
+                              onClick={() => openDetailModal(
+                                `${getProspectTypeLabel(entry.prospectType)} (${formatPeriod(entry.period)})`,
+                                'all',
+                                { prospectType: entry.prospectType || undefined, period: entry.period || undefined }
+                              )}
+                            >
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge variant="outline" className="text-xs">
+                                  {getProspectTypeLabel(entry.prospectType)}
+                                </Badge>
+                                <span className="text-muted-foreground">
+                                  ({formatPeriod(entry.period)}):
+                                </span>
+                                <span>
+                                  {countyList.map(([county, count], ci) => (
+                                    <span key={county}>
+                                      {ci > 0 && ', '}
+                                      {county} ({count})
+                                    </span>
+                                  ))}
+                                </span>
+                              </div>
+                              <span className="font-medium shrink-0 ml-2">
+                                = {entry.totalCount} st
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
