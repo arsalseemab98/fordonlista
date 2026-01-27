@@ -34,6 +34,7 @@ interface CarInfoResponse {
   första_registrering?: string
   besiktning_till?: string
   vehicle_history?: Array<{ date: string; event: string; details?: string }>
+  mileage_history?: Array<{ date: string; mileage_km: number }>
   error?: string
 }
 
@@ -464,6 +465,61 @@ export async function POST(request: NextRequest) {
     }
     if (antalPrivatannonser > 0) {
       result.antal_privatannonser = antalPrivatannonser
+    }
+
+    // Extract mileage history from besiktning (inspection) events
+    const mileageHistory: Array<{ date: string; mileage_km: number }> = []
+    const fourYearsAgo = new Date()
+    fourYearsAgo.setFullYear(fourYearsAgo.getFullYear() - 4)
+
+    history.forEach(h => {
+      const eventLower = h.event.toLowerCase()
+      const isBesiktning = eventLower.includes('besiktning') || eventLower.includes('kontrollbesiktning')
+      const detailsText = h.details || h.event
+
+      const milMatch = detailsText.match(/([\d\s]+)\s*mil(?:\b|$)/i)
+      const kmMatch = detailsText.match(/([\d\s]+)\s*km(?:\b|$)/i)
+
+      let mileageKm: number | undefined
+      if (milMatch) {
+        const milNum = parseInt(milMatch[1].replace(/\s/g, ''))
+        if (milNum > 0 && milNum < 1000000) mileageKm = milNum * 10
+      } else if (kmMatch) {
+        const kmNum = parseInt(kmMatch[1].replace(/\s/g, ''))
+        if (kmNum > 0 && kmNum < 10000000) mileageKm = kmNum
+      }
+
+      if (mileageKm && h.date && (isBesiktning || mileageKm > 100)) {
+        const eventDate = new Date(h.date)
+        if (eventDate >= fourYearsAgo) {
+          if (!mileageHistory.some(m => m.date === h.date)) {
+            mileageHistory.push({ date: h.date, mileage_km: mileageKm })
+          }
+        }
+      }
+    })
+
+    // Also try dedicated mileage sections
+    $('.sprow, .spec-row, .mileage-item').each((_, el) => {
+      const label = $(el).find('.sptitle, .label').text().trim().toLowerCase()
+      if (label.includes('mätarställning') || label.includes('miltal')) {
+        const value = $(el).text().replace($(el).find('.sptitle, .label').text(), '').trim()
+        const milMatch = value.match(/([\d\s]+)\s*mil/i)
+        if (milMatch) {
+          const milNum = parseInt(milMatch[1].replace(/\s/g, ''))
+          if (milNum > 0 && milNum < 1000000) {
+            const today = new Date().toISOString().split('T')[0]
+            if (!mileageHistory.some(m => m.date === today)) {
+              mileageHistory.push({ date: today, mileage_km: milNum * 10 })
+            }
+          }
+        }
+      }
+    })
+
+    if (mileageHistory.length > 0) {
+      mileageHistory.sort((a, b) => b.date.localeCompare(a.date))
+      result.mileage_history = mileageHistory
     }
 
     // Set dates from history (most accurate source)

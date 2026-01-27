@@ -86,6 +86,7 @@ export interface Vehicle {
   valuation_private: number | null
   total_in_sweden: number | null
   vehicle_history: Array<{ date: string; event: string; details?: string }> | null
+  mileage_history: Array<{ date: string; mileage_km: number }> | null
   senaste_avställning: string | null
   senaste_påställning: string | null
   första_registrering: string | null

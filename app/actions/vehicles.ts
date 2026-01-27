@@ -28,6 +28,7 @@ export interface CarInfoData {
   första_registrering?: string
   besiktning_till?: string
   vehicle_history?: Array<{ date: string; event: string; details?: string }>
+  mileage_history?: Array<{ date: string; mileage_km: number }>
   antal_foretagsannonser?: number
   antal_privatannonser?: number
   // Debug info from fetch-carinfo.ts
@@ -112,6 +113,7 @@ export async function saveCarInfoToVehicle(vehicleId: string, carInfo: CarInfoDa
   if (carInfo.valuation_private) updateData.valuation_private = carInfo.valuation_private
   if (carInfo.total_in_sweden) updateData.total_in_sweden = carInfo.total_in_sweden
   if (carInfo.vehicle_history) updateData.vehicle_history = carInfo.vehicle_history
+  if (carInfo.mileage_history) updateData.mileage_history = carInfo.mileage_history
   if (carInfo.antal_foretagsannonser) updateData.antal_foretagsannonser = carInfo.antal_foretagsannonser
   if (carInfo.antal_privatannonser) updateData.antal_privatannonser = carInfo.antal_privatannonser
 

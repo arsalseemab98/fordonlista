@@ -31,6 +31,7 @@ export interface CarInfoResult {
   första_registrering?: string
   besiktning_till?: string
   vehicle_history?: Array<{ date: string; event: string; details?: string }>
+  mileage_history?: Array<{ date: string; mileage_km: number }>
   error?: string
   // Debug info for troubleshooting ägarbyte detection
   _debug_agarbyte?: {
@@ -457,6 +458,68 @@ export async function fetchCarInfo(regNumber: string): Promise<CarInfoResult> {
   }
   if (antalPrivatannonser > 0) {
     result.antal_privatannonser = antalPrivatannonser
+  }
+
+  // Extract mileage history from besiktning (inspection) events
+  // Besiktning events may contain mileage in details: "Mätarställning: 45 230 mil" or "89 250 km"
+  const mileageHistory: Array<{ date: string; mileage_km: number }> = []
+  const fourYearsAgo = new Date()
+  fourYearsAgo.setFullYear(fourYearsAgo.getFullYear() - 4)
+
+  history.forEach(h => {
+    const eventLower = h.event.normalize('NFC').toLowerCase()
+    const isBesiktning = eventLower.includes('besiktning') || eventLower.includes('kontrollbesiktning')
+    const detailsText = h.details || h.event
+
+    // Try to extract mileage from details or event text
+    // Patterns: "45 230 mil", "89250 km", "Mätarställning: 45 230", "45230mil"
+    const milMatch = detailsText.match(/([\d\s]+)\s*mil(?:\b|$)/i)
+    const kmMatch = detailsText.match(/([\d\s]+)\s*km(?:\b|$)/i)
+
+    let mileageKm: number | undefined
+    if (milMatch) {
+      const milNum = parseInt(milMatch[1].replace(/\s/g, ''))
+      if (milNum > 0 && milNum < 1000000) mileageKm = milNum * 10
+    } else if (kmMatch) {
+      const kmNum = parseInt(kmMatch[1].replace(/\s/g, ''))
+      if (kmNum > 0 && kmNum < 10000000) mileageKm = kmNum
+    }
+
+    if (mileageKm && h.date && (isBesiktning || mileageKm > 100)) {
+      const eventDate = new Date(h.date)
+      if (eventDate >= fourYearsAgo) {
+        // Avoid duplicate dates
+        if (!mileageHistory.some(m => m.date === h.date)) {
+          mileageHistory.push({ date: h.date, mileage_km: mileageKm })
+        }
+      }
+    }
+  })
+
+  // Also try to extract mileage history from dedicated page sections
+  // car.info may have a "Mätarhistorik" or "Mätarställning" table/section
+  $('.sprow, .spec-row, .mileage-item').each((_, el) => {
+    const label = $(el).find('.sptitle, .label').text().trim().toLowerCase()
+    if (label.includes('mätarställning') || label.includes('miltal')) {
+      const value = $(el).text().replace($(el).find('.sptitle, .label').text(), '').trim()
+      const milMatch = value.match(/([\d\s]+)\s*mil/i)
+      if (milMatch) {
+        const milNum = parseInt(milMatch[1].replace(/\s/g, ''))
+        if (milNum > 0 && milNum < 1000000) {
+          // Use current date as we don't have a specific date
+          const today = new Date().toISOString().split('T')[0]
+          if (!mileageHistory.some(m => m.date === today)) {
+            mileageHistory.push({ date: today, mileage_km: milNum * 10 })
+          }
+        }
+      }
+    }
+  })
+
+  // Sort by date descending (newest first)
+  if (mileageHistory.length > 0) {
+    mileageHistory.sort((a, b) => b.date.localeCompare(a.date))
+    result.mileage_history = mileageHistory
   }
 
   // Set dates from history (most accurate source)

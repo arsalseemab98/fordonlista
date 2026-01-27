@@ -158,6 +158,7 @@ interface Vehicle {
   senaste_agarbyte?: string | null
   antal_foretagsannonser?: number | null
   antal_privatannonser?: number | null
+  mileage_history?: Array<{ date: string; mileage_km: number }> | null
 }
 
 interface CallLog {
@@ -2390,6 +2391,12 @@ export function PlaygroundView({
                   <TableHead>Märke / Modell</TableHead>
                   <TableHead className="w-[100px]">År</TableHead>
                   <TableHead className="w-[120px]">Miltal</TableHead>
+                  <TableHead className="w-[90px]">
+                    <Tooltip>
+                      <TooltipTrigger className="cursor-help underline decoration-dotted">Mil/år</TooltipTrigger>
+                      <TooltipContent>Genomsnittlig körsträcka per år (från besiktningshistorik)</TooltipContent>
+                    </Tooltip>
+                  </TableHead>
                   <TableHead>Ägare</TableHead>
                   <TableHead className="w-[120px]">Län</TableHead>
                   <TableHead className="w-[150px]">Prospekt-typ</TableHead>
@@ -2544,14 +2551,104 @@ export function PlaygroundView({
 
                       {/* Mileage */}
                       <TableCell>
-                        <span className={cn(
-                          "text-sm",
-                          primaryVehicle?.mileage && primaryVehicle.mileage > 200000
-                            ? "text-orange-600"
-                            : "text-gray-700"
-                        )}>
-                          {formatMileage(primaryVehicle?.mileage)}
-                        </span>
+                        {primaryVehicle?.mileage_history && primaryVehicle.mileage_history.length > 0 ? (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button className={cn(
+                                "text-sm underline decoration-dotted cursor-pointer hover:text-blue-600",
+                                primaryVehicle?.mileage && primaryVehicle.mileage > 200000
+                                  ? "text-orange-600"
+                                  : "text-gray-700"
+                              )}>
+                                {formatMileage(primaryVehicle?.mileage)}
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-3" align="start">
+                              <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Mätarhistorik (senaste 4 år)</p>
+                              <div className="space-y-1">
+                                {primaryVehicle.mileage_history.map((entry, idx) => (
+                                  <div key={idx} className="flex items-center justify-between gap-4 text-sm">
+                                    <span className="text-gray-500 font-mono text-xs">{entry.date}</span>
+                                    <span className="font-medium">{entry.mileage_km.toLocaleString('sv-SE')} km</span>
+                                  </div>
+                                ))}
+                              </div>
+                              {primaryVehicle.mileage_history.length >= 2 && (() => {
+                                const sorted = [...primaryVehicle.mileage_history].sort((a, b) => a.date.localeCompare(b.date))
+                                const oldest = sorted[0]
+                                const newest = sorted[sorted.length - 1]
+                                const diffKm = newest.mileage_km - oldest.mileage_km
+                                const diffDays = (new Date(newest.date).getTime() - new Date(oldest.date).getTime()) / (1000 * 60 * 60 * 24)
+                                const perYear = diffDays > 0 ? Math.round((diffKm / diffDays) * 365) : 0
+                                return (
+                                  <div className="mt-2 pt-2 border-t text-xs text-gray-500">
+                                    ~{perYear.toLocaleString('sv-SE')} km/år
+                                  </div>
+                                )
+                              })()}
+                            </PopoverContent>
+                          </Popover>
+                        ) : (
+                          <span className={cn(
+                            "text-sm",
+                            primaryVehicle?.mileage && primaryVehicle.mileage > 200000
+                              ? "text-orange-600"
+                              : "text-gray-700"
+                          )}>
+                            {formatMileage(primaryVehicle?.mileage)}
+                          </span>
+                        )}
+                      </TableCell>
+
+                      {/* Mil/år (annual mileage) */}
+                      <TableCell>
+                        {(() => {
+                          let milPerYear: number | null = null
+
+                          // Prefer mileage_history (from besiktning)
+                          if (primaryVehicle?.mileage_history && primaryVehicle.mileage_history.length >= 2) {
+                            const sorted = [...primaryVehicle.mileage_history].sort((a, b) => a.date.localeCompare(b.date))
+                            const oldest = sorted[0]
+                            const newest = sorted[sorted.length - 1]
+                            const diffKm = newest.mileage_km - oldest.mileage_km
+                            const diffDays = (new Date(newest.date).getTime() - new Date(oldest.date).getTime()) / (1000 * 60 * 60 * 24)
+                            if (diffDays > 30) {
+                              milPerYear = Math.round(((diffKm / diffDays) * 365) / 10) // km→mil
+                            }
+                          }
+                          // Fallback: estimate from total mileage / vehicle age
+                          if (milPerYear === null && primaryVehicle?.mileage && primaryVehicle?.year) {
+                            const age = new Date().getFullYear() - primaryVehicle.year
+                            if (age > 0) {
+                              milPerYear = Math.round((primaryVehicle.mileage / 10) / age)
+                            }
+                          }
+
+                          if (milPerYear === null) return <span className="text-gray-400 text-sm">-</span>
+
+                          // Color: <800 mil/år = low (blue), >2500 = high (red), normal = gray
+                          const color = milPerYear < 800
+                            ? 'text-blue-600 font-medium'
+                            : milPerYear > 2500
+                              ? 'text-red-600 font-medium'
+                              : 'text-gray-700'
+
+                          const hasHistory = primaryVehicle?.mileage_history && primaryVehicle.mileage_history.length >= 2
+
+                          return (
+                            <Tooltip>
+                              <TooltipTrigger className={cn("text-sm cursor-help", color)}>
+                                {milPerYear.toLocaleString('sv-SE')}
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {milPerYear.toLocaleString('sv-SE')} mil/år
+                                {hasHistory ? ' (från besiktning)' : ' (uppskattat)'}
+                                {milPerYear < 800 && ' · Lågmil'}
+                                {milPerYear > 2500 && ' · Högmil'}
+                              </TooltipContent>
+                            </Tooltip>
+                          )
+                        })()}
                       </TableCell>
 
                       {/* Owner */}

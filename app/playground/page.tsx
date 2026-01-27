@@ -65,7 +65,8 @@ export default async function PlaygroundPage({
             "senaste_påställning",
             senaste_agarbyte,
             antal_foretagsannonser,
-            antal_privatannonser
+            antal_privatannonser,
+            mileage_history
           ),
           call_logs (
             id,

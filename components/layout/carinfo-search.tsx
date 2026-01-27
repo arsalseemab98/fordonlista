@@ -39,6 +39,7 @@ interface CarInfoData {
   senaste_påställning?: string
   första_registrering?: string
   vehicle_history?: Array<{ date: string; event: string; details?: string }>
+  mileage_history?: Array<{ date: string; mileage_km: number }>
   error?: string
 }
 
@@ -273,6 +274,34 @@ export function CarInfoSearch() {
                     <p className="text-3xl font-bold text-gray-900">{formatNumber(carInfo.total_in_sweden)}</p>
                     <p className="text-xs text-gray-400">registrerade fordon av samma modell</p>
                   </div>
+                </div>
+              )}
+
+              {/* Mileage History */}
+              {carInfo.mileage_history && carInfo.mileage_history.length > 0 && (
+                <div className="border-t pt-4">
+                  <h3 className="font-semibold text-sm text-gray-500 uppercase mb-3">Mätarhistorik (senaste 4 år)</h3>
+                  <div className="space-y-2">
+                    {carInfo.mileage_history.map((entry, idx) => (
+                      <div key={idx} className="flex items-center justify-between gap-4 text-sm border-l-2 border-blue-200 pl-3 py-1">
+                        <span className="text-gray-400 font-mono text-xs">{entry.date}</span>
+                        <span className="font-medium">{entry.mileage_km.toLocaleString('sv-SE')} km</span>
+                      </div>
+                    ))}
+                  </div>
+                  {carInfo.mileage_history.length >= 2 && (() => {
+                    const sorted = [...carInfo.mileage_history].sort((a, b) => a.date.localeCompare(b.date))
+                    const oldest = sorted[0]
+                    const newest = sorted[sorted.length - 1]
+                    const diffKm = newest.mileage_km - oldest.mileage_km
+                    const diffDays = (new Date(newest.date).getTime() - new Date(oldest.date).getTime()) / (1000 * 60 * 60 * 24)
+                    const perYear = diffDays > 0 ? Math.round((diffKm / diffDays) * 365) : 0
+                    return (
+                      <div className="mt-2 text-sm text-gray-500 bg-gray-50 rounded p-2">
+                        Genomsnitt: ~{perYear.toLocaleString('sv-SE')} km/år
+                      </div>
+                    )
+                  })()}
                 </div>
               )}
 
