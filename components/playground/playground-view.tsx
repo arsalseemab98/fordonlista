@@ -70,12 +70,14 @@ import {
   Trash2,
   History,
   AlertTriangle,
-  CheckCircle2
+  CheckCircle2,
+  CalendarDays
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { bulkUpdateLeadsMetadata, addCallLog, markLeadForLetter, removeLeadFromLetterList, updateLeadProspectType, deleteExtraDataColumn, bulkDeleteLeads, restoreLeads, checkLeadsHistory, HistoryCheckResult } from '@/app/actions/leads'
 import { saveCarInfoToVehicle, activateLead, bulkActivateLeads, bulkResetCarInfo, addManualVehicle, CarInfoData } from '@/app/actions/vehicles'
+import { saveBilprospektDate } from '@/app/actions/settings'
 import {
   Tooltip,
   TooltipContent,
@@ -229,6 +231,7 @@ interface PlaygroundViewProps {
   currentFilters: CurrentFilters
   activePreferences?: ActivePreferences
   savedProspectTypes: ProspectTypeOption[]
+  bilprospektDate: string | null
 }
 
 const SWEDISH_COUNTIES = [
@@ -343,12 +346,15 @@ export function PlaygroundView({
   availableExtraColumns,
   currentFilters,
   activePreferences,
-  savedProspectTypes
+  savedProspectTypes,
+  bilprospektDate
 }: PlaygroundViewProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
   const [searchValue, setSearchValue] = useState(currentFilters.search || '')
+  const [bpDate, setBpDate] = useState<string>(bilprospektDate || '')
+  const [isSavingBpDate, setIsSavingBpDate] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
   // Local state for optimistic updates - hide leads immediately when status changes
@@ -737,6 +743,10 @@ export function PlaygroundView({
 
   // Send selected leads to Brev page (activate first, then navigate)
   const handleSendToBrev = useCallback(async () => {
+    if (!bpDate) {
+      toast.error('Ange Bilprospekt-datum innan du skickar leads')
+      return
+    }
     if (selectedLeads.size === 0) {
       toast.error('Inga leads valda')
       return
@@ -763,10 +773,14 @@ export function PlaygroundView({
     } finally {
       setIsActivating(false)
     }
-  }, [selectedLeads, clearSelection, router])
+  }, [selectedLeads, clearSelection, router, bpDate])
 
   // Send selected leads to To-Call page (activate and navigate)
   const handleSendToCall = useCallback(async () => {
+    if (!bpDate) {
+      toast.error('Ange Bilprospekt-datum innan du skickar leads')
+      return
+    }
     if (selectedLeads.size === 0) {
       toast.error('Inga leads valda')
       return
@@ -791,7 +805,7 @@ export function PlaygroundView({
     } finally {
       setIsActivating(false)
     }
-  }, [selectedLeads, clearSelection, router])
+  }, [selectedLeads, clearSelection, router, bpDate])
 
   // Open call log dialog
   const openCallDialog = useCallback((lead: Lead, quickResult?: string) => {
@@ -2335,6 +2349,55 @@ export function PlaygroundView({
             )}
           </div>
         )}
+      </div>
+
+      {/* Bilprospekt date bar */}
+      <div className={cn(
+        "flex items-center justify-between p-3 rounded-lg border",
+        bpDate ? "bg-green-50 border-green-200" : "bg-amber-50 border-amber-300"
+      )}>
+        <div className="flex items-center gap-3">
+          <CalendarDays className={cn("h-5 w-5", bpDate ? "text-green-600" : "text-amber-600")} />
+          <div>
+            <span className="text-sm font-medium">
+              {bpDate ? 'Bilprospekt uppdaterad' : 'Bilprospekt-datum saknas'}
+            </span>
+            {!bpDate && (
+              <p className="text-xs text-amber-600">Ange datum innan du kan skicka leads till ring/brev</p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Input
+            type="date"
+            value={bpDate}
+            onChange={(e) => setBpDate(e.target.value)}
+            className="w-[160px] h-8 text-sm"
+          />
+          <Button
+            size="sm"
+            variant={bpDate ? "default" : "outline"}
+            disabled={isSavingBpDate}
+            className="h-8"
+            onClick={async () => {
+              setIsSavingBpDate(true)
+              try {
+                const result = await saveBilprospektDate(bpDate || null)
+                if (result.success) {
+                  toast.success('Bilprospekt-datum sparat')
+                } else {
+                  toast.error(result.error || 'Kunde inte spara')
+                }
+              } catch {
+                toast.error('Något gick fel')
+              } finally {
+                setIsSavingBpDate(false)
+              }
+            }}
+          >
+            {isSavingBpDate ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+          </Button>
+        </div>
       </div>
 
       {/* Stats bar */}

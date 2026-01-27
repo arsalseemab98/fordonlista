@@ -260,7 +260,7 @@ export async function getPreferences() {
 
   const { data } = await supabase
     .from('preferences')
-    .select('preferred_makes, excluded_makes, preferred_models, excluded_models, min_mileage, max_mileage, min_year, max_year, prefer_deregistered, ai_enabled, letter_cost, filters_enabled')
+    .select('preferred_makes, excluded_makes, preferred_models, excluded_models, min_mileage, max_mileage, min_year, max_year, prefer_deregistered, ai_enabled, letter_cost, filters_enabled, bilprospekt_updated_at')
     .limit(1)
     .maybeSingle()
 
@@ -276,8 +276,43 @@ export async function getPreferences() {
     prefer_deregistered: false,
     ai_enabled: true,
     letter_cost: 12.00,
-    filters_enabled: true
+    filters_enabled: true,
+    bilprospekt_updated_at: null as string | null
   }
+}
+
+export async function saveBilprospektDate(date: string | null) {
+  const supabase = await createClient()
+
+  // Check if preferences row exists
+  const { data: existing } = await supabase
+    .from('preferences')
+    .select('id')
+    .limit(1)
+    .maybeSingle()
+
+  if (existing) {
+    const { error } = await supabase
+      .from('preferences')
+      .update({ bilprospekt_updated_at: date })
+      .eq('id', existing.id)
+
+    if (error) return { success: false, error: error.message }
+  } else {
+    const { error } = await supabase
+      .from('preferences')
+      .insert({ bilprospekt_updated_at: date })
+
+    if (error) return { success: false, error: error.message }
+  }
+
+  revalidatePath('/playground')
+  revalidatePath('/prospekt-typer')
+  revalidatePath('/brev')
+  revalidatePath('/to-call')
+  revalidatePath('/')
+
+  return { success: true }
 }
 
 export async function getLetterCost() {
@@ -290,6 +325,18 @@ export async function getLetterCost() {
     .maybeSingle()
 
   return data?.letter_cost || 12.00
+}
+
+export async function getBilprospektDate(): Promise<string | null> {
+  const supabase = await createClient()
+
+  const { data } = await supabase
+    .from('preferences')
+    .select('bilprospekt_updated_at')
+    .limit(1)
+    .maybeSingle()
+
+  return data?.bilprospekt_updated_at || null
 }
 
 // API Token management for car.info integration

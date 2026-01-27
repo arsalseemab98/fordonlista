@@ -1,6 +1,7 @@
 import { Header } from '@/components/layout/header'
 import { createClient } from '@/lib/supabase/server'
 import { LetterList } from '@/components/letters/letter-list'
+import { getBilprospektDate } from '@/app/actions/settings'
 
 // Revalidate every 30 seconds for better performance
 export const revalidate = 30
@@ -134,13 +135,17 @@ async function getLeadsForLetters(filter: string) {
 export default async function BrevPage({ searchParams }: BrevPageProps) {
   const params = await searchParams
   const filter = params.filter || 'not_sent'
-  const { leads, counts, letterCost, monthlyStats } = await getLeadsForLetters(filter)
+  const [{ leads, counts, letterCost, monthlyStats }, bilprospektDate] = await Promise.all([
+    getLeadsForLetters(filter),
+    getBilprospektDate()
+  ])
 
   return (
     <div className="flex flex-col">
       <Header
         title="Brevutskick"
         description="Hantera och exportera leads för brevutskick"
+        bilprospektDate={bilprospektDate}
       />
 
       <div className="flex-1 p-6">

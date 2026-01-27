@@ -8,6 +8,7 @@ import {
   type PeriodGap
 } from '@/lib/time-period-utils'
 import { getProspectTypes, type ProspectType } from './actions'
+import { getBilprospektDate } from '@/app/actions/settings'
 
 // Revalidate every 60 seconds
 export const revalidate = 60
@@ -60,8 +61,11 @@ export default async function ProspektTyperPage({
 
   const letterCost = preferences?.letter_cost ?? 12
 
-  // Fetch saved prospect types from database
-  const savedProspectTypes = await getProspectTypes()
+  // Fetch saved prospect types and bilprospekt date
+  const [savedProspectTypes, bilprospektDate] = await Promise.all([
+    getProspectTypes(),
+    getBilprospektDate()
+  ])
 
   // Fetch all leads with relevant fields for aggregation
   let query = supabase
@@ -281,6 +285,7 @@ export default async function ProspektTyperPage({
       <Header
         title="Prospekttyper & Perioder"
         description="Översikt över prospekttyper och tidsperioder med filtrering"
+        bilprospektDate={bilprospektDate}
       />
 
       <div className="flex-1 p-6">

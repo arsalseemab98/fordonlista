@@ -1,6 +1,6 @@
 'use client'
 
-import { Bell, HelpCircle } from 'lucide-react'
+import { Bell, HelpCircle, CalendarDays } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -18,16 +18,33 @@ import { RegNrSearch } from '@/components/prospekt-typer/reg-nr-search'
 interface HeaderProps {
   title: string
   description?: string
+  bilprospektDate?: string | null
 }
 
-export function Header({ title, description }: HeaderProps) {
+export function Header({ title, description, bilprospektDate }: HeaderProps) {
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6">
       {/* Page Title */}
-      <div>
-        <h1 className="text-xl font-semibold text-gray-900">{title}</h1>
-        {description && (
-          <p className="text-sm text-gray-500">{description}</p>
+      <div className="flex items-center gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-900">{title}</h1>
+          {description && (
+            <p className="text-sm text-gray-500">{description}</p>
+          )}
+        </div>
+        {bilprospektDate !== undefined && (
+          <Badge
+            variant="outline"
+            className={bilprospektDate
+              ? "gap-1.5 border-green-300 bg-green-50 text-green-700"
+              : "gap-1.5 border-amber-300 bg-amber-50 text-amber-700"
+            }
+          >
+            <CalendarDays className="h-3 w-3" />
+            {bilprospektDate
+              ? `BP: ${new Date(bilprospektDate + 'T00:00:00').toLocaleDateString('sv-SE')}`
+              : 'BP-datum saknas'}
+          </Badge>
         )}
       </div>
 

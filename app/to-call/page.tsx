@@ -1,6 +1,7 @@
 import { Header } from '@/components/layout/header'
 import { createClient } from '@/lib/supabase/server'
 import { ToCallList } from '@/components/to-call/to-call-list'
+import { getBilprospektDate } from '@/app/actions/settings'
 
 // Revalidate every 30 seconds for better performance
 export const revalidate = 30
@@ -105,7 +106,10 @@ async function getLeadsToCall(statusFilter?: string) {
 export default async function ToCallPage({ searchParams }: PageProps) {
   const params = await searchParams
   const statusFilter = params.status || 'all'
-  const leads = await getLeadsToCall(statusFilter === 'all' ? undefined : statusFilter)
+  const [leads, bilprospektDate] = await Promise.all([
+    getLeadsToCall(statusFilter === 'all' ? undefined : statusFilter),
+    getBilprospektDate()
+  ])
 
   const newCount = leads.filter(l => l.status === 'new').length
   const callbackCount = leads.filter(l => l.status === 'callback').length
@@ -116,6 +120,7 @@ export default async function ToCallPage({ searchParams }: PageProps) {
       <Header
         title="Att ringa"
         description={`${leads.length} leads väntar på samtal`}
+        bilprospektDate={bilprospektDate}
       />
 
       <div className="flex-1 p-6">
