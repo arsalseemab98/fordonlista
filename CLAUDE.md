@@ -87,6 +87,9 @@ const LEAD_STATUS_TYPES = [
 - **Mileage History:** Extracts last 4 years besiktning mileage readings, shows Mil/yr column with color coding (blue=low, red=high)
 - **Brev Cost Analytics:** Monthly breakdown of letters sent, cost, conversions and conversion rate on /brev page
 - **Prospect Types (Single Source of Truth):** All pages use `prospect_types` DB table merged with lead-derived types
+- **Mil/yr Filter & Sorting:** Filter by lågmil/normal/högmil, sort by mil/yr ascending/descending
+- **Car.info Status Filter:** Filter leads by car.info fetched or not fetched
+- **Bilprospekt Date Gate:** Must set Bilprospekt update date before sending leads to ring/brev. Badge shown on all main pages
 
 ## Database Tables (Supabase)
 - `leads` - Main lead records (phone, owner, location, status, deleted_at for soft delete)
@@ -96,8 +99,8 @@ const LEAD_STATUS_TYPES = [
 - `ai_patterns` - Learned AI patterns for scoring
 - `column_mappings` - Excel column mapping rules
 - `value_patterns` - Value transformation rules
-- `preferences` - App settings
-- `prospect_types` - Prospect type categories (name, description, color)
+- `preferences` - App settings (letter_cost, bilprospekt_updated_at, filter settings)
+- `prospect_types` - Prospect type categories (name, description, color): nyköpt_bil, avställd, lågmil, dödsbo
 
 ## Car.info Mileage History
 Besiktning mileage readings extracted from car.info vehicle history.
@@ -124,6 +127,28 @@ mileage_history: Array<{ date: string; mileage_km: number }> | null
 ### Scraper Files (must be kept in sync)
 - `lib/carinfo/fetch-carinfo.ts` - Server action version
 - `app/api/carinfo/route.ts` - Edge runtime version
+
+## Bilprospekt Date (Datakälla)
+External app "Bilprospekt" updates weekly with new ownership changes and vehicle data.
+
+### Gate Logic
+- `preferences.bilprospekt_updated_at` DATE column
+- **Playground**: Editable date picker (green=set, amber=missing)
+- **Blocking**: Cannot send leads to ring/brev without setting date
+- **Header badge**: Shown on playground, prospekt-typer, brev, to-call
+
+### Server Actions
+- `saveBilprospektDate(date)` - Save date to preferences
+- `getBilprospektDate()` - Lightweight fetch for header badge
+
+## Playground Filters
+| Filter | Type | Options |
+|--------|------|---------|
+| Aktivitet | Select | Alla, Ingen anmärkning, Car.info hämtad, Ej car.info, Ny, Ringd, Brev skickat |
+| Mil/år | Select | Alla, Lågmil (<800), Normal (800-2500), Högmil (>2500), Ingen data |
+| Sortering | Buttons | Senaste, Äldsta, Namn A-Ö, Namn Ö-A, Mil/år ↑, Mil/år ↓ |
+| Län | Multi-select | All Swedish counties |
+| Prospekt-typ | Multi-select | From DB + leads |
 
 ## Lead Status (databas)
 ```typescript

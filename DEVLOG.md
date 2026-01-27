@@ -5,6 +5,55 @@ Swedish vehicle lead management system for car dealers.
 
 ---
 
+## 2026-01-27 - Bilprospekt Date Gate & Archive Data
+
+**Type:** Feature
+
+**Description:**
+Lagt till Bilprospekt-datumfält i playground som blockerar skicka-knappar tills datum är angivet. Datumet visas som badge i headern på alla viktiga sidor. Nya arkivdata för Dödsbo och Lågmil insatta.
+
+**Features:**
+- Bilprospekt-datumväljare i playground (grönt=satt, amber=saknas)
+- Blockerar "Skicka till ring" och "Skicka till brev" utan datum
+- BP-datum badge i header (playground, prospekt-typer, brev, to-call)
+- Server actions: `saveBilprospektDate()`, `getBilprospektDate()`
+- Prospekttyp "Dödsbo" skapad
+- Arkivdata: 20 + 32 dödsbo-brev (Norrbotten), 251 lågmil-brev (Norrbotten)
+
+**Database Changes:**
+- `preferences.bilprospekt_updated_at` DATE kolumn (migration `20260127150000`)
+- Ny prospect_type: `dödsbo`
+- 303 arkivleads insatta (prospekt_archive)
+
+**Files Changed:**
+- `app/actions/settings.ts` - saveBilprospektDate, getBilprospektDate, getPreferences uppdaterad
+- `app/playground/page.tsx` - Skickar bilprospektDate till Header och PlaygroundView
+- `app/prospekt-typer/page.tsx` - Hämtar och visar bilprospektDate i Header
+- `app/brev/page.tsx` - Hämtar och visar bilprospektDate i Header
+- `app/to-call/page.tsx` - Hämtar och visar bilprospektDate i Header
+- `components/layout/header.tsx` - Valfri BP-datum badge
+- `components/playground/playground-view.tsx` - Datumväljare + gate-logik
+
+---
+
+## 2026-01-27 - Mil/yr Filter, Sorting & Car.info Status
+
+**Type:** Feature
+
+**Description:**
+Lagt till mil/år-filter, sortering och car.info-statusfilter i playground.
+
+**Features:**
+- Mil/år-filter: Lågmil (<800), Normal (800-2500), Högmil (>2500), Ingen data
+- Sortering: Mil/år stigande/fallande (client-side, nulls sist)
+- Aktivitetsfilter: "Car.info hämtad" och "Ej car.info" (baserat på carinfo_fetched_at)
+- Gemensam `getVehicleMilPerYear()` hjälpfunktion
+
+**Files Changed:**
+- `components/playground/playground-view.tsx` - Filter, sortering, statusfilter, hjälpfunktion
+
+---
+
 ## 2026-01-27 - Mileage History & Mil/yr Column
 
 **Type:** Feature

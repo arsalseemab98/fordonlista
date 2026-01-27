@@ -29,6 +29,13 @@
 - [x] Mil/år-kolumn i playground med färgkodning (blå=lågmil, röd=högmil)
 - [x] Mätarhistorik-popover vid klick på miltalskolumnen
 - [x] Deduplicering av mätarhistorik (en avläsning per år, bara besiktningsdatum)
+- [x] Mil/år-filter i playground (lågmil, normal, högmil, ingen data)
+- [x] Sortering efter mil/år (stigande/fallande) i playground
+- [x] Car.info-status i aktivitetsfilter (hämtad / ej hämtad)
+- [x] Dödsbo prospekttyp tillagd med arkivdata (20 + 32 brev)
+- [x] Lågmil arkivdata (251 brev, Norrbotten)
+- [x] Bilprospekt-datumfält i playground (blockerar skicka utan datum)
+- [x] Bilprospekt-datum badge i header (playground, brev, to-call, prospekt-typer)
 
 ---
 
