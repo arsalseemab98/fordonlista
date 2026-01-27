@@ -157,6 +157,13 @@ function formatPeriod(period: string | null): string {
   }
 }
 
+function formatPeriodRange(start: string | null, end: string | null): string {
+  if (!start && !end) return 'Ingen period'
+  if (!end) return formatPeriod(start)
+  if (!start) return formatPeriod(end)
+  return `${formatPeriod(start)} — ${formatPeriod(end)}`
+}
+
 export function ProspektTyperView({
   stats,
   prospectTypeSummary,
@@ -264,15 +271,26 @@ export function ProspektTyperView({
 
   // Mailing timeline: group leadDetails by sent_to_brev_at date
   const mailingTimeline = useMemo(() => {
+    // Build period end lookup from stats (leadDetails doesn't have period_end)
+    const periodEndLookup = new Map<string, string | null>()
+    for (const stat of stats) {
+      const key = `${stat.prospect_type || ''}|${stat.data_period_start || ''}`
+      if (!periodEndLookup.has(key)) {
+        periodEndLookup.set(key, stat.data_period_end)
+      }
+    }
+
     const byDate = new Map<string, Map<string, {
       prospectType: string | null
-      period: string | null
+      periodStart: string | null
+      periodEnd: string | null
       counties: Map<string, number>
       totalCount: number
     }>>()
     const unsent: Map<string, {
       prospectType: string | null
-      period: string | null
+      periodStart: string | null
+      periodEnd: string | null
       counties: Map<string, number>
       totalCount: number
     }> = new Map()
@@ -298,7 +316,8 @@ export function ProspektTyperView({
         countyMap.set(county, 1)
         targetMap.set(groupKey, {
           prospectType: lead.prospect_type,
-          period: lead.data_period_start,
+          periodStart: lead.data_period_start,
+          periodEnd: periodEndLookup.get(groupKey) || null,
           counties: countyMap,
           totalCount: 1,
         })
@@ -1103,7 +1122,7 @@ export function ProspektTyperView({
                               {getProspectTypeLabel(group.prospectType)}
                             </Badge>
                             <span className="text-sm text-muted-foreground">
-                              {formatPeriod(group.periodStart)}
+                              {formatPeriodRange(group.periodStart, group.periodEnd)}
                             </span>
                             {group.daysDuration !== null && (
                               <Badge variant="secondary" className="font-mono text-xs">
@@ -1219,7 +1238,7 @@ export function ProspektTyperView({
                               </Badge>
                             </TableCell>
                             <TableCell className="text-sm">
-                              {formatPeriod(group.periodStart)}
+                              {formatPeriodRange(group.periodStart, group.periodEnd)}
                               {group.daysDuration !== null && (
                                 <Badge variant="secondary" className="ml-2 font-mono text-xs">
                                   {group.daysDuration} d
@@ -1354,9 +1373,9 @@ export function ProspektTyperView({
                               key={i}
                               className="flex items-center justify-between p-2 rounded hover:bg-green-50 cursor-pointer text-sm"
                               onClick={() => openDetailModal(
-                                `${getProspectTypeLabel(entry.prospectType)} (${formatPeriod(entry.period)})`,
+                                `${getProspectTypeLabel(entry.prospectType)} (${formatPeriodRange(entry.periodStart, entry.periodEnd)})`,
                                 'brev',
-                                { prospectType: entry.prospectType || undefined, period: entry.period || undefined }
+                                { prospectType: entry.prospectType || undefined, period: entry.periodStart || undefined }
                               )}
                             >
                               <div className="flex items-center gap-2 flex-wrap">
@@ -1364,7 +1383,7 @@ export function ProspektTyperView({
                                   {getProspectTypeLabel(entry.prospectType)}
                                 </Badge>
                                 <span className="text-muted-foreground">
-                                  ({formatPeriod(entry.period)}):
+                                  ({formatPeriodRange(entry.periodStart, entry.periodEnd)}):
                                 </span>
                                 <span>
                                   {countyList.map(([county, count], ci) => (
@@ -1405,9 +1424,9 @@ export function ProspektTyperView({
                               key={i}
                               className="flex items-center justify-between p-2 rounded hover:bg-gray-50 cursor-pointer text-sm"
                               onClick={() => openDetailModal(
-                                `${getProspectTypeLabel(entry.prospectType)} (${formatPeriod(entry.period)})`,
+                                `${getProspectTypeLabel(entry.prospectType)} (${formatPeriodRange(entry.periodStart, entry.periodEnd)})`,
                                 'all',
-                                { prospectType: entry.prospectType || undefined, period: entry.period || undefined }
+                                { prospectType: entry.prospectType || undefined, period: entry.periodStart || undefined }
                               )}
                             >
                               <div className="flex items-center gap-2 flex-wrap">
@@ -1415,7 +1434,7 @@ export function ProspektTyperView({
                                   {getProspectTypeLabel(entry.prospectType)}
                                 </Badge>
                                 <span className="text-muted-foreground">
-                                  ({formatPeriod(entry.period)}):
+                                  ({formatPeriodRange(entry.periodStart, entry.periodEnd)}):
                                 </span>
                                 <span>
                                   {countyList.map(([county, count], ci) => (
