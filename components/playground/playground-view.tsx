@@ -159,6 +159,8 @@ interface Vehicle {
   antal_foretagsannonser?: number | null
   antal_privatannonser?: number | null
   mileage_history?: Array<{ date: string; mileage_km: number }> | null
+  carinfo_fetched_at?: string | null
+  ai_score?: number | null
 }
 
 interface CallLog {
@@ -258,12 +260,16 @@ const SORT_OPTIONS = [
   { value: 'oldest', label: 'Äldsta först' },
   { value: 'name_asc', label: 'Namn A-Ö' },
   { value: 'name_desc', label: 'Namn Ö-A' },
+  { value: 'mil_asc', label: 'Mil/år ↑' },
+  { value: 'mil_desc', label: 'Mil/år ↓' },
 ]
 
 // Lead status types for filtering
 const LEAD_STATUS_TYPES = [
   { value: 'all', label: 'Alla' },
   { value: 'no_activity', label: '⚪ Ingen anmärkning' },
+  { value: 'carinfo_fetched', label: '🔍 Car.info hämtad' },
+  { value: 'no_carinfo', label: '⚫ Ej car.info' },
   { value: 'new', label: '🟢 Ny' },
   { value: 'called', label: '🟡 Ringd' },
   { value: 'letter_sent', label: '🔴 Brev skickat' },
@@ -429,10 +435,20 @@ export function PlaygroundView({
     let result = leads
 
     if (activityFilter !== 'all') {
-      result = result.filter(lead => {
-        const { status } = getLeadStatus(lead)
-        return status === activityFilter
-      })
+      if (activityFilter === 'carinfo_fetched') {
+        result = result.filter(lead =>
+          lead.vehicles?.some(v => v.carinfo_fetched_at)
+        )
+      } else if (activityFilter === 'no_carinfo') {
+        result = result.filter(lead =>
+          !lead.vehicles?.some(v => v.carinfo_fetched_at)
+        )
+      } else {
+        result = result.filter(lead => {
+          const { status } = getLeadStatus(lead)
+          return status === activityFilter
+        })
+      }
     }
 
     if (mileageFilter !== 'all') {
@@ -448,8 +464,23 @@ export function PlaygroundView({
       })
     }
 
+    // Client-side sorting for mil/år
+    const sortValue = currentFilters.sort || 'newest'
+    if (sortValue === 'mil_asc' || sortValue === 'mil_desc') {
+      const asc = sortValue === 'mil_asc'
+      result = [...result].sort((a, b) => {
+        const milA = getVehicleMilPerYear(a.vehicles?.[0])
+        const milB = getVehicleMilPerYear(b.vehicles?.[0])
+        // Null values go last
+        if (milA === null && milB === null) return 0
+        if (milA === null) return 1
+        if (milB === null) return -1
+        return asc ? milA - milB : milB - milA
+      })
+    }
+
     return result
-  }, [leads, activityFilter, mileageFilter])
+  }, [leads, activityFilter, mileageFilter, currentFilters.sort])
 
   // Bulk delete state
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
@@ -1970,9 +2001,16 @@ export function PlaygroundView({
             </SelectTrigger>
             <SelectContent>
               {LEAD_STATUS_TYPES.map((type) => {
-                const count = type.value === 'all'
-                  ? leads.length
-                  : leads.filter(l => getLeadStatus(l).status === type.value).length
+                let count: number
+                if (type.value === 'all') {
+                  count = leads.length
+                } else if (type.value === 'carinfo_fetched') {
+                  count = leads.filter(l => l.vehicles?.some(v => v.carinfo_fetched_at)).length
+                } else if (type.value === 'no_carinfo') {
+                  count = leads.filter(l => !l.vehicles?.some(v => v.carinfo_fetched_at)).length
+                } else {
+                  count = leads.filter(l => getLeadStatus(l).status === type.value).length
+                }
                 return (
                   <SelectItem key={type.value} value={type.value}>
                     {type.label} ({count})
