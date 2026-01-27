@@ -235,7 +235,6 @@ export default async function PlaygroundPage({
       <Header
         title="Playground"
         description="Utforska och filtrera importerade leads. Ring, kopiera reg.nr, och hantera prospekt."
-        bilprospektDate={preferences.bilprospekt_updated_at || null}
       />
 
       <div className="flex-1 p-6">
