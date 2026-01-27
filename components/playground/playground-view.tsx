@@ -377,6 +377,9 @@ export function PlaygroundView({
   const [bulkProspectTypes, setBulkProspectTypes] = useState<string[]>([])
   const [bulkDateFrom, setBulkDateFrom] = useState<string>('')
   const [bulkDateTo, setBulkDateTo] = useState<string>('')
+  const [bulkBpDate, setBulkBpDate] = useState<string>('')
+  const [bulkYearFrom, setBulkYearFrom] = useState<string>('')
+  const [bulkYearTo, setBulkYearTo] = useState<string>('')
 
   // County search
   const [countySearch, setCountySearch] = useState('')
@@ -671,6 +674,9 @@ export function PlaygroundView({
     setBulkProspectTypes([])
     setBulkDateFrom('')
     setBulkDateTo('')
+    setBulkBpDate('')
+    setBulkYearFrom('')
+    setBulkYearTo('')
   }, [])
 
   // Toggle functions for bulk edit multi-select
@@ -700,52 +706,75 @@ export function PlaygroundView({
       return
     }
 
+    const hasLeadMetadata = bulkCounties.length > 0 || bulkProspectTypes.length > 0 || !!bulkDateFrom || !!bulkDateTo
+    const hasBpDate = !!bulkBpDate
+
     // Check if at least one value is set
-    if (bulkCounties.length === 0 && bulkProspectTypes.length === 0 && !bulkDateFrom && !bulkDateTo) {
+    if (!hasLeadMetadata && !hasBpDate) {
       toast.error('Välj minst ett fält att uppdatera')
       return
     }
 
     setIsSaving(true)
 
-    const metadata: {
-      county?: string | null
-      prospect_type?: string | null
-      data_period_start?: string | null
-      data_period_end?: string | null
-    } = {}
-
-    if (bulkCounties.length > 0) {
-      metadata.county = bulkCounties.join(',')
-    }
-    if (bulkProspectTypes.length > 0) {
-      metadata.prospect_type = bulkProspectTypes.join(',')
-    }
-    if (bulkDateFrom) {
-      metadata.data_period_start = bulkDateFrom === 'clear' ? null : bulkDateFrom
-    }
-    if (bulkDateTo) {
-      metadata.data_period_end = bulkDateTo === 'clear' ? null : bulkDateTo
+    // Save Bilprospekt date globally if set
+    if (hasBpDate) {
+      const bpResult = await saveBilprospektDate(bulkBpDate)
+      if (bpResult.success) {
+        setBpDate(bulkBpDate)
+        toast.success('Bilprospekt-datum sparat')
+      } else {
+        toast.error('Kunde inte spara Bilprospekt-datum')
+      }
     }
 
-    const result = await bulkUpdateLeadsMetadata(Array.from(selectedLeads), metadata)
+    // Save lead metadata if any set
+    if (hasLeadMetadata) {
+      const metadata: {
+        county?: string | null
+        prospect_type?: string | null
+        data_period_start?: string | null
+        data_period_end?: string | null
+      } = {}
+
+      if (bulkCounties.length > 0) {
+        metadata.county = bulkCounties.join(',')
+      }
+      if (bulkProspectTypes.length > 0) {
+        metadata.prospect_type = bulkProspectTypes.join(',')
+      }
+      if (bulkDateFrom) {
+        metadata.data_period_start = bulkDateFrom === 'clear' ? null : bulkDateFrom
+      }
+      if (bulkDateTo) {
+        metadata.data_period_end = bulkDateTo === 'clear' ? null : bulkDateTo
+      }
+
+      const result = await bulkUpdateLeadsMetadata(Array.from(selectedLeads), metadata)
+
+      if (result.success) {
+        toast.success(`${result.updatedCount} leads uppdaterade`)
+      } else {
+        toast.error(result.error || 'Kunde inte uppdatera')
+      }
+    }
 
     setIsSaving(false)
-
-    if (result.success) {
-      toast.success(`${result.updatedCount} leads uppdaterade`)
-      clearSelection()
-      router.refresh()
-    } else {
-      toast.error(result.error || 'Kunde inte uppdatera')
-    }
-  }, [selectedLeads, bulkCounties, bulkProspectTypes, bulkDateFrom, bulkDateTo, clearSelection, router])
+    clearSelection()
+    router.refresh()
+  }, [selectedLeads, bulkCounties, bulkProspectTypes, bulkDateFrom, bulkDateTo, bulkBpDate, clearSelection, router])
 
   // Send selected leads to Brev page (activate first, then navigate)
   const handleSendToBrev = useCallback(async () => {
-    if (!bpDate) {
+    const effectiveBpDate = bpDate || bulkBpDate
+    if (!effectiveBpDate) {
       toast.error('Ange Bilprospekt-datum innan du skickar leads')
       return
+    }
+    // Auto-save BP date if set via bulk bar
+    if (bulkBpDate && !bpDate) {
+      await saveBilprospektDate(bulkBpDate)
+      setBpDate(bulkBpDate)
     }
     if (selectedLeads.size === 0) {
       toast.error('Inga leads valda')
@@ -773,13 +802,19 @@ export function PlaygroundView({
     } finally {
       setIsActivating(false)
     }
-  }, [selectedLeads, clearSelection, router, bpDate])
+  }, [selectedLeads, clearSelection, router, bpDate, bulkBpDate])
 
   // Send selected leads to To-Call page (activate and navigate)
   const handleSendToCall = useCallback(async () => {
-    if (!bpDate) {
+    const effectiveBpDate = bpDate || bulkBpDate
+    if (!effectiveBpDate) {
       toast.error('Ange Bilprospekt-datum innan du skickar leads')
       return
+    }
+    // Auto-save BP date if set via bulk bar
+    if (bulkBpDate && !bpDate) {
+      await saveBilprospektDate(bulkBpDate)
+      setBpDate(bulkBpDate)
     }
     if (selectedLeads.size === 0) {
       toast.error('Inga leads valda')
@@ -805,7 +840,7 @@ export function PlaygroundView({
     } finally {
       setIsActivating(false)
     }
-  }, [selectedLeads, clearSelection, router, bpDate])
+  }, [selectedLeads, clearSelection, router, bpDate, bulkBpDate])
 
   // Open call log dialog
   const openCallDialog = useCallback((lead: Lead, quickResult?: string) => {
@@ -1758,6 +1793,57 @@ export function PlaygroundView({
                     value={bulkDateTo}
                     onChange={(e) => setBulkDateTo(e.target.value)}
                     className="w-[150px] bg-white"
+                  />
+                </div>
+
+                {/* Separator */}
+                <div className="h-8 w-px bg-blue-200" />
+
+                {/* Bilprospekt Datum */}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-green-800">Bilprospekt datum</label>
+                  <Input
+                    type="date"
+                    value={bulkBpDate}
+                    onChange={(e) => setBulkBpDate(e.target.value)}
+                    className={cn(
+                      "w-[150px]",
+                      bulkBpDate ? "bg-green-50 border-green-400" : "bg-white"
+                    )}
+                  />
+                </div>
+
+                {/* Årsmodell från */}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-green-800">Årsmodell från</label>
+                  <Input
+                    type="number"
+                    placeholder="t.ex. 2000"
+                    min={1950}
+                    max={new Date().getFullYear()}
+                    value={bulkYearFrom}
+                    onChange={(e) => setBulkYearFrom(e.target.value)}
+                    className={cn(
+                      "w-[120px]",
+                      bulkYearFrom ? "bg-green-50 border-green-400" : "bg-white"
+                    )}
+                  />
+                </div>
+
+                {/* Årsmodell till */}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-green-800">Årsmodell till</label>
+                  <Input
+                    type="number"
+                    placeholder="t.ex. 2015"
+                    min={1950}
+                    max={new Date().getFullYear()}
+                    value={bulkYearTo}
+                    onChange={(e) => setBulkYearTo(e.target.value)}
+                    className={cn(
+                      "w-[120px]",
+                      bulkYearTo ? "bg-green-50 border-green-400" : "bg-white"
+                    )}
                   />
                 </div>
 
