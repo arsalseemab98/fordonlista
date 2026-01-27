@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Loader2, Car, Phone, Mail, MapPin, CheckCircle, XCircle, Star, ExternalLink } from 'lucide-react'
+import { Search, Loader2, Phone, Mail, MapPin, CheckCircle, XCircle, Star, ExternalLink } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -101,24 +101,26 @@ export function RegNrSearch() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
             type="text"
-            placeholder="Sök reg.nr..."
+            placeholder="Sök lead reg.nr..."
             value={query}
             onChange={(e) => setQuery(e.target.value.toUpperCase())}
             onKeyDown={handleKeyDown}
-            className="pl-9 w-[180px] md:w-[220px] h-9 uppercase font-mono"
+            className="pl-9 w-[160px] md:w-[180px] h-9 uppercase font-mono"
             maxLength={7}
           />
         </div>
         <Button
           size="sm"
+          variant="outline"
           onClick={handleSearch}
           disabled={isLoading || query.trim().length < 2}
           className="h-9"
+          title="Sök lead via reg.nr"
         >
           {isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
-            <Car className="h-4 w-4" />
+            <Search className="h-4 w-4" />
           )}
         </Button>
       </div>

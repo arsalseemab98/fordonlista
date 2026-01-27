@@ -13,6 +13,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { CarInfoSearch } from './carinfo-search'
+import { RegNrSearch } from '@/components/prospekt-typer/reg-nr-search'
 
 interface HeaderProps {
   title: string
@@ -32,7 +33,12 @@ export function Header({ title, description }: HeaderProps) {
 
       {/* Right Section */}
       <div className="flex items-center gap-4">
-        {/* Car.info Search */}
+        {/* Lead Search (reg.nr → lead status) */}
+        <RegNrSearch />
+
+        <div className="h-6 w-px bg-gray-200" />
+
+        {/* Car.info Search (reg.nr → fordonsdata) */}
         <CarInfoSearch />
 
         {/* Notifications */}

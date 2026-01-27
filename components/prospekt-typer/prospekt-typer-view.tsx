@@ -56,7 +56,6 @@ import {
   ChevronRight
 } from 'lucide-react'
 import { type PeriodGap } from '@/lib/time-period-utils'
-import { RegNrSearch } from './reg-nr-search'
 import { createProspectType, deleteProspectType, type ProspectType } from '@/app/prospekt-typer/actions'
 
 interface ProspektStats {
@@ -494,18 +493,21 @@ export function ProspektTyperView({
 
   return (
     <div className="space-y-6">
-      {/* Top bar: Search + Archive Toggle */}
-      <div className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-lg border">
-        <div className="flex items-center gap-4">
-          <RegNrSearch />
-        </div>
+      {/* Archive Toggle */}
+      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Archive className="h-4 w-4 text-gray-500" />
-            <Label htmlFor="archive-toggle" className="text-sm text-muted-foreground">
-              Inkl. arkiv
-            </Label>
+          <Archive className="h-5 w-5 text-gray-500" />
+          <div>
+            <p className="font-medium">Inkludera arkiverade leads</p>
+            <p className="text-sm text-muted-foreground">
+              Visa även leads med status &quot;prospekt_archive&quot; i statistiken
+            </p>
           </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Label htmlFor="archive-toggle" className="text-sm text-muted-foreground">
+            {includeArchive ? 'På' : 'Av'}
+          </Label>
           <Switch
             id="archive-toggle"
             checked={includeArchive}
