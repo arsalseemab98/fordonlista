@@ -2672,10 +2672,10 @@ export function PlaygroundView({
                   <TableHead className="w-[150px]">Prospekt-typ</TableHead>
                   <TableHead className="w-[130px]">Status</TableHead>
                   <TableHead className="w-[130px]">Aktivitet</TableHead>
-                  <TableHead className="w-[100px]">
+                  <TableHead className="w-[170px]">
                     <Tooltip>
-                      <TooltipTrigger className="cursor-help underline decoration-dotted">Datum</TooltipTrigger>
-                      <TooltipContent>Dataperiod start (importdatum)</TooltipContent>
+                      <TooltipTrigger className="cursor-help underline decoration-dotted">Bilprospekt</TooltipTrigger>
+                      <TooltipContent>Bilprospekt dataperiod (från – till)</TooltipContent>
                     </Tooltip>
                   </TableHead>
                   {/* Car.info columns */}
@@ -3062,13 +3062,27 @@ export function PlaygroundView({
                         </div>
                       </TableCell>
 
-                      {/* Datum column */}
+                      {/* Bilprospekt datum column */}
                       <TableCell>
-                        <span className="text-sm text-gray-600">
-                          {lead.data_period_start
-                            ? new Date(lead.data_period_start).toLocaleDateString('sv-SE')
-                            : '-'}
-                        </span>
+                        <div className="flex flex-col gap-0.5">
+                          {lead.data_period_start || lead.data_period_end ? (
+                            <>
+                              <span className="text-xs text-gray-600">
+                                {lead.data_period_start
+                                  ? new Date(lead.data_period_start).toLocaleDateString('sv-SE')
+                                  : '—'}
+                              </span>
+                              <span className="text-xs text-gray-400">↓</span>
+                              <span className="text-xs text-gray-600">
+                                {lead.data_period_end
+                                  ? new Date(lead.data_period_end).toLocaleDateString('sv-SE')
+                                  : '—'}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-sm text-gray-400">-</span>
+                          )}
+                        </div>
                       </TableCell>
 
                       {/* Car.info columns */}
