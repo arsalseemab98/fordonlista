@@ -5,6 +5,69 @@ Swedish vehicle lead management system for car dealers.
 
 ---
 
+## 2026-01-27 - Mileage History & Mil/yr Column
+
+**Type:** Feature
+
+**Description:**
+Lagt till mätarhistorik från besiktningar (senaste 4 åren) i car.info-integrationen. Ny synlig "Mil/år" kolumn i playground-tabellen med färgkodning för att identifiera lågmil/högmil-fordon att ringa.
+
+**Features:**
+- Extraherar mätarställningar från besiktningshändelser i fordonshistorik
+- Matchar mönster: `(\d+) mil` (×10 till km) och `(\d+) km`
+- Filtrerar till senaste 4 åren, en avläsning per år (senaste besiktningen)
+- Använder BARA riktiga besiktningsdatum, aldrig dagens datum
+- Ny "Mil/år" kolumn med färgkodning:
+  - Blå (< 800 mil/år) = Lågmil
+  - Grå (800-2500 mil/år) = Normal
+  - Röd (> 2500 mil/år) = Högmil
+- Klickbar popover på miltalskolumnen visar besiktningshistorik + snitt km/år
+- Mätarhistorik i car.info-sökdialogen
+
+**Database Changes:**
+- `vehicles.mileage_history` JSONB kolumn tillagd (migration `20260127140000`)
+
+**Files Changed:**
+- `lib/carinfo/fetch-carinfo.ts` - Mätarhistorik-extraktion, deduplicering per år
+- `app/api/carinfo/route.ts` - Samma extraktion (Edge runtime)
+- `app/actions/vehicles.ts` - Sparar mileage_history till DB
+- `app/playground/page.tsx` - Hämtar mileage_history i Supabase-query
+- `components/playground/playground-view.tsx` - Mil/år kolumn + mätarhistorik popover
+- `components/layout/carinfo-search.tsx` - Mätarhistorik-sektion i sökdialogen
+- `lib/types/database.ts` - mileage_history fält i Vehicle interface
+
+**Errors Encountered:**
+- Duplicerade mätarställningar (samma km på olika datum) - Fixat med deduplicering per år
+- Dagens datum användes som fallback - Borttaget, bara besiktningsdatum
+
+---
+
+## 2026-01-27 - Brev Cost Analytics & Prospect Types Single Source of Truth
+
+**Type:** Feature
+
+**Description:**
+Lagt till månadsvis brevkostnadsanalys på /brev-sidan och fixat prospekttyper som single source of truth på alla sidor.
+
+**Features:**
+- Brevkostnadsanalys: kollapsbart kort med månadsvis tabell (Månad, Brev, Kostnad, Konverteringar, Konv.grad)
+- Konverteringar = leads med letter_sent=true OCH status booked/interested/bought
+- Prospekttyper: alla sidor använder nu `[...new Set([...savedProspectTypes, ...availableProspectTypes])]`
+- Lågmil prospekttyp tillagd i databasen
+- Soft delete migration applicerad (deleted_at kolumn)
+
+**Database Changes:**
+- `leads.deleted_at` timestamptz kolumn (migration `20260127120000`)
+- Prospect type `lågmil` insatt i `prospect_types`
+
+**Files Changed:**
+- `app/brev/page.tsx` - Analytics query + månadsaggregering
+- `components/letters/letter-list.tsx` - BrevMonthlyStats kort med tabell
+- `components/playground/playground-view.tsx` - Prospect types single source of truth
+- `components/prospekt-typer/prospekt-typer-view.tsx` - Prospect types single source of truth
+
+---
+
 ## 2026-01-21 - Prospect Type Management System
 
 **Type:** Feature

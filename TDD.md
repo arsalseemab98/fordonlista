@@ -21,6 +21,14 @@
 - [x] Settings page
 - [x] "Ingen anmärkning" filter på playground (default, visar orörda leads)
 - [x] Prospekttyper & perioder sida med filtrering (/prospekt-typer)
+- [x] Soft delete (deleted_at) på leads med papperskorg-sida
+- [x] Prospekttyper som single source of truth (DB + lead-derived, alla sidor)
+- [x] Lågmil prospekttyp tillagd i databasen
+- [x] Brev kostnadsanalys - månadsvis tabell med brev, kostnad, konverteringar, konv.grad
+- [x] Mileage history - senaste 4 års besiktningsavläsningar från car.info
+- [x] Mil/år-kolumn i playground med färgkodning (blå=lågmil, röd=högmil)
+- [x] Mätarhistorik-popover vid klick på miltalskolumnen
+- [x] Deduplicering av mätarhistorik (en avläsning per år, bara besiktningsdatum)
 
 ---
 

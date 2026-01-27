@@ -499,27 +499,17 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // Also try dedicated mileage sections
-    $('.sprow, .spec-row, .mileage-item').each((_, el) => {
-      const label = $(el).find('.sptitle, .label').text().trim().toLowerCase()
-      if (label.includes('mätarställning') || label.includes('miltal')) {
-        const value = $(el).text().replace($(el).find('.sptitle, .label').text(), '').trim()
-        const milMatch = value.match(/([\d\s]+)\s*mil/i)
-        if (milMatch) {
-          const milNum = parseInt(milMatch[1].replace(/\s/g, ''))
-          if (milNum > 0 && milNum < 1000000) {
-            const today = new Date().toISOString().split('T')[0]
-            if (!mileageHistory.some(m => m.date === today)) {
-              mileageHistory.push({ date: today, mileage_km: milNum * 10 })
-            }
-          }
-        }
-      }
-    })
-
     if (mileageHistory.length > 0) {
       mileageHistory.sort((a, b) => b.date.localeCompare(a.date))
-      result.mileage_history = mileageHistory
+      // Keep only the latest reading per year
+      const seenYears = new Set<string>()
+      const deduplicated = mileageHistory.filter(m => {
+        const year = m.date.substring(0, 4)
+        if (seenYears.has(year)) return false
+        seenYears.add(year)
+        return true
+      })
+      result.mileage_history = deduplicated
     }
 
     // Set dates from history (most accurate source)

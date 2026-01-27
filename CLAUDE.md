@@ -84,10 +84,13 @@ const LEAD_STATUS_TYPES = [
 - **Letter Export:** Export leads to CSV for physical mail campaigns
 - **Car.info Integration:** Fetch vehicle details from car.info API
 - **AI Scoring:** Score vehicles based on learned patterns
+- **Mileage History:** Extracts last 4 years besiktning mileage readings, shows Mil/yr column with color coding (blue=low, red=high)
+- **Brev Cost Analytics:** Monthly breakdown of letters sent, cost, conversions and conversion rate on /brev page
+- **Prospect Types (Single Source of Truth):** All pages use `prospect_types` DB table merged with lead-derived types
 
 ## Database Tables (Supabase)
-- `leads` - Main lead records (phone, owner, location, status)
-- `vehicles` - Vehicle data (reg_nr, make, model, mileage, year)
+- `leads` - Main lead records (phone, owner, location, status, deleted_at for soft delete)
+- `vehicles` - Vehicle data (reg_nr, make, model, mileage, year, mileage_history JSONB)
 - `call_logs` - Call history with results
 - `filter_presets` - Saved filter configurations per page
 - `ai_patterns` - Learned AI patterns for scoring
@@ -95,6 +98,32 @@ const LEAD_STATUS_TYPES = [
 - `value_patterns` - Value transformation rules
 - `preferences` - App settings
 - `prospect_types` - Prospect type categories (name, description, color)
+
+## Car.info Mileage History
+Besiktning mileage readings extracted from car.info vehicle history.
+
+### Data Model
+```typescript
+mileage_history: Array<{ date: string; mileage_km: number }> | null
+// Example: [{ date: "2025-09-17", mileage_km: 92510 }, { date: "2024-07-04", mileage_km: 81880 }]
+```
+
+### Extraction Logic
+- Source: besiktning events in vehicle_history (`.histitem`)
+- Patterns matched: `(\d+)\s*mil` (×10 to km), `(\d+)\s*km`
+- Filtered to last 4 years, one entry per year (latest besiktning per year)
+- Only uses real besiktning dates, never today's date
+
+### Playground Mil/yr Column
+- **Blue** (`< 800 mil/yr`) = Low mileage vehicle
+- **Gray** (800-2500 mil/yr) = Normal
+- **Red** (`> 2500 mil/yr`) = High mileage vehicle
+- Primary: calculated from mileage_history (besiktning readings)
+- Fallback: total mileage / vehicle age
+
+### Scraper Files (must be kept in sync)
+- `lib/carinfo/fetch-carinfo.ts` - Server action version
+- `app/api/carinfo/route.ts` - Edge runtime version
 
 ## Lead Status (databas)
 ```typescript
