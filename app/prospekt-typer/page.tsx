@@ -50,7 +50,7 @@ export default async function ProspektTyperPage({
   const selectedProspectTypes = prospectTypeParam ? prospectTypeParam.split(',').filter(t => t.trim()) : []
   const dateFrom = typeof params.date_from === 'string' ? params.date_from : undefined
   const dateTo = typeof params.date_to === 'string' ? params.date_to : undefined
-  const includeArchive = params.include_archive === 'true'
+  const includeArchive = params.include_archive !== 'false'
 
   // Fetch letter cost from preferences
   const { data: preferences } = await supabase

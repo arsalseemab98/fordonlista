@@ -193,7 +193,7 @@ export function ProspektTyperView({
   const [selectedProspectType, setSelectedProspectType] = useState<string>(currentFilters.prospectType || 'all')
   const [dateFrom, setDateFrom] = useState(currentFilters.dateFrom || '')
   const [dateTo, setDateTo] = useState(currentFilters.dateTo || '')
-  const [includeArchive, setIncludeArchive] = useState(currentFilters.includeArchive || false)
+  const [includeArchive, setIncludeArchive] = useState(currentFilters.includeArchive !== false)
 
   // Detail modal state
   const [detailModalOpen, setDetailModalOpen] = useState(false)
@@ -413,8 +413,8 @@ export function ProspektTyperView({
       params.delete('date_to')
     }
 
-    if (includeArchive) {
-      params.set('include_archive', 'true')
+    if (!includeArchive) {
+      params.set('include_archive', 'false')
     } else {
       params.delete('include_archive')
     }
@@ -428,13 +428,13 @@ export function ProspektTyperView({
     setSelectedProspectType('all')
     setDateFrom('')
     setDateTo('')
-    setIncludeArchive(false)
+    setIncludeArchive(true)
     startTransition(() => {
       router.push('/prospekt-typer')
     })
   }, [router])
 
-  const hasActiveFilters = selectedProspectType !== 'all' || dateFrom || dateTo || includeArchive
+  const hasActiveFilters = selectedProspectType !== 'all' || dateFrom || dateTo || !includeArchive
 
   // Handle create prospect type
   const handleCreateType = async () => {
@@ -481,8 +481,8 @@ export function ProspektTyperView({
   const handleArchiveToggle = useCallback((checked: boolean) => {
     setIncludeArchive(checked)
     const params = new URLSearchParams(searchParams.toString())
-    if (checked) {
-      params.set('include_archive', 'true')
+    if (!checked) {
+      params.set('include_archive', 'false')
     } else {
       params.delete('include_archive')
     }
