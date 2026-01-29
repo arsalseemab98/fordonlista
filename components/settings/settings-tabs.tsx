@@ -805,6 +805,9 @@ function IntegrationsSettings({ carInfoTokens, biluppgifterSettings }: { carInfo
   const [isSavingCookies, setIsSavingCookies] = useState(false)
   const [cookieSaveResult, setCookieSaveResult] = useState<{ success: boolean; message: string } | null>(null)
 
+  // Browser connection status
+  const [browserConnectionStatus, setBrowserConnectionStatus] = useState<'idle' | 'checking' | 'connected' | 'not_logged_in' | 'no_tab' | 'error'>('idle')
+
   const handleSave = async () => {
     if (!refreshToken || !bearerToken) {
       toast.error('Båda tokens krävs')
@@ -935,6 +938,40 @@ function IntegrationsSettings({ carInfoTokens, biluppgifterSettings }: { carInfo
     }
   }
 
+  const handleTestBrowserConnection = async () => {
+    setBrowserConnectionStatus('checking')
+
+    try {
+      // Try to fetch from biluppgifter.se via our API that checks browser connection
+      const response = await fetch('/api/biluppgifter-browser', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'check-connection' })
+      })
+
+      const data = await response.json()
+
+      if (data.connected) {
+        setBrowserConnectionStatus('connected')
+        toast.success('Anslutning fungerar!')
+      } else if (data.error?.includes('tab')) {
+        setBrowserConnectionStatus('no_tab')
+        toast.error('Öppna biluppgifter.se i Chrome först')
+      } else if (data.error?.includes('logged')) {
+        setBrowserConnectionStatus('not_logged_in')
+        toast.error('Logga in på biluppgifter.se först')
+      } else {
+        setBrowserConnectionStatus('error')
+        toast.error(data.error || 'Kunde inte ansluta')
+      }
+    } catch {
+      // Fallback: Open biluppgifter.se and tell user to check manually
+      setBrowserConnectionStatus('idle')
+      window.open('https://biluppgifter.se', '_blank')
+      toast.info('Kontrollera att du är inloggad på biluppgifter.se')
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Biluppgifter Integration */}
@@ -984,6 +1021,32 @@ function IntegrationsSettings({ carInfoTokens, biluppgifterSettings }: { carInfo
                   <div className="flex items-center gap-1.5 text-green-700">
                     <Check className="h-4 w-4" />
                     <span>Ingen server att köra</span>
+                  </div>
+                </div>
+
+                {/* Connection Status */}
+                <div className="border-t border-green-200 pt-3 mt-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={`h-3 w-3 rounded-full ${browserConnectionStatus === 'connected' ? 'bg-green-500' : browserConnectionStatus === 'checking' ? 'bg-yellow-500 animate-pulse' : 'bg-gray-300'}`} />
+                      <span className="text-sm text-gray-700">
+                        {browserConnectionStatus === 'connected' ? '✅ Ansluten till biluppgifter.se' :
+                         browserConnectionStatus === 'checking' ? 'Testar...' :
+                         browserConnectionStatus === 'not_logged_in' ? '⚠️ Ej inloggad på biluppgifter.se' :
+                         browserConnectionStatus === 'no_tab' ? '⚠️ Öppna biluppgifter.se i Chrome' :
+                         browserConnectionStatus === 'error' ? '❌ Kunde inte ansluta' :
+                         'Ej testad'}
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleTestBrowserConnection}
+                      disabled={browserConnectionStatus === 'checking'}
+                      className="gap-1.5"
+                    >
+                      {browserConnectionStatus === 'checking' ? 'Testar...' : 'Testa anslutning'}
+                    </Button>
                   </div>
                 </div>
               </div>
