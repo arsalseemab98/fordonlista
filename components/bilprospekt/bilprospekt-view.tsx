@@ -55,6 +55,12 @@ interface Prospect {
   mileage: number | null
   leasing: boolean
   credit: boolean
+  seller_name: string | null
+  chassis: string | null
+  in_service: string | null
+  cylinder_volume: number | null
+  fwd: string | null
+  new_or_old: string | null
 }
 
 interface BilprospektViewProps {
@@ -332,18 +338,25 @@ export function BilprospektView({
                   <TableHead>Bränsle</TableHead>
                   <TableHead>Växel</TableHead>
                   <TableHead>HK</TableHead>
+                  <TableHead>CC</TableHead>
                   <TableHead>Mil</TableHead>
+                  <TableHead>Färg</TableHead>
                   <TableHead>Ägare</TableHead>
                   <TableHead>Ort</TableHead>
                   <TableHead>Köpt</TableHead>
+                  <TableHead>Inköpsplats</TableHead>
+                  <TableHead>Ny/Begagnad</TableHead>
                   <TableHead>Innehav</TableHead>
+                  <TableHead>I trafik</TableHead>
+                  <TableHead>4WD</TableHead>
+                  <TableHead>Chassi</TableHead>
                   <TableHead>Finansiering</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {prospects.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={15} className="h-32 text-center">
+                    <TableCell colSpan={22} className="h-32 text-center">
                       <div className="flex flex-col items-center gap-2 text-muted-foreground">
                         <Database className="w-10 h-10 opacity-20" />
                         <p>Inga prospekt hittades</p>
@@ -384,7 +397,9 @@ export function BilprospektView({
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm">{prospect.engine_power && prospect.engine_power > 0 ? prospect.engine_power : '-'}</TableCell>
+                      <TableCell className="text-sm">{prospect.cylinder_volume || '-'}</TableCell>
                       <TableCell className="text-sm">{prospect.mileage || '-'}</TableCell>
+                      <TableCell className="text-sm">{prospect.color || '-'}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
                           {prospect.owner_type === 'company' ? (
@@ -401,8 +416,33 @@ export function BilprospektView({
                       <TableCell className="text-sm whitespace-nowrap">
                         {prospect.date_acquired ? new Date(prospect.date_acquired).toLocaleDateString('sv-SE') : '-'}
                       </TableCell>
+                      <TableCell className="text-sm max-w-[150px] truncate" title={prospect.seller_name || ''}>
+                        {prospect.seller_name || '-'}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {prospect.new_or_old ? (
+                          <Badge variant="outline" className={prospect.new_or_old === 'Ny' ? 'bg-green-50 text-green-800' : 'bg-gray-50'}>
+                            {prospect.new_or_old}
+                          </Badge>
+                        ) : '-'}
+                      </TableCell>
                       <TableCell className="text-sm whitespace-nowrap">
                         {calculatePossession(prospect.date_acquired)}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {prospect.in_service === 'Ja' ? (
+                          <Badge variant="outline" className="bg-green-50 text-green-800">Ja</Badge>
+                        ) : prospect.in_service === 'Nej' ? (
+                          <Badge variant="outline" className="bg-red-50 text-red-800">Nej</Badge>
+                        ) : '-'}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {prospect.fwd === 'Ja' ? (
+                          <Badge variant="outline" className="bg-blue-50 text-blue-800">4WD</Badge>
+                        ) : '-'}
+                      </TableCell>
+                      <TableCell className="text-sm font-mono text-xs max-w-[120px] truncate" title={prospect.chassis || ''}>
+                        {prospect.chassis || '-'}
                       </TableCell>
                       <TableCell className="text-sm">
                         {prospect.credit && <Badge variant="outline" className="bg-yellow-50 text-yellow-800 mr-1">Kredit</Badge>}
