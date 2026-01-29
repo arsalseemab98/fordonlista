@@ -963,159 +963,84 @@ function IntegrationsSettings({ carInfoTokens, biluppgifterSettings }: { carInfo
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Plug className="h-5 w-5 text-blue-600" />
-            Biluppgifter.se
+            Biluppgifter.se (Lokal API)
           </CardTitle>
           <CardDescription>
-            Hämta miltal, ägare, besiktning m.m. från biluppgifter.se
+            Hämta miltal, ägare, besiktning m.m. från biluppgifter.se via lokal server
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Browser-based method - Recommended */}
-          <div className="rounded-lg border-2 border-green-300 bg-green-50 p-4">
+        <CardContent className="space-y-4">
+          {/* Start Instructions - One click */}
+          <div className="rounded-lg border-2 border-blue-300 bg-blue-50 p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="font-semibold text-blue-900">1. Starta servern</p>
+                <p className="text-sm text-blue-700 mt-1">Öppna Terminal, klistra in kommandot och tryck Enter</p>
+              </div>
+              <Button
+                onClick={() => {
+                  navigator.clipboard.writeText('cd ~/Desktop/biluppgifter-api && uvicorn server:app --port 3456')
+                  toast.success('Kommando kopierat! Klistra in i Terminal.')
+                }}
+                className="gap-2 bg-blue-600 hover:bg-blue-700 shrink-0"
+              >
+                <ClipboardPaste className="h-4 w-4" />
+                Kopiera kommando
+              </Button>
+            </div>
+          </div>
+
+          {/* Cookie Instructions */}
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
             <div className="flex gap-3">
-              <Check className="h-6 w-6 text-green-600 shrink-0 mt-0.5" />
-              <div className="space-y-3">
-                <div>
-                  <p className="font-semibold text-green-900 text-lg">✨ Webbläsar-metod (Rekommenderad)</p>
-                  <p className="text-sm text-green-700 mt-1">Använder din inloggade Chrome-session. Inga cookies att kopiera!</p>
-                </div>
-
-                <div className="bg-white rounded-lg border border-green-200 p-3 space-y-2">
-                  <p className="font-medium text-green-800 text-sm">Så här fungerar det:</p>
-                  <ol className="text-sm text-green-700 space-y-1.5 list-decimal list-inside">
-                    <li>Logga in på <a href="https://biluppgifter.se" target="_blank" rel="noopener noreferrer" className="underline font-medium hover:text-green-900">biluppgifter.se</a> i Chrome</li>
-                    <li>Håll fliken öppen (kan vara i bakgrunden)</li>
-                    <li>Klicka &quot;Hämta biluppgifter&quot; i Bilprospekt-sidan</li>
-                  </ol>
-                </div>
-
-                <div className="flex flex-wrap gap-4 text-xs">
-                  <div className="flex items-center gap-1.5 text-green-700">
-                    <Check className="h-4 w-4" />
-                    <span>Ingen cookie-kopiering</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-green-700">
-                    <Check className="h-4 w-4" />
-                    <span>Ingen 2h-timeout</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-green-700">
-                    <Check className="h-4 w-4" />
-                    <span>~165ms per fordon</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-green-700">
-                    <Check className="h-4 w-4" />
-                    <span>Ingen server att köra</span>
-                  </div>
-                </div>
-
-                {/* Connection Status */}
-                <div className="border-t border-green-200 pt-3 mt-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className={`h-3 w-3 rounded-full ${browserConnectionStatus === 'connected' ? 'bg-green-500' : browserConnectionStatus === 'checking' ? 'bg-yellow-500 animate-pulse' : 'bg-gray-300'}`} />
-                      <span className="text-sm text-gray-700">
-                        {browserConnectionStatus === 'connected' ? '✅ Ansluten till biluppgifter.se' :
-                         browserConnectionStatus === 'checking' ? 'Testar...' :
-                         browserConnectionStatus === 'not_logged_in' ? '⚠️ Ej inloggad på biluppgifter.se' :
-                         browserConnectionStatus === 'no_tab' ? '⚠️ Öppna biluppgifter.se i Chrome' :
-                         browserConnectionStatus === 'error' ? '❌ Kunde inte ansluta' :
-                         'Ej testad'}
-                      </span>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleTestBrowserConnection}
-                      disabled={browserConnectionStatus === 'checking'}
-                      className="gap-1.5"
-                    >
-                      {browserConnectionStatus === 'checking' ? 'Testar...' : 'Testa anslutning'}
-                    </Button>
-                  </div>
-                </div>
+              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-2">
+                <p className="font-semibold text-amber-900">2. Uppdatera cookies (vid 403-fel)</p>
+                <p className="text-sm text-amber-700">cf_clearance löper ut var ~2 timme. Så här förnyar du:</p>
+                <ol className="text-sm text-amber-700 space-y-1 list-decimal list-inside">
+                  <li>Logga in på <a href="https://biluppgifter.se" target="_blank" rel="noopener noreferrer" className="underline font-medium">biluppgifter.se</a></li>
+                  <li>Tryck F12 → Application → Cookies</li>
+                  <li>Kopiera <code className="bg-amber-100 px-1 rounded">session</code> och <code className="bg-amber-100 px-1 rounded">cf_clearance</code></li>
+                  <li>Uppdatera <code className="bg-amber-100 px-1 rounded">~/Desktop/biluppgifter-api/.env</code></li>
+                  <li>Starta om servern</li>
+                </ol>
               </div>
             </div>
           </div>
 
-          {/* Alternative: Local API method */}
-          <details className="rounded-lg border border-gray-200 bg-gray-50">
-            <summary className="p-4 cursor-pointer font-medium text-gray-700 hover:bg-gray-100">
-              🔧 Alternativ: Lokal API-server (avancerat)
-            </summary>
-            <div className="p-4 pt-0 space-y-4">
-              <p className="text-sm text-gray-600">
-                Om webbläsar-metoden inte fungerar kan du köra en lokal server istället.
-                Kräver manuell cookie-uppdatering var ~2 timme.
-              </p>
-
-              {/* Start Instructions - One click */}
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-blue-900 text-sm">Starta biluppgifter-api:</p>
-                    <p className="text-xs text-blue-600 mt-0.5">Öppna Terminal, klistra in och tryck Enter</p>
-                  </div>
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      navigator.clipboard.writeText('cd ~/Desktop/biluppgifter-api && uvicorn server:app --port 3456')
-                      toast.success('Kommando kopierat! Klistra in i Terminal.')
-                    }}
-                    className="gap-1.5 bg-blue-600 hover:bg-blue-700 shrink-0"
-                  >
-                    <ClipboardPaste className="h-3.5 w-3.5" />
-                    Kopiera kommando
-                  </Button>
-                </div>
-              </div>
-
-              {/* Cookie warning */}
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                <div className="flex gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-medium text-amber-900 text-sm">Cookies krävs</p>
-                    <p className="text-xs text-amber-700 mt-1">
-                      Kopiera <code className="bg-amber-100 px-1 rounded">session</code> och <code className="bg-amber-100 px-1 rounded">cf_clearance</code> från
-                      DevTools → Application → Cookies till <code className="bg-amber-100 px-1 rounded">~/Desktop/biluppgifter-api/.env</code>
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* API URL */}
-              <div className="space-y-2">
-                <Label htmlFor="biluppgifter-url" className="text-sm">API URL</Label>
-                <Input
-                  id="biluppgifter-url"
-                  type="text"
-                  placeholder="http://localhost:3456"
-                  value={biluppgifterUrl}
-                  onChange={(e) => setBiluppgifterUrl(e.target.value)}
-                  className="font-mono text-sm"
-                />
-              </div>
-
-              {/* Test Result */}
-              {biluppgifterTestResult && (
-                <div className={`rounded-lg p-2 text-sm ${biluppgifterTestResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                  {biluppgifterTestResult.success ? <Check className="inline h-4 w-4 mr-1" /> : <X className="inline h-4 w-4 mr-1" />}
-                  {biluppgifterTestResult.message}
-                </div>
-              )}
-
-              {/* Buttons */}
-              <div className="flex gap-2">
-                <Button size="sm" onClick={handleSaveBiluppgifter} disabled={isSavingBiluppgifter} className="gap-1.5">
-                  <Save className="h-3.5 w-3.5" />
-                  {isSavingBiluppgifter ? 'Sparar...' : 'Spara'}
-                </Button>
-                <Button size="sm" variant="outline" onClick={handleTestBiluppgifter} disabled={isTestingBiluppgifter}>
-                  {isTestingBiluppgifter ? 'Testar...' : 'Testa'}
-                </Button>
-              </div>
+          {/* API URL & Test */}
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="biluppgifter-url">API URL</Label>
+              <Input
+                id="biluppgifter-url"
+                type="text"
+                placeholder="http://localhost:3456"
+                value={biluppgifterUrl}
+                onChange={(e) => setBiluppgifterUrl(e.target.value)}
+                className="font-mono text-sm"
+              />
             </div>
-          </details>
+
+            {/* Test Result */}
+            {biluppgifterTestResult && (
+              <div className={`rounded-lg p-3 ${biluppgifterTestResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                {biluppgifterTestResult.success ? <Check className="inline h-4 w-4 mr-2" /> : <X className="inline h-4 w-4 mr-2" />}
+                {biluppgifterTestResult.message}
+              </div>
+            )}
+
+            {/* Buttons */}
+            <div className="flex gap-2">
+              <Button onClick={handleSaveBiluppgifter} disabled={isSavingBiluppgifter} className="gap-2">
+                <Save className="h-4 w-4" />
+                {isSavingBiluppgifter ? 'Sparar...' : 'Spara URL'}
+              </Button>
+              <Button variant="outline" onClick={handleTestBiluppgifter} disabled={isTestingBiluppgifter}>
+                {isTestingBiluppgifter ? 'Testar...' : 'Testa anslutning'}
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
