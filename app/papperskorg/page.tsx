@@ -20,6 +20,7 @@ export default async function PapperskorgPage() {
       county,
       status,
       deleted_at,
+      bilprospekt_date,
       vehicles (
         id,
         reg_nr,

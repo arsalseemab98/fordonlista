@@ -42,6 +42,7 @@ interface Lead {
   county?: string
   status: string
   deleted_at: string
+  bilprospekt_date?: string | null
   vehicles: Vehicle[]
 }
 
@@ -213,6 +214,7 @@ export function TrashView({ leads, totalCount }: TrashViewProps) {
                   <TableHead>Ägare</TableHead>
                   <TableHead className="w-[100px]">Län</TableHead>
                   <TableHead className="w-[100px]">Status</TableHead>
+                  <TableHead className="w-[100px]">BP Datum</TableHead>
                   <TableHead className="w-[120px]">Raderad</TableHead>
                   <TableHead className="w-[100px]">Dagar kvar</TableHead>
                   <TableHead className="w-[180px] text-right">Åtgärder</TableHead>
@@ -270,6 +272,17 @@ export function TrashView({ leads, totalCount }: TrashViewProps) {
                         <Badge variant="outline" className="text-xs">
                           {lead.status}
                         </Badge>
+                      </TableCell>
+
+                      {/* BP Datum */}
+                      <TableCell>
+                        {lead.bilprospekt_date ? (
+                          <span className="text-sm text-green-700 font-medium">
+                            {new Date(lead.bilprospekt_date).toLocaleDateString('sv-SE')}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-gray-400">-</span>
+                        )}
                       </TableCell>
 
                       <TableCell>

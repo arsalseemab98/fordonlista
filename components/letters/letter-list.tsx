@@ -56,6 +56,7 @@ interface Lead {
   phone: string | null
   letter_sent: boolean | null
   letter_sent_date: string | null
+  bilprospekt_date?: string | null
   vehicles: Vehicle[]
 }
 
@@ -545,6 +546,7 @@ export function LetterList({ leads, counts, currentFilter, letterCost, monthlySt
                   <TableHead>Ägare</TableHead>
                   <TableHead>Ort</TableHead>
                   <TableHead>Telefon</TableHead>
+                  <TableHead className="w-[100px]">BP Datum</TableHead>
                   <TableHead>Brev skickat</TableHead>
                   <TableHead className="w-[80px]">Åtgärd</TableHead>
                 </TableRow>
@@ -608,6 +610,17 @@ export function LetterList({ leads, counts, currentFilter, letterCost, monthlySt
                               <PhoneOff className="h-3 w-3" />
                               Saknas
                             </div>
+                          )
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {vIndex === 0 && (
+                          lead.bilprospekt_date ? (
+                            <span className="text-sm text-green-700 font-medium">
+                              {new Date(lead.bilprospekt_date).toLocaleDateString('sv-SE')}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400">-</span>
                           )
                         )}
                       </TableCell>

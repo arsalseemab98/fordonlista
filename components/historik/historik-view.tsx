@@ -119,6 +119,7 @@ interface Lead {
   sent_to_call_at?: string | null
   sent_to_brev_at?: string | null
   data_period_start?: string | null
+  bilprospekt_date?: string | null
   extra_data?: Record<string, unknown>
   created_at: string
   vehicles: Vehicle[]
@@ -832,6 +833,7 @@ export function HistorikView({
                   <TableHead className="w-[120px]">Prospekt-typ</TableHead>
                   <TableHead className="w-[100px]">Status</TableHead>
                   <TableHead className="w-[120px]">Aktivitet</TableHead>
+                  <TableHead className="w-[90px]">BP Datum</TableHead>
                   <TableHead className="w-[90px]">Datum</TableHead>
                   <TableHead className="w-[60px] text-center">Ägare</TableHead>
                   <TableHead className="w-[70px] text-center">Värd. F</TableHead>
@@ -1052,6 +1054,17 @@ export function HistorikView({
                             </TooltipProvider>
                           )}
                         </div>
+                      </TableCell>
+
+                      {/* BP Datum */}
+                      <TableCell>
+                        {lead.bilprospekt_date ? (
+                          <span className="text-sm text-green-700 font-medium">
+                            {new Date(lead.bilprospekt_date).toLocaleDateString('sv-SE')}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-gray-400">-</span>
+                        )}
                       </TableCell>
 
                       {/* Datum */}

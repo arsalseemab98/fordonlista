@@ -18,7 +18,8 @@ import {
   FlaskConical,
   History,
   Layers,
-  Trash2
+  Trash2,
+  Database
 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -35,6 +36,7 @@ const navigation = [
   { name: 'Fordon', href: '/vehicles', icon: Car, description: 'Fordonslista' },
   { name: 'Import', href: '/import', icon: Upload, description: 'Ladda upp Excel' },
   { name: 'AI Insikter', href: '/ai', icon: Brain, description: 'Mönster & analys' },
+  { name: 'Bilprospekt', href: '/bilprospekt', icon: Database, description: 'Sök prospekt' },
 ]
 
 const secondaryNav = [

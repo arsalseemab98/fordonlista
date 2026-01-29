@@ -48,6 +48,7 @@ async function getLeadsForLetters(filter: string) {
       phone,
       letter_sent,
       letter_sent_date,
+      bilprospekt_date,
       vehicles (
         id,
         reg_nr,

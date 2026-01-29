@@ -99,6 +99,7 @@ export default async function HistorikPage({
           sent_to_call_at,
           sent_to_brev_at,
           data_period_start,
+          bilprospekt_date,
           extra_data,
           created_at,
           vehicles (

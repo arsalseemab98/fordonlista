@@ -65,6 +65,7 @@ interface Lead {
   source?: string
   created_at: string
   updated_at: string
+  bilprospekt_date?: string | null
   vehicles: Vehicle[]
   call_logs: CallLog[]
 }
@@ -246,6 +247,7 @@ export function LeadsTable({ leads, totalPages, currentPage }: LeadsTableProps) 
                 <TableHead>Fordon</TableHead>
                 <TableHead className="w-[120px]">Miltal</TableHead>
                 <TableHead className="w-[100px]">Status</TableHead>
+                <TableHead className="w-[100px]">BP Datum</TableHead>
                 <TableHead className="w-[140px]">Senaste kontakt</TableHead>
                 <TableHead className="w-[100px]"></TableHead>
               </TableRow>
@@ -350,6 +352,17 @@ export function LeadsTable({ leads, totalPages, currentPage }: LeadsTableProps) 
                       <Badge className={cn("font-medium", status.className)}>
                         {status.label}
                       </Badge>
+                    </TableCell>
+
+                    {/* BP Datum */}
+                    <TableCell>
+                      {lead.bilprospekt_date ? (
+                        <span className="text-sm text-green-700 font-medium">
+                          {new Date(lead.bilprospekt_date).toLocaleDateString('sv-SE')}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-gray-400">-</span>
+                      )}
                     </TableCell>
 
                     {/* Last contact */}
