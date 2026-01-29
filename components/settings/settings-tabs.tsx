@@ -788,8 +788,20 @@ function IntegrationsSettings({ carInfoTokens, biluppgifterSettings }: { carInfo
   const [isTesting, setIsTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
 
-  // Biluppgifter state
-  const [biluppgifterUrl, setBiluppgifterUrl] = useState(biluppgifterSettings?.refresh_token || 'http://localhost:3456')
+  // Biluppgifter state - parse cookies from JSON if available
+  const parsedBiluppgifterCookies = (() => {
+    try {
+      if (biluppgifterSettings?.refresh_token) {
+        return JSON.parse(biluppgifterSettings.refresh_token)
+      }
+    } catch {}
+    return { session: '', cf_clearance: '', antiforgery: '' }
+  })()
+  const [buSession, setBuSession] = useState(parsedBiluppgifterCookies.session || '')
+  const [buCfClearance, setBuCfClearance] = useState(parsedBiluppgifterCookies.cf_clearance || '')
+  const [buAntiforgery, setBuAntiforgery] = useState(parsedBiluppgifterCookies.antiforgery || '')
+  const [showBuSession, setShowBuSession] = useState(false)
+  const [showBuCfClearance, setShowBuCfClearance] = useState(false)
   const [isSavingBiluppgifter, setIsSavingBiluppgifter] = useState(false)
   const [isTestingBiluppgifter, setIsTestingBiluppgifter] = useState(false)
   const [biluppgifterTestResult, setBiluppgifterTestResult] = useState<{ success: boolean; message: string } | null>(null)
@@ -841,22 +853,30 @@ function IntegrationsSettings({ carInfoTokens, biluppgifterSettings }: { carInfo
   }
 
   const handleSaveBiluppgifter = async () => {
-    if (!biluppgifterUrl) {
-      toast.error('API URL krävs')
+    if (!buSession) {
+      toast.error('Session cookie krävs')
       return
     }
 
     setIsSavingBiluppgifter(true)
+
+    // Store cookies as JSON
+    const cookiesJson = JSON.stringify({
+      session: buSession,
+      cf_clearance: buCfClearance,
+      antiforgery: buAntiforgery,
+    })
+
     const result = await saveBiluppgifterSettings({
-      api_url: biluppgifterUrl
+      api_url: cookiesJson // Using api_url field to store JSON
     })
     setIsSavingBiluppgifter(false)
 
     if (result.success) {
-      toast.success('Biluppgifter-inställningar sparade')
+      toast.success('Biluppgifter cookies sparade')
       router.refresh()
     } else {
-      toast.error(result.error || 'Kunde inte spara inställningar')
+      toast.error(result.error || 'Kunde inte spara cookies')
     }
   }
 
@@ -865,15 +885,24 @@ function IntegrationsSettings({ carInfoTokens, biluppgifterSettings }: { carInfo
     setBiluppgifterTestResult(null)
 
     try {
-      const response = await fetch(`${biluppgifterUrl}/health`)
+      // Test by calling the internal API route
+      const response = await fetch('/api/biluppgifter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reg_number: 'ABC123' })
+      })
 
-      if (response.ok) {
+      const data = await response.json()
+
+      if (data.error) {
+        setBiluppgifterTestResult({ success: false, message: data.error })
+      } else if (data.success) {
         setBiluppgifterTestResult({ success: true, message: 'Anslutningen fungerar!' })
       } else {
-        setBiluppgifterTestResult({ success: false, message: `HTTP ${response.status}: ${response.statusText}` })
+        setBiluppgifterTestResult({ success: false, message: 'Okänt svar från API' })
       }
-    } catch (error) {
-      setBiluppgifterTestResult({ success: false, message: 'Kunde inte ansluta till API. Kontrollera att servern körs.' })
+    } catch {
+      setBiluppgifterTestResult({ success: false, message: 'Kunde inte ansluta till API' })
     }
 
     setIsTestingBiluppgifter(false)
@@ -886,10 +915,10 @@ function IntegrationsSettings({ carInfoTokens, biluppgifterSettings }: { carInfo
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Plug className="h-5 w-5 text-blue-600" />
-            Biluppgifter API
+            Biluppgifter.se Integration
           </CardTitle>
           <CardDescription>
-            Konfigurera anslutning till biluppgifter-api för att hämta miltal, ägare, besiktning m.m.
+            Hämta miltal, ägare, besiktning och adressfordon direkt från biluppgifter.se
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -898,30 +927,83 @@ function IntegrationsSettings({ carInfoTokens, biluppgifterSettings }: { carInfo
             <div className="flex gap-2">
               <Info className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
               <div className="space-y-2">
-                <p className="font-medium text-blue-900">Så här startar du biluppgifter-api:</p>
+                <p className="font-medium text-blue-900">Så här hittar du dina cookies:</p>
                 <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
-                  <li>Öppna terminal i <code className="bg-blue-100 px-1 rounded">biluppgifter-api</code> mappen</li>
-                  <li>Kör <code className="bg-blue-100 px-1 rounded">uvicorn server:app --port 3456</code></li>
-                  <li>API:et körs på <code className="bg-blue-100 px-1 rounded">http://localhost:3456</code></li>
+                  <li>Logga in på <a href="https://biluppgifter.se" target="_blank" rel="noopener noreferrer" className="underline">biluppgifter.se</a></li>
+                  <li>Öppna DevTools (Cmd+Option+I på Mac, F12 på Windows)</li>
+                  <li>Gå till Application → Cookies → biluppgifter.se</li>
+                  <li>Kopiera värdena för <code className="bg-blue-100 px-1 rounded">session</code>, <code className="bg-blue-100 px-1 rounded">cf_clearance</code> och <code className="bg-blue-100 px-1 rounded">.AspNetCore.Antiforgery...</code></li>
                 </ol>
               </div>
             </div>
           </div>
 
-          {/* API URL */}
+          {/* Session Cookie */}
           <div className="space-y-2">
-            <Label htmlFor="biluppgifter-url">API URL</Label>
+            <Label htmlFor="bu-session">Session Cookie</Label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  id="bu-session"
+                  type={showBuSession ? 'text' : 'password'}
+                  placeholder="CfDJ8Bljl%2B5gH95CjNdduDxPUH7o..."
+                  value={buSession}
+                  onChange={(e) => setBuSession(e.target.value)}
+                  className="pr-10 font-mono text-sm"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                  onClick={() => setShowBuSession(!showBuSession)}
+                >
+                  {showBuSession ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* CF Clearance Cookie */}
+          <div className="space-y-2">
+            <Label htmlFor="bu-cf-clearance">Cloudflare Clearance (cf_clearance)</Label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  id="bu-cf-clearance"
+                  type={showBuCfClearance ? 'text' : 'password'}
+                  placeholder="eHX6MGJtAWGhUdEmIJ_Tpo7emTSe75..."
+                  value={buCfClearance}
+                  onChange={(e) => setBuCfClearance(e.target.value)}
+                  className="pr-10 font-mono text-sm"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                  onClick={() => setShowBuCfClearance(!showBuCfClearance)}
+                >
+                  {showBuCfClearance ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500">
+              Denna cookie löper ut regelbundet - uppdatera om du får Cloudflare-fel.
+            </p>
+          </div>
+
+          {/* Antiforgery Cookie */}
+          <div className="space-y-2">
+            <Label htmlFor="bu-antiforgery">Antiforgery Token</Label>
             <Input
-              id="biluppgifter-url"
+              id="bu-antiforgery"
               type="text"
-              placeholder="http://localhost:3456"
-              value={biluppgifterUrl}
-              onChange={(e) => setBiluppgifterUrl(e.target.value)}
+              placeholder=".AspNetCore.Antiforgery..."
+              value={buAntiforgery}
+              onChange={(e) => setBuAntiforgery(e.target.value)}
               className="font-mono text-sm"
             />
-            <p className="text-xs text-gray-500">
-              Standard: http://localhost:3456 (lokal server)
-            </p>
           </div>
 
           {/* Test Result */}
@@ -943,7 +1025,7 @@ function IntegrationsSettings({ carInfoTokens, biluppgifterSettings }: { carInfo
           <div className="flex gap-2">
             <Button onClick={handleSaveBiluppgifter} disabled={isSavingBiluppgifter} className="gap-2">
               <Save className="h-4 w-4" />
-              {isSavingBiluppgifter ? 'Sparar...' : 'Spara inställningar'}
+              {isSavingBiluppgifter ? 'Sparar...' : 'Spara cookies'}
             </Button>
             <Button variant="outline" onClick={handleTestBiluppgifter} disabled={isTestingBiluppgifter}>
               {isTestingBiluppgifter ? 'Testar...' : 'Testa anslutning'}
