@@ -36,6 +36,11 @@
 - [x] Lågmil arkivdata (251 brev, Norrbotten)
 - [x] Bilprospekt-datumfält i playground (blockerar skicka utan datum)
 - [x] Bilprospekt-datum badge i header (playground, brev, to-call, prospekt-typer)
+- [x] Bilprospekt-sida (/bilprospekt) med MCP-integration och Supabase-tabell
+- [x] Bilprospekt-filter (region, märke, modell, bränsle, årsmodell, innehavstid, prospekttyp)
+- [x] Bilprospekt dedikerad tabell (bilprospekt_prospects) med 27 kolumner
+- [x] Biluppgifter API-integration för miltal-hämtning
+- [x] Bulk miltal-hämtning med rate limiting (5 åt gången, 1s delay)
 
 ---
 

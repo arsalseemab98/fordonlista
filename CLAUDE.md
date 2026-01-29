@@ -17,6 +17,7 @@
 | Route | Description |
 |-------|-------------|
 | `/playground` | Huvudsida - ENDAST orörda leads (ej skickade till ring/brev), bulk actions |
+| `/bilprospekt` | Sök prospekt från Bilprospekt MCP, hämta miltal från biluppgifter-api |
 | `/to-call` | Leads queue for calling (new, callback, no_answer statuses) |
 | `/leads` | All leads with status management |
 | `/leads/[id]` | Lead detail page with call logging |
@@ -101,6 +102,7 @@ const LEAD_STATUS_TYPES = [
 - `value_patterns` - Value transformation rules
 - `preferences` - App settings (letter_cost, bilprospekt_updated_at, filter settings)
 - `prospect_types` - Prospect type categories (name, description, color): nyköpt_bil, avställd, lågmil, dödsbo
+- `bilprospekt_prospects` - Bilprospekt data (bp_id, reg_number, brand, model, mileage, etc.)
 
 ## Car.info Mileage History
 Besiktning mileage readings extracted from car.info vehicle history.
@@ -220,10 +222,92 @@ FilterPresets component available on all main pages:
 - Set default preset (auto-loads on page visit)
 - Quick-load saved presets
 
+## Bilprospekt Page (`/bilprospekt`)
+Sök och filtrera prospekt direkt från Bilprospekt MCP API med egen dedikerad databas-tabell.
+
+### Features
+- Sökfilter: Region, Märke, Modell, Bränsle, Årsmodell, Innehavstid, Prospekttyp
+- Dedikerad tabell (`bilprospekt_prospects`) med full fordonsdata
+- Bulk-val och actions
+- Paginering (50 per sida)
+- Hämta miltal från biluppgifter-api
+
+### Database Table: `bilprospekt_prospects`
+```sql
+bp_id, reg_number, brand, model, fuel, color, car_year, date_acquired,
+owner_name, owner_type, owner_gender, owner_birth_year, address, zip,
+municipality, region, region_code, kaross, transmission, engine_power,
+mileage, weight, leasing, credit, seller_name, chassis, in_service,
+cylinder_volume, fwd, new_or_old, created_at, updated_at
+```
+
+### MCP Tools Used
+- `mcp__bilprospekt__prospect_search` - Huvudsökning
+- `mcp__bilprospekt__get_regions` - Hämta regioner
+- `mcp__bilprospekt__get_brands` - Hämta märken
+
+---
+
+## Biluppgifter API Integration
+Hämtar fordonsdata och ägarinfo från biluppgifter.se via lokal API-server.
+
+### API Server
+- **URL:** `http://localhost:3456` (env: `BILUPPGIFTER_API_URL`)
+- **Repo:** `/Users/arsalseemab/Desktop/biluppgifter-api`
+- **Type:** FastAPI REST server som scrapar biluppgifter.se
+
+### Endpoints
+| Endpoint | Beskrivning |
+|----------|-------------|
+| `GET /api/vehicle/{regnr}` | Hämta fordonsdata (miltal, skatt, besiktning, ägare) |
+| `GET /api/profile/{profile_id}` | Hämta detaljerad ägarprofil (adress, telefon, ålder) |
+| `GET /api/address/{regnr}` | Hämta alla fordon på ägarens adress |
+| `GET /health` | Health check |
+
+### Data som hämtas
+**Fordonsdata:**
+- Mätarställning (mil)
+- Antal ägare
+- Årskatt (kr)
+- Besiktning giltig till
+
+**Ägardata:**
+- Namn, ålder
+- Adress (gatuadress, postnummer, ort)
+- Telefonnummer
+- Andra fordon på adressen
+
+### Integration Files
+- `lib/biluppgifter/fetch-biluppgifter.ts` - API client (server action)
+- `app/bilprospekt/actions.ts` - Server actions för datahämtning
+
+### Functions
+```typescript
+fetchBiluppgifterVehicle(regnr)    // Endast fordonsdata (snabbare)
+fetchBiluppgifterComplete(regnr)   // Fordon + ägarprofil + adressfordon
+fetchBiluppgifterBatch(regnrs, fetchComplete)  // Batch (3 åt gången, 1.5s delay)
+checkBiluppgifterHealth()          // Health check
+```
+
+### Database Columns (bu_*)
+```sql
+bu_num_owners, bu_annual_tax, bu_inspection_until,
+bu_owner_age, bu_owner_address, bu_owner_postal_code, bu_owner_postal_city,
+bu_owner_phone, bu_owner_vehicles (JSONB), bu_address_vehicles (JSONB),
+bu_fetched_at
+```
+
+### Usage in UI
+Markera prospekt i Bilprospekt-tabellen → Klicka "Hämta biluppgifter" → API hämtar och sparar all data.
+Rader med hämtad data visas med grön bakgrund och ✓ ikon.
+
+---
+
 ## Environment Variables
 Located in `.env.local`:
 ```
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 CARINFO_API_KEY=
+BILUPPGIFTER_API_URL=http://localhost:3456
 ```

@@ -5,6 +5,49 @@ Swedish vehicle lead management system for car dealers.
 
 ---
 
+## 2026-01-29 - Bilprospekt Page & Biluppgifter API Integration
+
+**Type:** Feature
+
+**Description:**
+Skapade ny Bilprospekt-sida som hämtar data från Bilprospekt MCP API och sparar i egen dedikerad Supabase-tabell. Integrerade biluppgifter-api för att hämta miltal från biluppgifter.se.
+
+**Features:**
+- Ny sida `/bilprospekt` med full filterfunktionalitet
+- Filter: Region, Märke, Modell, Bränsle, Årsmodell (from/to), Innehavstid, Prospekttyp
+- Dedikerad tabell `bilprospekt_prospects` med 27 kolumner
+- Paginering (50 per sida)
+- Bulk-val av prospekt
+- Hämta miltal för markerade prospekt via biluppgifter-api
+- Batch-hämtning med rate limiting (5 åt gången, 1s delay)
+- Health check för biluppgifter-api status
+
+**Database Changes:**
+- Created `bilprospekt_prospects` table with columns:
+  - bp_id (PK), reg_number, brand, model, fuel, color, car_year, date_acquired
+  - owner_name, owner_type, owner_gender, owner_birth_year, address, zip
+  - municipality, region, region_code, kaross, transmission, engine_power
+  - mileage, weight, leasing, credit, seller_name, chassis, in_service
+  - cylinder_volume, fwd, new_or_old, created_at, updated_at
+- Added indexes on bp_id, reg_number, brand, region
+- Added RLS policies for authenticated users
+
+**Files Created:**
+- `app/bilprospekt/page.tsx` - Server component
+- `app/bilprospekt/actions.ts` - Server actions för miltal-hämtning
+- `components/bilprospekt/bilprospekt-view.tsx` - Client view med filter och tabell
+- `lib/biluppgifter/fetch-biluppgifter.ts` - API client för biluppgifter-api
+
+**Files Changed:**
+- `components/layout/sidebar.tsx` - Added Bilprospekt navigation item
+
+**External Dependencies:**
+- biluppgifter-api (FastAPI server at localhost:3456)
+  - Repo: `/Users/arsalseemab/Desktop/biluppgifter-api`
+  - Endpoint: `GET /api/vehicle/{regnr}` for vehicle data with mileage
+
+---
+
 ## 2026-01-27 - Bilprospekt Date Gate & Archive Data
 
 **Type:** Feature

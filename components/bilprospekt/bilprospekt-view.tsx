@@ -20,6 +20,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -28,11 +33,27 @@ import {
   ChevronLeft,
   ChevronRight,
   Database,
-  Car,
   User,
   Building2,
-  RefreshCw,
+  Gauge,
+  Loader2,
+  Phone,
+  MapPin,
+  Car,
+  Calendar,
+  Users,
+  Receipt,
+  Info,
+  CheckCircle2,
 } from 'lucide-react'
+import { fetchMileageForProspects, checkBiluppgifterStatus } from '@/app/bilprospekt/actions'
+import { useToast } from '@/hooks/use-toast'
+
+interface AddressVehicle {
+  regnr: string
+  description: string
+  status?: string
+}
 
 interface Prospect {
   id: number
@@ -61,6 +82,18 @@ interface Prospect {
   cylinder_volume: number | null
   fwd: string | null
   new_or_old: string | null
+  // Biluppgifter data
+  bu_num_owners: number | null
+  bu_annual_tax: number | null
+  bu_inspection_until: string | null
+  bu_owner_age: number | null
+  bu_owner_address: string | null
+  bu_owner_postal_code: string | null
+  bu_owner_postal_city: string | null
+  bu_owner_phone: string | null
+  bu_owner_vehicles: AddressVehicle[] | null
+  bu_address_vehicles: AddressVehicle[] | null
+  bu_fetched_at: string | null
 }
 
 interface BilprospektViewProps {
@@ -106,9 +139,11 @@ export function BilprospektView({
 }: BilprospektViewProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { toast } = useToast()
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [searchTerm, setSearchTerm] = useState(currentFilters.search || '')
+  const [isFetchingData, setIsFetchingData] = useState(false)
 
   const totalPages = Math.ceil(totalCount / pageSize)
 
@@ -121,7 +156,6 @@ export function BilprospektView({
         params.delete(key)
       }
     })
-    // Reset to page 0 when filters change
     if (!updates.page) {
       params.set('page', '0')
     }
@@ -150,6 +184,61 @@ export function BilprospektView({
     setSelectedIds(newSet)
   }
 
+  const handleFetchBiluppgifter = async () => {
+    if (selectedIds.size === 0) {
+      toast({
+        title: 'Välj prospekt',
+        description: 'Markera minst ett prospekt för att hämta data.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const isHealthy = await checkBiluppgifterStatus()
+    if (!isHealthy) {
+      toast({
+        title: 'Biluppgifter API är inte tillgänglig',
+        description: 'Starta biluppgifter-api: cd biluppgifter-api && uvicorn server:app --port 3456',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setIsFetchingData(true)
+
+    try {
+      const selectedProspects = prospects
+        .filter(p => selectedIds.has(p.id))
+        .map(p => ({ bp_id: p.bp_id, reg_number: p.reg_number }))
+
+      const result = await fetchMileageForProspects(selectedProspects)
+
+      if (result.success) {
+        toast({
+          title: 'Biluppgifter hämtade',
+          description: `${result.updated} av ${result.total} prospekt uppdaterade.`,
+        })
+        setSelectedIds(new Set())
+        router.refresh()
+      } else {
+        toast({
+          title: 'Fel',
+          description: 'Kunde inte hämta biluppgifter.',
+          variant: 'destructive',
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching biluppgifter:', error)
+      toast({
+        title: 'Fel',
+        description: 'Ett oväntat fel uppstod.',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsFetchingData(false)
+    }
+  }
+
   const getFuelBadgeColor = (fuel: string | null) => {
     if (!fuel) return 'bg-gray-100 text-gray-600'
     if (fuel.includes('EL') && !fuel.includes('HYBRID')) return 'bg-green-100 text-green-800'
@@ -170,6 +259,10 @@ export function BilprospektView({
     return remainingMonths > 0 ? `${years}å ${remainingMonths}m` : `${years} år`
   }
 
+  const hasBiluppgifterData = (prospect: Prospect) => {
+    return prospect.bu_fetched_at !== null
+  }
+
   return (
     <div className="space-y-4">
       {/* Stats */}
@@ -184,7 +277,22 @@ export function BilprospektView({
           </div>
         </div>
         {selectedIds.size > 0 && (
-          <Badge variant="secondary">{selectedIds.size} valda</Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary">{selectedIds.size} valda</Badge>
+            <Button
+              size="sm"
+              onClick={handleFetchBiluppgifter}
+              disabled={isFetchingData}
+              className="gap-2"
+            >
+              {isFetchingData ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Gauge className="w-4 h-4" />
+              )}
+              Hämta biluppgifter
+            </Button>
+          </div>
         )}
       </div>
 
@@ -198,7 +306,6 @@ export function BilprospektView({
         </CardHeader>
         <CardContent className="pb-4">
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-            {/* Region */}
             <Select
               value={currentFilters.region || '25'}
               onValueChange={(value) => updateFilters({ region: value })}
@@ -213,7 +320,6 @@ export function BilprospektView({
               </SelectContent>
             </Select>
 
-            {/* Brand */}
             <Select
               value={currentFilters.brand || 'all'}
               onValueChange={(value) => updateFilters({ brand: value === 'all' ? undefined : value })}
@@ -229,7 +335,6 @@ export function BilprospektView({
               </SelectContent>
             </Select>
 
-            {/* Fuel */}
             <Select
               value={currentFilters.fuel || 'all'}
               onValueChange={(value) => updateFilters({ fuel: value === 'all' ? undefined : value })}
@@ -245,7 +350,6 @@ export function BilprospektView({
               </SelectContent>
             </Select>
 
-            {/* Year From */}
             <Input
               type="number"
               placeholder="År från"
@@ -254,7 +358,6 @@ export function BilprospektView({
               className="w-full"
             />
 
-            {/* Year To */}
             <Input
               type="number"
               placeholder="År till"
@@ -263,7 +366,6 @@ export function BilprospektView({
               className="w-full"
             />
 
-            {/* Possession From */}
             <Input
               type="number"
               placeholder="Innehav från (mån)"
@@ -272,7 +374,6 @@ export function BilprospektView({
               className="w-full"
             />
 
-            {/* Possession To */}
             <Input
               type="number"
               placeholder="Innehav till (mån)"
@@ -281,7 +382,6 @@ export function BilprospektView({
               className="w-full"
             />
 
-            {/* Search */}
             <div className="flex gap-2">
               <Input
                 placeholder="Sök reg.nr, namn..."
@@ -295,7 +395,6 @@ export function BilprospektView({
             </div>
           </div>
 
-          {/* Active filters */}
           <div className="flex flex-wrap gap-2 mt-3">
             {currentFilters.region && (
               <Badge variant="outline">
@@ -333,29 +432,26 @@ export function BilprospektView({
                   <TableHead>Reg.nr</TableHead>
                   <TableHead>Märke</TableHead>
                   <TableHead>Modell</TableHead>
-                  <TableHead>Typ</TableHead>
                   <TableHead>År</TableHead>
                   <TableHead>Bränsle</TableHead>
-                  <TableHead>Växel</TableHead>
-                  <TableHead>HK</TableHead>
-                  <TableHead>CC</TableHead>
-                  <TableHead>Färg</TableHead>
+                  <TableHead>Mil</TableHead>
                   <TableHead>Ägare</TableHead>
+                  <TableHead>Ålder</TableHead>
+                  <TableHead>Telefon</TableHead>
+                  <TableHead>Adress</TableHead>
                   <TableHead>Ort</TableHead>
-                  <TableHead>Köpt</TableHead>
-                  <TableHead>Inköpsplats</TableHead>
-                  <TableHead>Ny/Begagnad</TableHead>
+                  <TableHead>Ägare #</TableHead>
+                  <TableHead>Skatt/år</TableHead>
+                  <TableHead>Besikt.</TableHead>
+                  <TableHead>Fordon</TableHead>
                   <TableHead>Innehav</TableHead>
-                  <TableHead>I trafik</TableHead>
-                  <TableHead>4WD</TableHead>
-                  <TableHead>Chassi</TableHead>
-                  <TableHead>Finansiering</TableHead>
+                  <TableHead>Info</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {prospects.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={21} className="h-32 text-center">
+                    <TableCell colSpan={18} className="h-32 text-center">
                       <div className="flex flex-col items-center gap-2 text-muted-foreground">
                         <Database className="w-10 h-10 opacity-20" />
                         <p>Inga prospekt hittades</p>
@@ -367,7 +463,7 @@ export function BilprospektView({
                   prospects.map((prospect) => (
                     <TableRow
                       key={prospect.id}
-                      className="cursor-pointer hover:bg-muted/50"
+                      className={`cursor-pointer hover:bg-muted/50 ${hasBiluppgifterData(prospect) ? 'bg-green-50/30' : ''}`}
                       onClick={() => handleSelectOne(prospect.id)}
                     >
                       <TableCell onClick={(e) => e.stopPropagation()}>
@@ -377,27 +473,30 @@ export function BilprospektView({
                         />
                       </TableCell>
                       <TableCell>
-                        <span className="font-mono text-sm font-medium text-blue-600">
-                          {prospect.reg_number}
-                        </span>
+                        <div className="flex items-center gap-1">
+                          <span className="font-mono text-sm font-medium text-blue-600">
+                            {prospect.reg_number}
+                          </span>
+                          {hasBiluppgifterData(prospect) && (
+                            <CheckCircle2 className="w-3 h-3 text-green-600" />
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="font-medium">{prospect.brand}</TableCell>
                       <TableCell className="text-sm">{prospect.model || '-'}</TableCell>
-                      <TableCell className="text-sm">{prospect.kaross || '-'}</TableCell>
                       <TableCell>{prospect.car_year || '-'}</TableCell>
                       <TableCell>
                         <Badge variant="secondary" className={getFuelBadgeColor(prospect.fuel)}>
                           {prospect.fuel || '-'}
                         </Badge>
                       </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={prospect.transmission === 'Automat' ? 'bg-purple-50' : ''}>
-                          {prospect.transmission === 'Automat' ? 'A' : 'M'}
-                        </Badge>
+                      <TableCell className="text-sm">
+                        {prospect.mileage ? (
+                          <span className="font-medium">{prospect.mileage.toLocaleString()}</span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
                       </TableCell>
-                      <TableCell className="text-sm">{prospect.engine_power && prospect.engine_power > 0 ? prospect.engine_power : '-'}</TableCell>
-                      <TableCell className="text-sm">{prospect.cylinder_volume || '-'}</TableCell>
-                      <TableCell className="text-sm">{prospect.color || '-'}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
                           {prospect.owner_type === 'company' ? (
@@ -405,49 +504,150 @@ export function BilprospektView({
                           ) : (
                             <User className="w-4 h-4 text-muted-foreground" />
                           )}
-                          <span className="text-sm max-w-[120px] truncate">
+                          <span className="text-sm max-w-[100px] truncate">
                             {prospect.owner_name?.split(',')[0] || '-'}
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm">{prospect.municipality || '-'}</TableCell>
-                      <TableCell className="text-sm whitespace-nowrap">
-                        {prospect.date_acquired ? new Date(prospect.date_acquired).toLocaleDateString('sv-SE') : '-'}
-                      </TableCell>
-                      <TableCell className="text-sm max-w-[150px] truncate" title={prospect.seller_name || ''}>
-                        {prospect.seller_name || '-'}
+                      <TableCell className="text-sm">
+                        {prospect.bu_owner_age ? (
+                          <span>{prospect.bu_owner_age} år</span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-sm">
-                        {prospect.new_or_old ? (
-                          <Badge variant="outline" className={prospect.new_or_old === 'Ny' ? 'bg-green-50 text-green-800' : 'bg-gray-50'}>
-                            {prospect.new_or_old}
+                        {prospect.bu_owner_phone ? (
+                          <a
+                            href={`tel:${prospect.bu_owner_phone}`}
+                            className="flex items-center gap-1 text-blue-600 hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Phone className="w-3 h-3" />
+                            {prospect.bu_owner_phone}
+                          </a>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm max-w-[120px] truncate" title={prospect.bu_owner_address || ''}>
+                        {prospect.bu_owner_address || '-'}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {prospect.bu_owner_postal_city || prospect.municipality || '-'}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {prospect.bu_num_owners ? (
+                          <Badge variant="outline">{prospect.bu_num_owners}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {prospect.bu_annual_tax ? (
+                          <span>{prospect.bu_annual_tax.toLocaleString()} kr</span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">
+                        {prospect.bu_inspection_until ? (
+                          <Badge variant="outline" className={
+                            new Date(prospect.bu_inspection_until) < new Date() ? 'bg-red-50 text-red-800' : 'bg-green-50 text-green-800'
+                          }>
+                            {prospect.bu_inspection_until}
                           </Badge>
-                        ) : '-'}
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm" onClick={(e) => e.stopPropagation()}>
+                        {(prospect.bu_address_vehicles && prospect.bu_address_vehicles.length > 0) ? (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="outline" size="sm" className="gap-1">
+                                <Car className="w-3 h-3" />
+                                {prospect.bu_address_vehicles.length}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80">
+                              <div className="space-y-2">
+                                <h4 className="font-medium flex items-center gap-2">
+                                  <MapPin className="w-4 h-4" />
+                                  Fordon på adressen
+                                </h4>
+                                <div className="text-sm text-muted-foreground mb-2">
+                                  {prospect.bu_owner_address}, {prospect.bu_owner_postal_code} {prospect.bu_owner_postal_city}
+                                </div>
+                                <div className="max-h-48 overflow-y-auto space-y-1">
+                                  {prospect.bu_address_vehicles.map((v, i) => (
+                                    <div key={i} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
+                                      <div>
+                                        <span className="font-mono font-medium">{v.regnr}</span>
+                                        <span className="text-muted-foreground ml-2">{v.description}</span>
+                                      </div>
+                                      {v.status && (
+                                        <Badge variant="outline" className={v.status === 'I Trafik' ? 'bg-green-50' : 'bg-red-50'}>
+                                          {v.status}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-sm whitespace-nowrap">
                         {calculatePossession(prospect.date_acquired)}
                       </TableCell>
-                      <TableCell className="text-sm">
-                        {prospect.in_service === 'Ja' ? (
-                          <Badge variant="outline" className="bg-green-50 text-green-800">Ja</Badge>
-                        ) : prospect.in_service === 'Nej' ? (
-                          <Badge variant="outline" className="bg-red-50 text-red-800">Nej</Badge>
-                        ) : '-'}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {prospect.fwd === 'Ja' ? (
-                          <Badge variant="outline" className="bg-blue-50 text-blue-800">Ja</Badge>
-                        ) : (
-                          <span className="text-muted-foreground">Nej</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm font-mono text-xs max-w-[120px] truncate" title={prospect.chassis || ''}>
-                        {prospect.chassis || '-'}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {prospect.credit && <Badge variant="outline" className="bg-yellow-50 text-yellow-800 mr-1">Kredit</Badge>}
-                        {prospect.leasing && <Badge variant="outline" className="bg-purple-50 text-purple-800">Leasing</Badge>}
-                        {!prospect.credit && !prospect.leasing && <span className="text-muted-foreground">Kontant</span>}
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <Info className="w-4 h-4" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-80">
+                            <div className="space-y-3">
+                              <h4 className="font-medium">Detaljer: {prospect.reg_number}</h4>
+                              <div className="grid grid-cols-2 gap-2 text-sm">
+                                <div className="text-muted-foreground">Typ:</div>
+                                <div>{prospect.kaross || '-'}</div>
+                                <div className="text-muted-foreground">Växellåda:</div>
+                                <div>{prospect.transmission || '-'}</div>
+                                <div className="text-muted-foreground">HK:</div>
+                                <div>{prospect.engine_power || '-'}</div>
+                                <div className="text-muted-foreground">CC:</div>
+                                <div>{prospect.cylinder_volume || '-'}</div>
+                                <div className="text-muted-foreground">Färg:</div>
+                                <div>{prospect.color || '-'}</div>
+                                <div className="text-muted-foreground">4WD:</div>
+                                <div>{prospect.fwd === 'Ja' ? 'Ja' : 'Nej'}</div>
+                                <div className="text-muted-foreground">I trafik:</div>
+                                <div>{prospect.in_service || '-'}</div>
+                                <div className="text-muted-foreground">Ny/Begagnad:</div>
+                                <div>{prospect.new_or_old || '-'}</div>
+                                <div className="text-muted-foreground">Inköpsplats:</div>
+                                <div className="truncate" title={prospect.seller_name || ''}>{prospect.seller_name || '-'}</div>
+                                <div className="text-muted-foreground">Chassi:</div>
+                                <div className="font-mono text-xs truncate" title={prospect.chassis || ''}>{prospect.chassis || '-'}</div>
+                                <div className="text-muted-foreground">Finansiering:</div>
+                                <div>
+                                  {prospect.credit ? 'Kredit' : prospect.leasing ? 'Leasing' : 'Kontant'}
+                                </div>
+                              </div>
+                              {hasBiluppgifterData(prospect) && (
+                                <div className="pt-2 border-t text-xs text-muted-foreground">
+                                  Biluppgifter hämtade: {new Date(prospect.bu_fetched_at!).toLocaleString('sv-SE')}
+                                </div>
+                              )}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
                       </TableCell>
                     </TableRow>
                   ))
