@@ -396,6 +396,55 @@ export async function saveBiluppgifterSettings(data: {
   return { success: true }
 }
 
+// Save biluppgifter cookies (stored as JSON in refresh_token field)
+export async function saveBiluppgifterCookies(cookies: {
+  session: string
+  cf_clearance: string
+  antiforgery?: string
+}) {
+  const supabase = await createClient()
+
+  const cookieJson = JSON.stringify(cookies)
+
+  // Check if settings exist
+  const { data: existing } = await supabase
+    .from('api_tokens')
+    .select('id')
+    .eq('service_name', 'biluppgifter')
+    .maybeSingle()
+
+  if (existing) {
+    const { error } = await supabase
+      .from('api_tokens')
+      .update({
+        refresh_token: cookieJson,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', existing.id)
+
+    if (error) {
+      console.error('Error updating biluppgifter cookies:', error)
+      return { success: false, error: error.message }
+    }
+  } else {
+    const { error } = await supabase
+      .from('api_tokens')
+      .insert({
+        service_name: 'biluppgifter',
+        refresh_token: cookieJson
+      })
+
+    if (error) {
+      console.error('Error creating biluppgifter cookies:', error)
+      return { success: false, error: error.message }
+    }
+  }
+
+  revalidatePath('/settings')
+  revalidatePath('/bilprospekt')
+  return { success: true }
+}
+
 // API Token management for car.info integration
 export async function getCarInfoTokens() {
   const supabase = await createClient()
