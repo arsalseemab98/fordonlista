@@ -366,6 +366,59 @@ export function BilprospektView({
     }
   }
 
+  const handleFetchAllBiluppgifter = async (unfetchedProspects: Prospect[]) => {
+    if (unfetchedProspects.length === 0) {
+      toast.info('Alla prospekt har redan biluppgifter')
+      return
+    }
+
+    const isHealthy = await checkBiluppgifterStatus()
+    if (!isHealthy) {
+      toast.error('Biluppgifter API är inte tillgänglig', {
+        description: 'Starta biluppgifter-api: cd biluppgifter-api && uvicorn server:app --port 3456',
+      })
+      return
+    }
+
+    setIsFetchingData(true)
+    setFetchProgress({ current: 0, total: unfetchedProspects.length })
+
+    const estimatedBatches = Math.ceil(unfetchedProspects.length / 3)
+    const estimatedSeconds = estimatedBatches * 2
+
+    toast.loading(`Hämtar biluppgifter för ${unfetchedProspects.length} fordon...`, {
+      description: `Uppskattat ${estimatedSeconds} sekunder (för att undvika rate limit).`,
+    })
+
+    try {
+      const prospectsToFetch = unfetchedProspects.map(p => ({
+        bp_id: p.bp_id,
+        reg_number: p.reg_number
+      }))
+
+      const result = await fetchMileageForProspects(prospectsToFetch)
+
+      if (result.success) {
+        toast.success('Biluppgifter hämtade!', {
+          description: `${result.updated} av ${result.total} prospekt uppdaterade. ${result.failed > 0 ? `(${result.failed} misslyckades)` : ''}`,
+        })
+        router.refresh()
+      } else {
+        toast.error('Fel', {
+          description: 'Kunde inte hämta biluppgifter.',
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching biluppgifter:', error)
+      toast.error('Fel', {
+        description: 'Ett oväntat fel uppstod.',
+      })
+    } finally {
+      setIsFetchingData(false)
+      setFetchProgress(null)
+    }
+  }
+
   const getFuelBadgeColor = (fuel: string | null) => {
     if (!fuel) return 'bg-gray-100 text-gray-600'
     if (fuel.includes('EL') && !fuel.includes('HYBRID')) return 'bg-green-100 text-green-800'
@@ -619,6 +672,37 @@ export function BilprospektView({
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {/* Fetch all biluppgifter for unfetched prospects on page */}
+          {(() => {
+            const unfetched = prospects.filter(p => !p.bu_fetched_at)
+            return unfetched.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleFetchAllBiluppgifter(unfetched)}
+                disabled={isFetchingData}
+                className="gap-2"
+              >
+                {isFetchingData ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Hämtar... ({fetchProgress?.current || 0}/{fetchProgress?.total})
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    Hämta alla ({unfetched.length})
+                    {unfetched.length > 10 && (
+                      <span className="text-xs opacity-70">
+                        (~{Math.ceil(unfetched.length / 3) * 2}s)
+                      </span>
+                    )}
+                  </>
+                )}
+              </Button>
+            )
+          })()}
+
           {selectedIds.size > 0 && (
             <>
               <Badge variant="secondary">{selectedIds.size} valda</Badge>
@@ -636,7 +720,7 @@ export function BilprospektView({
                 ) : (
                   <>
                     <Download className="w-4 h-4" />
-                    Hämta biluppgifter
+                    Hämta valda
                     {selectedIds.size > 10 && (
                       <span className="text-xs opacity-70">
                         (~{Math.ceil(selectedIds.size / 3) * 2}s)
