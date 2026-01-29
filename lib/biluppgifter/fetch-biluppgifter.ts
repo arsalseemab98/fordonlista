@@ -1,5 +1,27 @@
 'use server'
 
+import { createClient } from '@/lib/supabase/server'
+
+// Get configured API URL from database, fall back to env var or default
+async function getBiluppgifterApiUrl(): Promise<string> {
+  try {
+    const supabase = await createClient()
+    const { data } = await supabase
+      .from('api_tokens')
+      .select('refresh_token')
+      .eq('service_name', 'biluppgifter')
+      .maybeSingle()
+
+    if (data?.refresh_token) {
+      return data.refresh_token
+    }
+  } catch (error) {
+    console.error('Error fetching biluppgifter API URL:', error)
+  }
+
+  return process.env.BILUPPGIFTER_API_URL || 'http://localhost:3456'
+}
+
 interface BiluppgifterVehicle {
   regnr: string
   page_title: string
@@ -92,14 +114,13 @@ export interface BiluppgifterResult {
   error?: string
 }
 
-const BILUPPGIFTER_API_URL = process.env.BILUPPGIFTER_API_URL || 'http://localhost:3456'
-
 /**
  * Fetch vehicle data only (faster, less data)
  */
 export async function fetchBiluppgifterVehicle(regnr: string): Promise<BiluppgifterResult> {
   try {
-    const response = await fetch(`${BILUPPGIFTER_API_URL}/api/vehicle/${regnr}`, {
+    const apiUrl = await getBiluppgifterApiUrl()
+    const response = await fetch(`${apiUrl}/api/vehicle/${regnr}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
       cache: 'no-store',
@@ -125,7 +146,8 @@ export async function fetchBiluppgifterVehicle(regnr: string): Promise<Biluppgif
  */
 export async function fetchBiluppgifterOwnerProfile(profileId: string): Promise<BiluppgifterOwnerProfile | null> {
   try {
-    const response = await fetch(`${BILUPPGIFTER_API_URL}/api/profile/${profileId}`, {
+    const apiUrl = await getBiluppgifterApiUrl()
+    const response = await fetch(`${apiUrl}/api/profile/${profileId}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
       cache: 'no-store',
@@ -144,7 +166,8 @@ export async function fetchBiluppgifterOwnerProfile(profileId: string): Promise<
  */
 export async function fetchBiluppgifterAddressVehicles(regnr: string): Promise<BiluppgifterAddressVehicles | null> {
   try {
-    const response = await fetch(`${BILUPPGIFTER_API_URL}/api/address/${regnr}`, {
+    const apiUrl = await getBiluppgifterApiUrl()
+    const response = await fetch(`${apiUrl}/api/address/${regnr}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
       cache: 'no-store',
@@ -163,8 +186,9 @@ export async function fetchBiluppgifterAddressVehicles(regnr: string): Promise<B
  */
 export async function fetchBiluppgifterComplete(regnr: string): Promise<BiluppgifterResult> {
   try {
+    const apiUrl = await getBiluppgifterApiUrl()
     // First fetch vehicle data
-    const vehicleResponse = await fetch(`${BILUPPGIFTER_API_URL}/api/vehicle/${regnr}`, {
+    const vehicleResponse = await fetch(`${apiUrl}/api/vehicle/${regnr}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
       cache: 'no-store',
@@ -387,7 +411,8 @@ export async function fetchBiluppgifter(regnr: string): Promise<BiluppgifterResu
 
 export async function checkBiluppgifterHealth(): Promise<boolean> {
   try {
-    const response = await fetch(`${BILUPPGIFTER_API_URL}/health`, {
+    const apiUrl = await getBiluppgifterApiUrl()
+    const response = await fetch(`${apiUrl}/health`, {
       method: 'GET',
       cache: 'no-store',
     })

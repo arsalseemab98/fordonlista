@@ -9,24 +9,27 @@ async function getSettings() {
     { data: columnMappings },
     { data: valuePatterns },
     { data: preferences },
-    { data: carInfoTokens }
+    { data: carInfoTokens },
+    { data: biluppgifterSettings }
   ] = await Promise.all([
     supabase.from('column_mappings').select('*').order('created_at', { ascending: false }),
     supabase.from('value_patterns').select('*').order('field_name'),
     supabase.from('preferences').select('*').limit(1).maybeSingle(),
-    supabase.from('api_tokens').select('*').eq('service_name', 'car_info').maybeSingle()
+    supabase.from('api_tokens').select('*').eq('service_name', 'car_info').maybeSingle(),
+    supabase.from('api_tokens').select('*').eq('service_name', 'biluppgifter').maybeSingle()
   ])
 
   return {
     columnMappings: columnMappings || [],
     valuePatterns: valuePatterns || [],
     preferences: preferences || null,
-    carInfoTokens: carInfoTokens || null
+    carInfoTokens: carInfoTokens || null,
+    biluppgifterSettings: biluppgifterSettings || null
   }
 }
 
 export default async function SettingsPage() {
-  const { columnMappings, valuePatterns, preferences, carInfoTokens } = await getSettings()
+  const { columnMappings, valuePatterns, preferences, carInfoTokens, biluppgifterSettings } = await getSettings()
 
   return (
     <div className="flex flex-col">
@@ -41,6 +44,7 @@ export default async function SettingsPage() {
           valuePatterns={valuePatterns}
           preferences={preferences}
           carInfoTokens={carInfoTokens}
+          biluppgifterSettings={biluppgifterSettings}
         />
       </div>
     </div>

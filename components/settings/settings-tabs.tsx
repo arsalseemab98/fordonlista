@@ -52,7 +52,8 @@ import {
   saveValuePattern,
   deleteValuePattern,
   savePreferences,
-  saveCarInfoTokens
+  saveCarInfoTokens,
+  saveBiluppgifterSettings
 } from '@/app/actions/settings'
 import { useRouter } from 'next/navigation'
 
@@ -97,14 +98,22 @@ interface ApiTokens {
   updated_at?: string
 }
 
+interface BiluppgifterSettings {
+  id: string
+  service_name: string
+  refresh_token?: string // Used to store API URL
+  updated_at?: string
+}
+
 interface SettingsTabsProps {
   columnMappings: ColumnMapping[]
   valuePatterns: ValuePattern[]
   preferences: Preferences | null
   carInfoTokens: ApiTokens | null
+  biluppgifterSettings: BiluppgifterSettings | null
 }
 
-export function SettingsTabs({ columnMappings, valuePatterns, preferences, carInfoTokens }: SettingsTabsProps) {
+export function SettingsTabs({ columnMappings, valuePatterns, preferences, carInfoTokens, biluppgifterSettings }: SettingsTabsProps) {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState('general')
 
@@ -150,7 +159,7 @@ export function SettingsTabs({ columnMappings, valuePatterns, preferences, carIn
       </TabsContent>
 
       <TabsContent value="integrations" className="mt-6">
-        <IntegrationsSettings carInfoTokens={carInfoTokens} />
+        <IntegrationsSettings carInfoTokens={carInfoTokens} biluppgifterSettings={biluppgifterSettings} />
       </TabsContent>
     </Tabs>
   )
@@ -769,7 +778,7 @@ function AISettings({ preferences }: { preferences: Preferences | null }) {
   )
 }
 
-function IntegrationsSettings({ carInfoTokens }: { carInfoTokens: ApiTokens | null }) {
+function IntegrationsSettings({ carInfoTokens, biluppgifterSettings }: { carInfoTokens: ApiTokens | null, biluppgifterSettings: BiluppgifterSettings | null }) {
   const router = useRouter()
   const [refreshToken, setRefreshToken] = useState(carInfoTokens?.refresh_token || '')
   const [bearerToken, setBearerToken] = useState(carInfoTokens?.bearer_token || '')
@@ -778,6 +787,12 @@ function IntegrationsSettings({ carInfoTokens }: { carInfoTokens: ApiTokens | nu
   const [isSaving, setIsSaving] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
+
+  // Biluppgifter state
+  const [biluppgifterUrl, setBiluppgifterUrl] = useState(biluppgifterSettings?.refresh_token || 'http://localhost:3456')
+  const [isSavingBiluppgifter, setIsSavingBiluppgifter] = useState(false)
+  const [isTestingBiluppgifter, setIsTestingBiluppgifter] = useState(false)
+  const [biluppgifterTestResult, setBiluppgifterTestResult] = useState<{ success: boolean; message: string } | null>(null)
 
   const handleSave = async () => {
     if (!refreshToken || !bearerToken) {
@@ -825,8 +840,119 @@ function IntegrationsSettings({ carInfoTokens }: { carInfoTokens: ApiTokens | nu
     setIsTesting(false)
   }
 
+  const handleSaveBiluppgifter = async () => {
+    if (!biluppgifterUrl) {
+      toast.error('API URL krävs')
+      return
+    }
+
+    setIsSavingBiluppgifter(true)
+    const result = await saveBiluppgifterSettings({
+      api_url: biluppgifterUrl
+    })
+    setIsSavingBiluppgifter(false)
+
+    if (result.success) {
+      toast.success('Biluppgifter-inställningar sparade')
+      router.refresh()
+    } else {
+      toast.error(result.error || 'Kunde inte spara inställningar')
+    }
+  }
+
+  const handleTestBiluppgifter = async () => {
+    setIsTestingBiluppgifter(true)
+    setBiluppgifterTestResult(null)
+
+    try {
+      const response = await fetch(`${biluppgifterUrl}/health`)
+
+      if (response.ok) {
+        setBiluppgifterTestResult({ success: true, message: 'Anslutningen fungerar!' })
+      } else {
+        setBiluppgifterTestResult({ success: false, message: `HTTP ${response.status}: ${response.statusText}` })
+      }
+    } catch (error) {
+      setBiluppgifterTestResult({ success: false, message: 'Kunde inte ansluta till API. Kontrollera att servern körs.' })
+    }
+
+    setIsTestingBiluppgifter(false)
+  }
+
   return (
     <div className="space-y-6">
+      {/* Biluppgifter API */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Plug className="h-5 w-5 text-blue-600" />
+            Biluppgifter API
+          </CardTitle>
+          <CardDescription>
+            Konfigurera anslutning till biluppgifter-api för att hämta miltal, ägare, besiktning m.m.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Instructions */}
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <div className="flex gap-2">
+              <Info className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+              <div className="space-y-2">
+                <p className="font-medium text-blue-900">Så här startar du biluppgifter-api:</p>
+                <ol className="text-sm text-blue-700 space-y-1 list-decimal list-inside">
+                  <li>Öppna terminal i <code className="bg-blue-100 px-1 rounded">biluppgifter-api</code> mappen</li>
+                  <li>Kör <code className="bg-blue-100 px-1 rounded">uvicorn server:app --port 3456</code></li>
+                  <li>API:et körs på <code className="bg-blue-100 px-1 rounded">http://localhost:3456</code></li>
+                </ol>
+              </div>
+            </div>
+          </div>
+
+          {/* API URL */}
+          <div className="space-y-2">
+            <Label htmlFor="biluppgifter-url">API URL</Label>
+            <Input
+              id="biluppgifter-url"
+              type="text"
+              placeholder="http://localhost:3456"
+              value={biluppgifterUrl}
+              onChange={(e) => setBiluppgifterUrl(e.target.value)}
+              className="font-mono text-sm"
+            />
+            <p className="text-xs text-gray-500">
+              Standard: http://localhost:3456 (lokal server)
+            </p>
+          </div>
+
+          {/* Test Result */}
+          {biluppgifterTestResult && (
+            <div className={`rounded-lg p-3 ${biluppgifterTestResult.success ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+              {biluppgifterTestResult.success ? <Check className="inline h-4 w-4 mr-2" /> : <X className="inline h-4 w-4 mr-2" />}
+              {biluppgifterTestResult.message}
+            </div>
+          )}
+
+          {/* Last Updated */}
+          {biluppgifterSettings?.updated_at && (
+            <p className="text-xs text-gray-500">
+              Senast uppdaterad: {new Date(biluppgifterSettings.updated_at).toLocaleString('sv-SE')}
+            </p>
+          )}
+
+          {/* Buttons */}
+          <div className="flex gap-2">
+            <Button onClick={handleSaveBiluppgifter} disabled={isSavingBiluppgifter} className="gap-2">
+              <Save className="h-4 w-4" />
+              {isSavingBiluppgifter ? 'Sparar...' : 'Spara inställningar'}
+            </Button>
+            <Button variant="outline" onClick={handleTestBiluppgifter} disabled={isTestingBiluppgifter}>
+              {isTestingBiluppgifter ? 'Testar...' : 'Testa anslutning'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Car.info Integration */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
