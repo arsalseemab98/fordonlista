@@ -938,38 +938,22 @@ function IntegrationsSettings({ carInfoTokens, biluppgifterSettings }: { carInfo
     }
   }
 
-  const handleTestBrowserConnection = async () => {
+  const handleTestBrowserConnection = () => {
     setBrowserConnectionStatus('checking')
 
-    try {
-      // Try to fetch from biluppgifter.se via our API that checks browser connection
-      const response = await fetch('/api/biluppgifter-browser', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'check-connection' })
-      })
+    // Open biluppgifter.se in a new tab for the user to verify login
+    const newWindow = window.open('https://biluppgifter.se', '_blank')
 
-      const data = await response.json()
-
-      if (data.connected) {
+    // After a short delay, update status based on whether window opened
+    setTimeout(() => {
+      if (newWindow) {
         setBrowserConnectionStatus('connected')
-        toast.success('Anslutning fungerar!')
-      } else if (data.error?.includes('tab')) {
-        setBrowserConnectionStatus('no_tab')
-        toast.error('Öppna biluppgifter.se i Chrome först')
-      } else if (data.error?.includes('logged')) {
-        setBrowserConnectionStatus('not_logged_in')
-        toast.error('Logga in på biluppgifter.se först')
+        toast.success('biluppgifter.se öppnad! Kontrollera att du är inloggad (ser "Logga ut" längst upp).')
       } else {
         setBrowserConnectionStatus('error')
-        toast.error(data.error || 'Kunde inte ansluta')
+        toast.error('Popup blockerad. Tillåt popups för denna sida.')
       }
-    } catch {
-      // Fallback: Open biluppgifter.se and tell user to check manually
-      setBrowserConnectionStatus('idle')
-      window.open('https://biluppgifter.se', '_blank')
-      toast.info('Kontrollera att du är inloggad på biluppgifter.se')
-    }
+    }, 1000)
   }
 
   return (
