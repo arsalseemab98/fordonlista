@@ -339,7 +339,6 @@ export function BilprospektView({
                   <TableHead>Växel</TableHead>
                   <TableHead>HK</TableHead>
                   <TableHead>CC</TableHead>
-                  <TableHead>Mil</TableHead>
                   <TableHead>Färg</TableHead>
                   <TableHead>Ägare</TableHead>
                   <TableHead>Ort</TableHead>
@@ -356,7 +355,7 @@ export function BilprospektView({
               <TableBody>
                 {prospects.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={22} className="h-32 text-center">
+                    <TableCell colSpan={21} className="h-32 text-center">
                       <div className="flex flex-col items-center gap-2 text-muted-foreground">
                         <Database className="w-10 h-10 opacity-20" />
                         <p>Inga prospekt hittades</p>
@@ -398,7 +397,6 @@ export function BilprospektView({
                       </TableCell>
                       <TableCell className="text-sm">{prospect.engine_power && prospect.engine_power > 0 ? prospect.engine_power : '-'}</TableCell>
                       <TableCell className="text-sm">{prospect.cylinder_volume || '-'}</TableCell>
-                      <TableCell className="text-sm">{prospect.mileage || '-'}</TableCell>
                       <TableCell className="text-sm">{prospect.color || '-'}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
