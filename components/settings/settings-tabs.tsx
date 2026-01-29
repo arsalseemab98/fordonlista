@@ -1029,11 +1029,48 @@ function IntegrationsSettings({ carInfoTokens, biluppgifterSettings }: { carInfo
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Important: Must run locally */}
+          {typeof window !== 'undefined' && !window.location.hostname.includes('localhost') && (
+            <div className="rounded-lg border-2 border-red-300 bg-red-50 p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-red-900">⚠️ Kör appen lokalt för biluppgifter</p>
+                  <p className="text-sm text-red-700 mt-1">
+                    Du är på Vercel ({window.location.hostname}) men API:t körs på din dator.
+                    Öppna <strong>localhost:3000</strong> istället.
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText('cd ~/Desktop/fordonlista && npm run dev')
+                        toast.success('Kommando kopierat! Klistra in i Terminal, sen öppna localhost:3000')
+                      }}
+                      className="gap-2 bg-red-600 hover:bg-red-700"
+                    >
+                      <ClipboardPaste className="h-4 w-4" />
+                      Kopiera: npm run dev
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.open('http://localhost:3000/settings', '_blank')}
+                      className="border-red-300 text-red-700 hover:bg-red-100"
+                    >
+                      Öppna localhost:3000
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Start Instructions - One click */}
           <div className="rounded-lg border-2 border-blue-300 bg-blue-50 p-4">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="font-semibold text-blue-900">1. Starta servern</p>
+                <p className="font-semibold text-blue-900">1. Starta biluppgifter-api</p>
                 <p className="text-sm text-blue-700 mt-1">Öppna Terminal, klistra in kommandot och tryck Enter</p>
               </div>
               <Button
@@ -1049,13 +1086,33 @@ function IntegrationsSettings({ carInfoTokens, biluppgifterSettings }: { carInfo
             </div>
           </div>
 
+          {/* Start Next.js locally */}
+          <div className="rounded-lg border-2 border-purple-300 bg-purple-50 p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="font-semibold text-purple-900">2. Starta fordonlista lokalt</p>
+                <p className="text-sm text-purple-700 mt-1">I en ny Terminal-flik, starta Next.js</p>
+              </div>
+              <Button
+                onClick={() => {
+                  navigator.clipboard.writeText('cd ~/Desktop/fordonlista && npm run dev')
+                  toast.success('Kommando kopierat! Klistra in i ny Terminal-flik.')
+                }}
+                className="gap-2 bg-purple-600 hover:bg-purple-700 shrink-0"
+              >
+                <ClipboardPaste className="h-4 w-4" />
+                Kopiera kommando
+              </Button>
+            </div>
+          </div>
+
           {/* Cookie Instructions */}
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
             <div className="flex items-start justify-between gap-4">
               <div className="flex gap-3">
                 <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-amber-900">2. Uppdatera cookies (vid 403-fel)</p>
+                  <p className="font-semibold text-amber-900">3. Uppdatera cookies (vid 403-fel)</p>
                   <p className="text-sm text-amber-700 mt-1">cf_clearance löper ut var ~2 timme</p>
                   <ol className="text-sm text-amber-700 mt-2 space-y-0.5 list-decimal list-inside">
                     <li>Öppna <a href="https://biluppgifter.se" target="_blank" rel="noopener noreferrer" className="underline font-medium">biluppgifter.se</a> → F12 → Console</li>
