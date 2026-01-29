@@ -1,17 +1,25 @@
 'use server'
 
-// Get the base URL for internal API calls
-function getBaseUrl(): string {
-  // In production on Vercel
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`
+import { createClient } from '@/lib/supabase/server'
+
+// Get biluppgifter API URL from database or env
+async function getBiluppgifterApiUrl(): Promise<string> {
+  try {
+    const supabase = await createClient()
+    const { data } = await supabase
+      .from('api_tokens')
+      .select('bearer_token') // Using bearer_token field for API URL
+      .eq('service_name', 'biluppgifter')
+      .maybeSingle()
+
+    if (data?.bearer_token) {
+      return data.bearer_token
+    }
+  } catch (error) {
+    console.error('Error fetching biluppgifter API URL:', error)
   }
-  // In development or custom deployment
-  if (process.env.NEXT_PUBLIC_SITE_URL) {
-    return process.env.NEXT_PUBLIC_SITE_URL
-  }
-  // Default to localhost
-  return 'http://localhost:3000'
+
+  return process.env.BILUPPGIFTER_API_URL || 'http://localhost:3456'
 }
 
 // Interfaces for internal use - the API route handles the actual scraping
@@ -51,43 +59,96 @@ export interface BiluppgifterResult {
  */
 export async function fetchBiluppgifterVehicle(regnr: string): Promise<BiluppgifterResult> {
   try {
-    const baseUrl = getBaseUrl()
-    const response = await fetch(`${baseUrl}/api/biluppgifter`, {
-      method: 'POST',
+    const apiUrl = await getBiluppgifterApiUrl()
+    const response = await fetch(`${apiUrl}/api/vehicle/${regnr}`, {
+      method: 'GET',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reg_number: regnr, fetch_profile: false }),
       cache: 'no-store',
     })
 
     if (!response.ok) {
       if (response.status === 403) {
-        return { success: false, regnr, error: 'Cloudflare blockade - uppdatera cookies i Inställningar' }
+        return { success: false, regnr, error: 'Cloudflare blockade - uppdatera cookies i biluppgifter-api' }
       }
       return { success: false, regnr, error: `HTTP ${response.status}: ${response.statusText}` }
     }
 
     const data = await response.json()
-
-    if (!data.success) {
-      return { success: false, regnr, error: data.error || 'Okänt fel' }
-    }
-
-    return {
-      success: true,
-      regnr: data.regnr,
-      mileage: data.mileage,
-      mileage_unit: data.mileage_unit,
-      num_owners: data.num_owners,
-      annual_tax: data.annual_tax,
-      inspection_until: data.inspection_until,
-      owner_name: data.owner_name,
-      owner_city: data.owner_city,
-      owner_profile_id: data.owner_profile_id,
-    }
+    return parseVehicleData(data, regnr)
   } catch (error) {
     console.error(`Error fetching biluppgifter vehicle for ${regnr}:`, error)
     return { success: false, regnr, error: error instanceof Error ? error.message : 'Unknown error' }
   }
+}
+
+/**
+ * Parse vehicle data from biluppgifter-api response
+ */
+function parseVehicleData(data: Record<string, unknown>, regnr: string): BiluppgifterResult {
+  const result: BiluppgifterResult = {
+    success: true,
+    regnr,
+  }
+
+  // Parse data sections
+  const sections = data.data as Record<string, Record<string, string>> | undefined
+  if (sections) {
+    for (const sectionData of Object.values(sections)) {
+      for (const [label, value] of Object.entries(sectionData || {})) {
+        const labelLower = label.toLowerCase()
+
+        // Mätarställning (Mileage)
+        if (labelLower.includes('mätarställning') || labelLower.includes('miltal')) {
+          const kmMatch = value.match(/([\d\s]+)\s*km/i)
+          const milMatch = value.match(/([\d\s]+)\s*mil/i)
+
+          if (kmMatch) {
+            result.mileage = parseInt(kmMatch[1].replace(/\s/g, ''), 10)
+            result.mileage_unit = 'km'
+          } else if (milMatch) {
+            const mil = parseInt(milMatch[1].replace(/\s/g, ''), 10)
+            result.mileage = mil * 10
+            result.mileage_unit = 'mil'
+          }
+        }
+
+        // Antal ägare
+        if (labelLower.includes('antal ägare')) {
+          const numMatch = value.match(/(\d+)/)
+          if (numMatch) {
+            result.num_owners = parseInt(numMatch[1], 10)
+          }
+        }
+
+        // Fordonsskatt
+        if (labelLower.includes('skatt')) {
+          const taxMatch = value.match(/([\d\s]+)\s*kr/i)
+          if (taxMatch) {
+            result.annual_tax = parseInt(taxMatch[1].replace(/\s/g, ''), 10)
+          }
+        }
+
+        // Besiktning
+        if (labelLower.includes('besiktning')) {
+          const dateMatch = value.match(/(\d{4}-\d{2}(?:-\d{2})?)/)
+          if (dateMatch) {
+            result.inspection_until = dateMatch[1]
+          }
+        }
+      }
+    }
+  }
+
+  // Parse owner info
+  const owner = data.owner as Record<string, unknown> | undefined
+  if (owner?.current_owner) {
+    const currentOwner = owner.current_owner as Record<string, string>
+    result.owner_name = currentOwner.name
+    result.owner_city = currentOwner.city
+    result.owner_profile_id = currentOwner.profile_id
+  }
+
+  return result
 }
 
 // Note: Owner profile and address vehicles are now fetched by the internal API route
@@ -98,46 +159,50 @@ export async function fetchBiluppgifterVehicle(regnr: string): Promise<Biluppgif
  */
 export async function fetchBiluppgifterComplete(regnr: string): Promise<BiluppgifterResult> {
   try {
-    const baseUrl = getBaseUrl()
-    const response = await fetch(`${baseUrl}/api/biluppgifter`, {
-      method: 'POST',
+    const apiUrl = await getBiluppgifterApiUrl()
+
+    // Fetch vehicle data first
+    const vehicleResponse = await fetch(`${apiUrl}/api/vehicle/${regnr}`, {
+      method: 'GET',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reg_number: regnr, fetch_profile: true }),
       cache: 'no-store',
     })
 
-    if (!response.ok) {
-      if (response.status === 403) {
-        return { success: false, regnr, error: 'Cloudflare blockade - uppdatera cookies i Inställningar' }
+    if (!vehicleResponse.ok) {
+      if (vehicleResponse.status === 403) {
+        return { success: false, regnr, error: 'Cloudflare blockade - uppdatera cookies i biluppgifter-api' }
       }
-      return { success: false, regnr, error: `HTTP ${response.status}: ${response.statusText}` }
+      return { success: false, regnr, error: `HTTP ${vehicleResponse.status}: ${vehicleResponse.statusText}` }
     }
 
-    const data = await response.json()
+    const vehicleData = await vehicleResponse.json()
+    const result = parseVehicleData(vehicleData, regnr)
 
-    if (!data.success) {
-      return { success: false, regnr, error: data.error || 'Okänt fel' }
+    // If we have owner profile ID, fetch detailed owner data
+    if (result.owner_profile_id) {
+      try {
+        const profileResponse = await fetch(`${apiUrl}/api/profile/${result.owner_profile_id}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
+        })
+
+        if (profileResponse.ok) {
+          const profileData = await profileResponse.json()
+          result.owner_age = profileData.age
+          result.owner_address = profileData.address
+          result.owner_postal_code = profileData.postal_code
+          result.owner_postal_city = profileData.postal_city
+          result.owner_phone = profileData.phone
+          result.owner_vehicles = profileData.vehicles
+          result.address_vehicles = profileData.address_vehicles
+        }
+      } catch (profileError) {
+        console.error(`Error fetching owner profile:`, profileError)
+      }
     }
 
-    return {
-      success: true,
-      regnr: data.regnr,
-      mileage: data.mileage,
-      mileage_unit: data.mileage_unit,
-      num_owners: data.num_owners,
-      annual_tax: data.annual_tax,
-      inspection_until: data.inspection_until,
-      owner_name: data.owner_name,
-      owner_city: data.owner_city,
-      owner_profile_id: data.owner_profile_id,
-      owner_age: data.owner_age,
-      owner_address: data.owner_address,
-      owner_postal_code: data.owner_postal_code,
-      owner_postal_city: data.owner_postal_city,
-      owner_phone: data.owner_phone,
-      owner_vehicles: data.owner_vehicles,
-      address_vehicles: data.address_vehicles,
-    }
+    return result
   } catch (error) {
     console.error(`Error fetching complete biluppgifter for ${regnr}:`, error)
     return { success: false, regnr, error: error instanceof Error ? error.message : 'Unknown error' }
@@ -234,14 +299,12 @@ export async function fetchBiluppgifter(regnr: string): Promise<BiluppgifterResu
 
 export async function checkBiluppgifterHealth(): Promise<boolean> {
   try {
-    const baseUrl = getBaseUrl()
-    const response = await fetch(`${baseUrl}/api/biluppgifter`, {
+    const apiUrl = await getBiluppgifterApiUrl()
+    const response = await fetch(`${apiUrl}/health`, {
       method: 'GET',
       cache: 'no-store',
     })
-    if (!response.ok) return false
-    const data = await response.json()
-    return data.status === 'configured'
+    return response.ok
   } catch {
     return false
   }

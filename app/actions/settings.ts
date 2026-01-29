@@ -368,7 +368,7 @@ export async function saveBiluppgifterSettings(data: {
     const { error } = await supabase
       .from('api_tokens')
       .update({
-        refresh_token: data.api_url, // Using refresh_token field to store API URL
+        bearer_token: data.api_url, // Using bearer_token field to store API URL
         updated_at: new Date().toISOString()
       })
       .eq('id', existing.id)
@@ -382,7 +382,7 @@ export async function saveBiluppgifterSettings(data: {
       .from('api_tokens')
       .insert({
         service_name: 'biluppgifter',
-        refresh_token: data.api_url // Using refresh_token field to store API URL
+        bearer_token: data.api_url // Using bearer_token field to store API URL
       })
 
     if (error) {

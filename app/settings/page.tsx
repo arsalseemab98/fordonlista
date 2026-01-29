@@ -16,7 +16,7 @@ async function getSettings() {
     supabase.from('value_patterns').select('*').order('field_name'),
     supabase.from('preferences').select('*').limit(1).maybeSingle(),
     supabase.from('api_tokens').select('*').eq('service_name', 'car_info').maybeSingle(),
-    supabase.from('api_tokens').select('*').eq('service_name', 'biluppgifter').maybeSingle()
+supabase.from('api_tokens').select('id, service_name, bearer_token, updated_at').eq('service_name', 'biluppgifter').maybeSingle()
   ])
 
   return {
