@@ -805,6 +805,11 @@ function IntegrationsSettings({ carInfoTokens, biluppgifterSettings }: { carInfo
   const [isSavingCookies, setIsSavingCookies] = useState(false)
   const [cookieSaveResult, setCookieSaveResult] = useState<{ success: boolean; message: string } | null>(null)
 
+  // .env file paste state
+  const [envContent, setEnvContent] = useState('')
+  const [isSavingEnv, setIsSavingEnv] = useState(false)
+  const [envSaveResult, setEnvSaveResult] = useState<{ success: boolean; message: string } | null>(null)
+
   // Browser connection status
   const [browserConnectionStatus, setBrowserConnectionStatus] = useState<'idle' | 'checking' | 'connected' | 'not_logged_in' | 'no_tab' | 'error'>('idle')
 
@@ -956,6 +961,60 @@ function IntegrationsSettings({ carInfoTokens, biluppgifterSettings }: { carInfo
     }, 1000)
   }
 
+  const handleSaveEnvFile = async () => {
+    if (!envContent.trim()) {
+      toast.error('Klistra in .env-innehåll först')
+      return
+    }
+
+    // Parse the env content
+    const lines = envContent.trim().split('\n')
+    const envVars: Record<string, string> = {}
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith('#')) continue
+      const eqIndex = trimmed.indexOf('=')
+      if (eqIndex > 0) {
+        const key = trimmed.substring(0, eqIndex).trim()
+        const value = trimmed.substring(eqIndex + 1).trim()
+        envVars[key] = value
+      }
+    }
+
+    if (!envVars.BILUPPGIFTER_SESSION && !envVars.BILUPPGIFTER_CF_CLEARANCE) {
+      toast.error('Ingen BILUPPGIFTER_SESSION eller BILUPPGIFTER_CF_CLEARANCE hittades')
+      return
+    }
+
+    setIsSavingEnv(true)
+    setEnvSaveResult(null)
+
+    try {
+      const response = await fetch('/api/biluppgifter-env', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ envContent: envContent.trim() })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setEnvSaveResult({ success: true, message: 'Cookies sparade till .env-filen! Starta om servern.' })
+        toast.success('Cookies sparade! Starta om biluppgifter-api.')
+        setEnvContent('')
+      } else {
+        setEnvSaveResult({ success: false, message: data.error || 'Kunde inte spara' })
+        toast.error(data.error || 'Kunde inte spara till .env-filen')
+      }
+    } catch {
+      setEnvSaveResult({ success: false, message: 'Nätverksfel vid sparande' })
+      toast.error('Kunde inte kontakta servern')
+    }
+
+    setIsSavingEnv(false)
+  }
+
   return (
     <div className="space-y-6">
       {/* Biluppgifter Integration */}
@@ -1018,6 +1077,40 @@ function IntegrationsSettings({ carInfoTokens, biluppgifterSettings }: { carInfo
                 Kopiera script
               </Button>
             </div>
+          </div>
+
+          {/* .env Paste Section */}
+          <div className="rounded-lg border-2 border-green-300 bg-green-50 p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <ClipboardPaste className="h-5 w-5 text-green-600" />
+              <p className="font-semibold text-green-900">Klistra in .env-innehåll</p>
+            </div>
+            <p className="text-sm text-green-700">
+              Klistra in hela .env-innehållet från cookie-scriptet här:
+            </p>
+            <textarea
+              value={envContent}
+              onChange={(e) => setEnvContent(e.target.value)}
+              placeholder={`BILUPPGIFTER_SESSION=CfDJ8...
+BILUPPGIFTER_CF_CLEARANCE=0qzhiG8...`}
+              className="w-full h-24 p-3 border border-green-300 rounded-md font-mono text-xs bg-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+            />
+
+            {envSaveResult && (
+              <div className={`rounded-lg p-3 ${envSaveResult.success ? 'bg-green-100 text-green-800' : 'bg-red-50 text-red-700'}`}>
+                {envSaveResult.success ? <Check className="inline h-4 w-4 mr-2" /> : <X className="inline h-4 w-4 mr-2" />}
+                {envSaveResult.message}
+              </div>
+            )}
+
+            <Button
+              onClick={handleSaveEnvFile}
+              disabled={isSavingEnv || !envContent.trim()}
+              className="gap-2 bg-green-600 hover:bg-green-700"
+            >
+              <Save className="h-4 w-4" />
+              {isSavingEnv ? 'Sparar...' : 'Spara till .env'}
+            </Button>
           </div>
 
           {/* API URL & Test */}
