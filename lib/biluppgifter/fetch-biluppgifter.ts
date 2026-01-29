@@ -298,26 +298,82 @@ function parseVehicleData(data: BiluppgifterVehicle): BiluppgifterResult {
 }
 
 /**
+ * Rate limiting configuration for biluppgifter API
+ * Adjust these values if getting rate limited (403/429 errors)
+ */
+const RATE_LIMIT_CONFIG = {
+  batchSize: 3,           // Process 3 vehicles at a time
+  delayBetweenBatches: 1500, // 1.5 seconds between batches
+  delayOnError: 5000,     // 5 seconds extra delay if error occurs
+  maxRetries: 2,          // Retry failed requests max 2 times
+  largeBatchThreshold: 20, // Use slower rate for >20 vehicles
+  largeBatchDelay: 2500,  // 2.5 seconds delay for large batches
+}
+
+/**
  * Fetch complete data for multiple vehicles (with rate limiting)
+ * Automatically adjusts rate based on batch size to avoid bans
  */
 export async function fetchBiluppgifterBatch(
   regnrs: string[],
   fetchComplete: boolean = false
 ): Promise<BiluppgifterResult[]> {
   const results: BiluppgifterResult[] = []
-  const batchSize = 3 // Smaller batch for complete fetches
-  const delayMs = 1500 // Longer delay to avoid rate limiting
+  const { batchSize, delayBetweenBatches, delayOnError, maxRetries, largeBatchThreshold, largeBatchDelay } = RATE_LIMIT_CONFIG
+
+  // Use longer delays for larger batches to be safer
+  const delayMs = regnrs.length > largeBatchThreshold ? largeBatchDelay : delayBetweenBatches
+
+  console.log(`[biluppgifter] Starting batch fetch: ${regnrs.length} vehicles, ${Math.ceil(regnrs.length / batchSize)} batches, ${delayMs}ms delay`)
 
   for (let i = 0; i < regnrs.length; i += batchSize) {
     const batch = regnrs.slice(i, i + batchSize)
+    const batchNum = Math.floor(i / batchSize) + 1
+    const totalBatches = Math.ceil(regnrs.length / batchSize)
+
+    console.log(`[biluppgifter] Processing batch ${batchNum}/${totalBatches}: ${batch.join(', ')}`)
+
     const fetchFn = fetchComplete ? fetchBiluppgifterComplete : fetchBiluppgifterVehicle
-    const batchResults = await Promise.all(batch.map(fetchFn))
+
+    // Process batch with retry logic
+    const batchResults: BiluppgifterResult[] = []
+    for (const regnr of batch) {
+      let result: BiluppgifterResult | null = null
+      let retries = 0
+
+      while (!result && retries <= maxRetries) {
+        try {
+          result = await fetchFn(regnr)
+
+          // If we got rate limited (403), add extra delay and retry
+          if (!result.success && result.error?.includes('403')) {
+            console.warn(`[biluppgifter] Rate limited on ${regnr}, waiting ${delayOnError}ms before retry...`)
+            await new Promise(resolve => setTimeout(resolve, delayOnError))
+            retries++
+            result = null // Force retry
+          }
+        } catch (error) {
+          console.error(`[biluppgifter] Error fetching ${regnr}:`, error)
+          retries++
+          if (retries <= maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, delayOnError))
+          }
+        }
+      }
+
+      batchResults.push(result || { success: false, regnr, error: 'Max retries exceeded' })
+    }
+
     results.push(...batchResults)
 
+    // Wait between batches (but not after the last one)
     if (i + batchSize < regnrs.length) {
       await new Promise(resolve => setTimeout(resolve, delayMs))
     }
   }
+
+  const successful = results.filter(r => r.success).length
+  console.log(`[biluppgifter] Batch complete: ${successful}/${results.length} successful`)
 
   return results
 }

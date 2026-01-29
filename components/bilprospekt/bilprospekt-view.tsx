@@ -56,7 +56,7 @@ import {
   EyeOff,
 } from 'lucide-react'
 import { fetchMileageForProspects, checkBiluppgifterStatus } from '@/app/bilprospekt/actions'
-import { useToast } from '@/hooks/use-toast'
+import { toast } from 'sonner'
 
 interface AddressVehicle {
   regnr: string
@@ -177,6 +177,46 @@ const REGIONS = [
 ]
 
 const STORAGE_KEY = 'bilprospektVisibleColumns'
+const STORAGE_VERSION_KEY = 'bilprospektColumnsVersion'
+const CURRENT_VERSION = 2 // Increment when adding new columns
+
+// Helper to merge saved columns with new defaults (for new columns added after user saved)
+function getMergedColumns(): Set<string> {
+  if (typeof window === 'undefined') {
+    return new Set(ALL_COLUMNS.filter(c => c.default).map(c => c.id))
+  }
+
+  const savedVersion = localStorage.getItem(STORAGE_VERSION_KEY)
+  const saved = localStorage.getItem(STORAGE_KEY)
+
+  // If no saved version or old version, add any new default columns
+  if (!savedVersion || parseInt(savedVersion) < CURRENT_VERSION) {
+    const savedArray: string[] = saved ? JSON.parse(saved) : []
+    const savedSet = new Set<string>(savedArray)
+
+    // Add any new default columns that weren't in the old saved set
+    const newDefaults = ALL_COLUMNS.filter(c => c.default && !savedSet.has(c.id))
+    newDefaults.forEach(c => savedSet.add(c.id))
+
+    // Update storage with merged columns and new version
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(savedSet)))
+    localStorage.setItem(STORAGE_VERSION_KEY, String(CURRENT_VERSION))
+
+    return savedSet
+  }
+
+  // Current version - use saved as-is
+  if (saved) {
+    try {
+      const savedArray: string[] = JSON.parse(saved)
+      return new Set<string>(savedArray)
+    } catch {
+      // Fall back to defaults
+    }
+  }
+
+  return new Set(ALL_COLUMNS.filter(c => c.default).map(c => c.id))
+}
 
 export function BilprospektView({
   prospects,
@@ -189,31 +229,20 @@ export function BilprospektView({
 }: BilprospektViewProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { toast } = useToast()
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [searchTerm, setSearchTerm] = useState(currentFilters.search || '')
   const [isFetchingData, setIsFetchingData] = useState(false)
+  const [fetchProgress, setFetchProgress] = useState<{ current: number; total: number } | null>(null)
 
-  // Column visibility state - initialize from localStorage
-  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(STORAGE_KEY)
-      if (saved) {
-        try {
-          return new Set(JSON.parse(saved))
-        } catch {
-          // Fall back to defaults
-        }
-      }
-    }
-    return new Set(ALL_COLUMNS.filter(c => c.default).map(c => c.id))
-  })
+  // Column visibility state - initialize from localStorage with version-aware merging
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => getMergedColumns())
 
-  // Persist column visibility to localStorage
+  // Persist column visibility to localStorage with version
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(visibleColumns)))
+      localStorage.setItem(STORAGE_VERSION_KEY, String(CURRENT_VERSION))
     }
   }, [visibleColumns])
 
@@ -283,25 +312,30 @@ export function BilprospektView({
 
   const handleFetchBiluppgifter = async () => {
     if (selectedIds.size === 0) {
-      toast({
-        title: 'Välj prospekt',
+      toast.error('Välj prospekt', {
         description: 'Markera minst ett prospekt för att hämta data.',
-        variant: 'destructive',
       })
       return
     }
 
     const isHealthy = await checkBiluppgifterStatus()
     if (!isHealthy) {
-      toast({
-        title: 'Biluppgifter API är inte tillgänglig',
+      toast.error('Biluppgifter API är inte tillgänglig', {
         description: 'Starta biluppgifter-api: cd biluppgifter-api && uvicorn server:app --port 3456',
-        variant: 'destructive',
       })
       return
     }
 
     setIsFetchingData(true)
+    setFetchProgress({ current: 0, total: selectedIds.size })
+
+    // Show estimated time (3 items per batch, 1.5s delay between batches)
+    const estimatedBatches = Math.ceil(selectedIds.size / 3)
+    const estimatedSeconds = estimatedBatches * 2 // ~2 seconds per batch (fetch + delay)
+
+    toast.loading(`Hämtar biluppgifter för ${selectedIds.size} fordon...`, {
+      description: `Uppskattat ${estimatedSeconds} sekunder (för att undvika rate limit).`,
+    })
 
     try {
       const selectedProspects = prospects
@@ -311,28 +345,24 @@ export function BilprospektView({
       const result = await fetchMileageForProspects(selectedProspects)
 
       if (result.success) {
-        toast({
-          title: 'Biluppgifter hämtade',
-          description: `${result.updated} av ${result.total} prospekt uppdaterade.`,
+        toast.success('Biluppgifter hämtade!', {
+          description: `${result.updated} av ${result.total} prospekt uppdaterade. ${result.failed > 0 ? `(${result.failed} misslyckades)` : ''}`,
         })
         setSelectedIds(new Set())
         router.refresh()
       } else {
-        toast({
-          title: 'Fel',
+        toast.error('Fel', {
           description: 'Kunde inte hämta biluppgifter.',
-          variant: 'destructive',
         })
       }
     } catch (error) {
       console.error('Error fetching biluppgifter:', error)
-      toast({
-        title: 'Fel',
+      toast.error('Fel', {
         description: 'Ett oväntat fel uppstod.',
-        variant: 'destructive',
       })
     } finally {
       setIsFetchingData(false)
+      setFetchProgress(null)
     }
   }
 
@@ -599,11 +629,21 @@ export function BilprospektView({
                 className="gap-2"
               >
                 {isFetchingData ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Hämtar... ({fetchProgress?.current || 0}/{fetchProgress?.total || selectedIds.size})
+                  </>
                 ) : (
-                  <Download className="w-4 h-4" />
+                  <>
+                    <Download className="w-4 h-4" />
+                    Hämta biluppgifter
+                    {selectedIds.size > 10 && (
+                      <span className="text-xs opacity-70">
+                        (~{Math.ceil(selectedIds.size / 3) * 2}s)
+                      </span>
+                    )}
+                  </>
                 )}
-                Hämta biluppgifter
               </Button>
             </>
           )}

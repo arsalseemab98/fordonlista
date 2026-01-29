@@ -5,6 +5,44 @@ Swedish vehicle lead management system for car dealers.
 
 ---
 
+## 2026-01-29 - Biluppgifter Column Visibility Fix & Rate Limiting
+
+**Type:** Bug Fix & Enhancement
+
+**Problem 1: Biluppgifter columns not visible**
+- Users couldn't see biluppgifter columns (ålder, telefon, adress, etc.) because localStorage cached old column preferences from before these columns were added.
+
+**Solution:**
+- Added version tracking (`STORAGE_VERSION_KEY`) to detect when new columns are added
+- When version is outdated, automatically merges new default columns into saved preferences
+- Users now see new columns immediately while keeping their other preferences
+
+**Problem 2: Rate limiting for large datasets**
+- Risk of getting banned from biluppgifter.se when fetching large amounts of data
+
+**Solution:**
+- Added robust rate limiting configuration:
+  - `batchSize: 3` - Process 3 vehicles at a time
+  - `delayBetweenBatches: 1500ms` - 1.5 seconds between batches
+  - `largeBatchThreshold: 20` - Use slower rate for >20 vehicles
+  - `largeBatchDelay: 2500ms` - 2.5 seconds for large batches
+  - `maxRetries: 2` - Retry failed requests with 5s delay
+- Added progress feedback in UI showing estimated time
+- Console logging for debugging batch processing
+
+**Files Changed:**
+- `components/bilprospekt/bilprospekt-view.tsx`
+  - Added `getMergedColumns()` helper with version-aware merging
+  - Added `CURRENT_VERSION = 2` constant
+  - Added `fetchProgress` state for UI feedback
+  - Fixed toast to use `sonner` instead of non-existent `useToast` hook
+- `lib/biluppgifter/fetch-biluppgifter.ts`
+  - Added `RATE_LIMIT_CONFIG` object with configurable settings
+  - Added retry logic for 403 rate limit errors
+  - Added console logging for debugging
+
+---
+
 ## 2026-01-29 - Bilprospekt Page & Biluppgifter API Integration
 
 **Type:** Feature
