@@ -207,14 +207,14 @@ export function BilprospektView({
 
             {/* Brand */}
             <Select
-              value={currentFilters.brand || ''}
-              onValueChange={(value) => updateFilters({ brand: value || undefined })}
+              value={currentFilters.brand || 'all'}
+              onValueChange={(value) => updateFilters({ brand: value === 'all' ? undefined : value })}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Märke" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Alla märken</SelectItem>
+                <SelectItem value="all">Alla märken</SelectItem>
                 {availableBrands.map(b => (
                   <SelectItem key={b} value={b}>{b}</SelectItem>
                 ))}
@@ -223,14 +223,14 @@ export function BilprospektView({
 
             {/* Fuel */}
             <Select
-              value={currentFilters.fuel || ''}
-              onValueChange={(value) => updateFilters({ fuel: value || undefined })}
+              value={currentFilters.fuel || 'all'}
+              onValueChange={(value) => updateFilters({ fuel: value === 'all' ? undefined : value })}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Bränsle" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Alla</SelectItem>
+                <SelectItem value="all">Alla</SelectItem>
                 {availableFuels.map(f => (
                   <SelectItem key={f} value={f}>{f}</SelectItem>
                 ))}
