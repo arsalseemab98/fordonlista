@@ -337,12 +337,11 @@ export function BilprospektView({
     setIsFetchingData(true)
     setFetchProgress({ current: 0, total: selectedIds.size })
 
-    // Show estimated time (3 items per batch, 1.5s delay between batches)
-    const estimatedBatches = Math.ceil(selectedIds.size / 3)
-    const estimatedSeconds = estimatedBatches * 2 // ~2 seconds per batch (fetch + delay)
+    // Show estimated time (5 items per batch, ~1s per item locally)
+    const estimatedSeconds = Math.max(1, Math.ceil(selectedIds.size * 1.2))
 
     toast.loading(`Hämtar biluppgifter för ${selectedIds.size} fordon...`, {
-      description: `Uppskattat ${estimatedSeconds} sekunder (för att undvika rate limit).`,
+      description: selectedIds.size === 1 ? 'Tar ca 1 sekund...' : `Uppskattat ~${estimatedSeconds} sekunder.`,
     })
 
     try {
@@ -399,11 +398,10 @@ export function BilprospektView({
     setIsFetchingData(true)
     setFetchProgress({ current: 0, total: unfetchedProspects.length })
 
-    const estimatedBatches = Math.ceil(unfetchedProspects.length / 3)
-    const estimatedSeconds = estimatedBatches * 2
+    const estimatedSeconds = Math.max(1, Math.ceil(unfetchedProspects.length * 1.2))
 
     toast.loading(`Hämtar biluppgifter för ${unfetchedProspects.length} fordon...`, {
-      description: `Uppskattat ${estimatedSeconds} sekunder (för att undvika rate limit).`,
+      description: unfetchedProspects.length === 1 ? 'Tar ca 1 sekund...' : `Uppskattat ~${estimatedSeconds} sekunder.`,
     })
 
     try {

@@ -211,15 +211,15 @@ export async function fetchBiluppgifterComplete(regnr: string): Promise<Biluppgi
 
 /**
  * Rate limiting configuration for biluppgifter API
- * Adjust these values if getting rate limited (403/429 errors)
+ * Running locally so we can be more aggressive
  */
 const RATE_LIMIT_CONFIG = {
-  batchSize: 3,           // Process 3 vehicles at a time
-  delayBetweenBatches: 1500, // 1.5 seconds between batches
-  delayOnError: 5000,     // 5 seconds extra delay if error occurs
+  batchSize: 5,           // Process 5 vehicles at a time (faster)
+  delayBetweenBatches: 500, // 0.5 seconds between batches (local = fast)
+  delayOnError: 3000,     // 3 seconds extra delay if error occurs
   maxRetries: 2,          // Retry failed requests max 2 times
   largeBatchThreshold: 20, // Use slower rate for >20 vehicles
-  largeBatchDelay: 2500,  // 2.5 seconds delay for large batches
+  largeBatchDelay: 1000,  // 1 second delay for large batches
 }
 
 /**
