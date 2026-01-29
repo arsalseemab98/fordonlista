@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -25,6 +25,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -40,11 +48,12 @@ import {
   Phone,
   MapPin,
   Car,
-  Calendar,
-  Users,
-  Receipt,
   Info,
   CheckCircle2,
+  Settings2,
+  Download,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import { fetchMileageForProspects, checkBiluppgifterStatus } from '@/app/bilprospekt/actions'
 import { useToast } from '@/hooks/use-toast'
@@ -116,6 +125,45 @@ interface BilprospektViewProps {
   availableMunicipalities: string[]
 }
 
+// Column definitions
+const ALL_COLUMNS = [
+  { id: 'reg_number', label: 'Reg.nr', group: 'basic', default: true },
+  { id: 'brand', label: 'Märke', group: 'basic', default: true },
+  { id: 'model', label: 'Modell', group: 'basic', default: true },
+  { id: 'car_year', label: 'År', group: 'basic', default: true },
+  { id: 'fuel', label: 'Bränsle', group: 'basic', default: true },
+  { id: 'mileage', label: 'Mil', group: 'basic', default: true },
+  { id: 'color', label: 'Färg', group: 'vehicle', default: false },
+  { id: 'kaross', label: 'Kaross', group: 'vehicle', default: false },
+  { id: 'transmission', label: 'Växel', group: 'vehicle', default: false },
+  { id: 'engine_power', label: 'HK', group: 'vehicle', default: false },
+  { id: 'cylinder_volume', label: 'CC', group: 'vehicle', default: false },
+  { id: 'fwd', label: '4WD', group: 'vehicle', default: false },
+  { id: 'in_service', label: 'I trafik', group: 'vehicle', default: false },
+  { id: 'chassis', label: 'Chassi', group: 'vehicle', default: false },
+  { id: 'owner_name', label: 'Ägare', group: 'owner', default: true },
+  { id: 'bu_owner_age', label: 'Ålder', group: 'biluppgifter', default: true },
+  { id: 'bu_owner_phone', label: 'Telefon', group: 'biluppgifter', default: true },
+  { id: 'bu_owner_address', label: 'Adress', group: 'biluppgifter', default: true },
+  { id: 'municipality', label: 'Ort', group: 'owner', default: true },
+  { id: 'bu_num_owners', label: 'Ägare #', group: 'biluppgifter', default: true },
+  { id: 'bu_annual_tax', label: 'Skatt/år', group: 'biluppgifter', default: true },
+  { id: 'bu_inspection_until', label: 'Besiktning', group: 'biluppgifter', default: true },
+  { id: 'bu_address_vehicles', label: 'Fordon', group: 'biluppgifter', default: true },
+  { id: 'date_acquired', label: 'Köpt', group: 'owner', default: false },
+  { id: 'possession', label: 'Innehav', group: 'owner', default: true },
+  { id: 'seller_name', label: 'Inköpsplats', group: 'owner', default: false },
+  { id: 'new_or_old', label: 'Ny/Begagnad', group: 'owner', default: false },
+  { id: 'financing', label: 'Finansiering', group: 'owner', default: false },
+]
+
+const COLUMN_GROUPS = [
+  { id: 'basic', label: 'Grundläggande' },
+  { id: 'vehicle', label: 'Fordon' },
+  { id: 'owner', label: 'Ägare' },
+  { id: 'biluppgifter', label: 'Biluppgifter' },
+]
+
 const REGIONS = [
   { value: '25', label: 'Norrbotten' },
   { value: '24', label: 'Västerbotten' },
@@ -127,6 +175,8 @@ const REGIONS = [
   { value: '14', label: 'Västra Götaland' },
   { value: '12', label: 'Skåne' },
 ]
+
+const STORAGE_KEY = 'bilprospektVisibleColumns'
 
 export function BilprospektView({
   prospects,
@@ -145,7 +195,54 @@ export function BilprospektView({
   const [searchTerm, setSearchTerm] = useState(currentFilters.search || '')
   const [isFetchingData, setIsFetchingData] = useState(false)
 
+  // Column visibility state - initialize from localStorage
+  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (saved) {
+        try {
+          return new Set(JSON.parse(saved))
+        } catch {
+          // Fall back to defaults
+        }
+      }
+    }
+    return new Set(ALL_COLUMNS.filter(c => c.default).map(c => c.id))
+  })
+
+  // Persist column visibility to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(visibleColumns)))
+    }
+  }, [visibleColumns])
+
   const totalPages = Math.ceil(totalCount / pageSize)
+
+  const toggleColumn = useCallback((columnId: string) => {
+    setVisibleColumns(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(columnId)) {
+        newSet.delete(columnId)
+      } else {
+        newSet.add(columnId)
+      }
+      return newSet
+    })
+  }, [])
+
+  const showAllColumns = useCallback(() => {
+    setVisibleColumns(new Set(ALL_COLUMNS.map(c => c.id)))
+  }, [])
+
+  const hideAllColumns = useCallback(() => {
+    // Always keep reg_number visible
+    setVisibleColumns(new Set(['reg_number']))
+  }, [])
+
+  const resetToDefaults = useCallback(() => {
+    setVisibleColumns(new Set(ALL_COLUMNS.filter(c => c.default).map(c => c.id)))
+  }, [])
 
   const updateFilters = (updates: Record<string, string | undefined>) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -263,9 +360,183 @@ export function BilprospektView({
     return prospect.bu_fetched_at !== null
   }
 
+  const isColumnVisible = (columnId: string) => visibleColumns.has(columnId)
+
+  // Render cell content based on column id
+  const renderCell = (prospect: Prospect, columnId: string) => {
+    switch (columnId) {
+      case 'reg_number':
+        return (
+          <div className="flex items-center gap-1">
+            <span className="font-mono text-sm font-medium text-blue-600">
+              {prospect.reg_number}
+            </span>
+            {hasBiluppgifterData(prospect) && (
+              <CheckCircle2 className="w-3 h-3 text-green-600" />
+            )}
+          </div>
+        )
+      case 'brand':
+        return <span className="font-medium">{prospect.brand}</span>
+      case 'model':
+        return prospect.model || '-'
+      case 'car_year':
+        return prospect.car_year || '-'
+      case 'fuel':
+        return (
+          <Badge variant="secondary" className={getFuelBadgeColor(prospect.fuel)}>
+            {prospect.fuel || '-'}
+          </Badge>
+        )
+      case 'mileage':
+        return prospect.mileage ? (
+          <span className="font-medium">{prospect.mileage.toLocaleString()}</span>
+        ) : '-'
+      case 'color':
+        return prospect.color || '-'
+      case 'kaross':
+        return prospect.kaross || '-'
+      case 'transmission':
+        return (
+          <Badge variant="outline" className={prospect.transmission === 'Automat' ? 'bg-purple-50' : ''}>
+            {prospect.transmission === 'Automat' ? 'A' : 'M'}
+          </Badge>
+        )
+      case 'engine_power':
+        return prospect.engine_power && prospect.engine_power > 0 ? prospect.engine_power : '-'
+      case 'cylinder_volume':
+        return prospect.cylinder_volume || '-'
+      case 'fwd':
+        return prospect.fwd === 'Ja' ? (
+          <Badge variant="outline" className="bg-blue-50 text-blue-800">Ja</Badge>
+        ) : 'Nej'
+      case 'in_service':
+        return prospect.in_service === 'Ja' ? (
+          <Badge variant="outline" className="bg-green-50 text-green-800">Ja</Badge>
+        ) : prospect.in_service === 'Nej' ? (
+          <Badge variant="outline" className="bg-red-50 text-red-800">Nej</Badge>
+        ) : '-'
+      case 'chassis':
+        return (
+          <span className="font-mono text-xs max-w-[100px] truncate block" title={prospect.chassis || ''}>
+            {prospect.chassis || '-'}
+          </span>
+        )
+      case 'owner_name':
+        return (
+          <div className="flex items-center gap-1">
+            {prospect.owner_type === 'company' ? (
+              <Building2 className="w-4 h-4 text-purple-500" />
+            ) : (
+              <User className="w-4 h-4 text-muted-foreground" />
+            )}
+            <span className="max-w-[100px] truncate">
+              {prospect.owner_name?.split(',')[0] || '-'}
+            </span>
+          </div>
+        )
+      case 'bu_owner_age':
+        return prospect.bu_owner_age ? `${prospect.bu_owner_age} år` : '-'
+      case 'bu_owner_phone':
+        return prospect.bu_owner_phone ? (
+          <a
+            href={`tel:${prospect.bu_owner_phone}`}
+            className="flex items-center gap-1 text-blue-600 hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Phone className="w-3 h-3" />
+            {prospect.bu_owner_phone}
+          </a>
+        ) : '-'
+      case 'bu_owner_address':
+        return (
+          <span className="max-w-[120px] truncate block" title={prospect.bu_owner_address || ''}>
+            {prospect.bu_owner_address || '-'}
+          </span>
+        )
+      case 'municipality':
+        return prospect.bu_owner_postal_city || prospect.municipality || '-'
+      case 'bu_num_owners':
+        return prospect.bu_num_owners ? (
+          <Badge variant="outline">{prospect.bu_num_owners}</Badge>
+        ) : '-'
+      case 'bu_annual_tax':
+        return prospect.bu_annual_tax ? `${prospect.bu_annual_tax.toLocaleString()} kr` : '-'
+      case 'bu_inspection_until':
+        return prospect.bu_inspection_until ? (
+          <Badge variant="outline" className={
+            new Date(prospect.bu_inspection_until) < new Date() ? 'bg-red-50 text-red-800' : 'bg-green-50 text-green-800'
+          }>
+            {prospect.bu_inspection_until}
+          </Badge>
+        ) : '-'
+      case 'bu_address_vehicles':
+        return (prospect.bu_address_vehicles && prospect.bu_address_vehicles.length > 0) ? (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1" onClick={(e) => e.stopPropagation()}>
+                <Car className="w-3 h-3" />
+                {prospect.bu_address_vehicles.length}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80">
+              <div className="space-y-2">
+                <h4 className="font-medium flex items-center gap-2">
+                  <MapPin className="w-4 h-4" />
+                  Fordon på adressen
+                </h4>
+                <div className="text-sm text-muted-foreground mb-2">
+                  {prospect.bu_owner_address}, {prospect.bu_owner_postal_code} {prospect.bu_owner_postal_city}
+                </div>
+                <div className="max-h-48 overflow-y-auto space-y-1">
+                  {prospect.bu_address_vehicles.map((v, i) => (
+                    <div key={i} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
+                      <div>
+                        <span className="font-mono font-medium">{v.regnr}</span>
+                        <span className="text-muted-foreground ml-2">{v.description}</span>
+                      </div>
+                      {v.status && (
+                        <Badge variant="outline" className={v.status === 'I Trafik' ? 'bg-green-50' : 'bg-red-50'}>
+                          {v.status}
+                        </Badge>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+        ) : '-'
+      case 'date_acquired':
+        return prospect.date_acquired ? new Date(prospect.date_acquired).toLocaleDateString('sv-SE') : '-'
+      case 'possession':
+        return calculatePossession(prospect.date_acquired)
+      case 'seller_name':
+        return (
+          <span className="max-w-[120px] truncate block" title={prospect.seller_name || ''}>
+            {prospect.seller_name || '-'}
+          </span>
+        )
+      case 'new_or_old':
+        return prospect.new_or_old ? (
+          <Badge variant="outline" className={prospect.new_or_old === 'Ny' ? 'bg-green-50 text-green-800' : 'bg-gray-50'}>
+            {prospect.new_or_old}
+          </Badge>
+        ) : '-'
+      case 'financing':
+        return prospect.credit ? (
+          <Badge variant="outline" className="bg-yellow-50 text-yellow-800">Kredit</Badge>
+        ) : prospect.leasing ? (
+          <Badge variant="outline" className="bg-purple-50 text-purple-800">Leasing</Badge>
+        ) : 'Kontant'
+      default:
+        return '-'
+    }
+  }
+
   return (
     <div className="space-y-4">
-      {/* Stats */}
+      {/* Stats & Actions */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -276,24 +547,67 @@ export function BilprospektView({
             <p className="text-2xl font-bold">{totalCount.toLocaleString()}</p>
           </div>
         </div>
-        {selectedIds.size > 0 && (
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary">{selectedIds.size} valda</Badge>
-            <Button
-              size="sm"
-              onClick={handleFetchBiluppgifter}
-              disabled={isFetchingData}
-              className="gap-2"
-            >
-              {isFetchingData ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Gauge className="w-4 h-4" />
-              )}
-              Hämta biluppgifter
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Column visibility dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Settings2 className="w-4 h-4" />
+                Kolumner ({visibleColumns.size})
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56 max-h-[400px] overflow-y-auto">
+              <DropdownMenuLabel>Visa kolumner</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <div className="flex gap-1 px-2 py-1">
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={showAllColumns}>
+                  <Eye className="w-3 h-3 mr-1" /> Alla
+                </Button>
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={hideAllColumns}>
+                  <EyeOff className="w-3 h-3 mr-1" /> Inga
+                </Button>
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={resetToDefaults}>
+                  Standard
+                </Button>
+              </div>
+              <DropdownMenuSeparator />
+              {COLUMN_GROUPS.map(group => (
+                <div key={group.id}>
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">{group.label}</DropdownMenuLabel>
+                  {ALL_COLUMNS.filter(c => c.group === group.id).map(column => (
+                    <DropdownMenuCheckboxItem
+                      key={column.id}
+                      checked={isColumnVisible(column.id)}
+                      onCheckedChange={() => toggleColumn(column.id)}
+                      disabled={column.id === 'reg_number'} // Always show reg_number
+                    >
+                      {column.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+                </div>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {selectedIds.size > 0 && (
+            <>
+              <Badge variant="secondary">{selectedIds.size} valda</Badge>
+              <Button
+                size="sm"
+                onClick={handleFetchBiluppgifter}
+                disabled={isFetchingData}
+                className="gap-2"
+              >
+                {isFetchingData ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+                Hämta biluppgifter
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Filters */}
@@ -429,29 +743,16 @@ export function BilprospektView({
                       onCheckedChange={handleSelectAll}
                     />
                   </TableHead>
-                  <TableHead>Reg.nr</TableHead>
-                  <TableHead>Märke</TableHead>
-                  <TableHead>Modell</TableHead>
-                  <TableHead>År</TableHead>
-                  <TableHead>Bränsle</TableHead>
-                  <TableHead>Mil</TableHead>
-                  <TableHead>Ägare</TableHead>
-                  <TableHead>Ålder</TableHead>
-                  <TableHead>Telefon</TableHead>
-                  <TableHead>Adress</TableHead>
-                  <TableHead>Ort</TableHead>
-                  <TableHead>Ägare #</TableHead>
-                  <TableHead>Skatt/år</TableHead>
-                  <TableHead>Besikt.</TableHead>
-                  <TableHead>Fordon</TableHead>
-                  <TableHead>Innehav</TableHead>
+                  {ALL_COLUMNS.filter(c => isColumnVisible(c.id)).map(column => (
+                    <TableHead key={column.id}>{column.label}</TableHead>
+                  ))}
                   <TableHead>Info</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {prospects.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={18} className="h-32 text-center">
+                    <TableCell colSpan={visibleColumns.size + 2} className="h-32 text-center">
                       <div className="flex flex-col items-center gap-2 text-muted-foreground">
                         <Database className="w-10 h-10 opacity-20" />
                         <p>Inga prospekt hittades</p>
@@ -472,138 +773,11 @@ export function BilprospektView({
                           onCheckedChange={() => handleSelectOne(prospect.id)}
                         />
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <span className="font-mono text-sm font-medium text-blue-600">
-                            {prospect.reg_number}
-                          </span>
-                          {hasBiluppgifterData(prospect) && (
-                            <CheckCircle2 className="w-3 h-3 text-green-600" />
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-medium">{prospect.brand}</TableCell>
-                      <TableCell className="text-sm">{prospect.model || '-'}</TableCell>
-                      <TableCell>{prospect.car_year || '-'}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className={getFuelBadgeColor(prospect.fuel)}>
-                          {prospect.fuel || '-'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {prospect.mileage ? (
-                          <span className="font-medium">{prospect.mileage.toLocaleString()}</span>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          {prospect.owner_type === 'company' ? (
-                            <Building2 className="w-4 h-4 text-purple-500" />
-                          ) : (
-                            <User className="w-4 h-4 text-muted-foreground" />
-                          )}
-                          <span className="text-sm max-w-[100px] truncate">
-                            {prospect.owner_name?.split(',')[0] || '-'}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {prospect.bu_owner_age ? (
-                          <span>{prospect.bu_owner_age} år</span>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {prospect.bu_owner_phone ? (
-                          <a
-                            href={`tel:${prospect.bu_owner_phone}`}
-                            className="flex items-center gap-1 text-blue-600 hover:underline"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Phone className="w-3 h-3" />
-                            {prospect.bu_owner_phone}
-                          </a>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm max-w-[120px] truncate" title={prospect.bu_owner_address || ''}>
-                        {prospect.bu_owner_address || '-'}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {prospect.bu_owner_postal_city || prospect.municipality || '-'}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {prospect.bu_num_owners ? (
-                          <Badge variant="outline">{prospect.bu_num_owners}</Badge>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {prospect.bu_annual_tax ? (
-                          <span>{prospect.bu_annual_tax.toLocaleString()} kr</span>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm whitespace-nowrap">
-                        {prospect.bu_inspection_until ? (
-                          <Badge variant="outline" className={
-                            new Date(prospect.bu_inspection_until) < new Date() ? 'bg-red-50 text-red-800' : 'bg-green-50 text-green-800'
-                          }>
-                            {prospect.bu_inspection_until}
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm" onClick={(e) => e.stopPropagation()}>
-                        {(prospect.bu_address_vehicles && prospect.bu_address_vehicles.length > 0) ? (
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button variant="outline" size="sm" className="gap-1">
-                                <Car className="w-3 h-3" />
-                                {prospect.bu_address_vehicles.length}
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-80">
-                              <div className="space-y-2">
-                                <h4 className="font-medium flex items-center gap-2">
-                                  <MapPin className="w-4 h-4" />
-                                  Fordon på adressen
-                                </h4>
-                                <div className="text-sm text-muted-foreground mb-2">
-                                  {prospect.bu_owner_address}, {prospect.bu_owner_postal_code} {prospect.bu_owner_postal_city}
-                                </div>
-                                <div className="max-h-48 overflow-y-auto space-y-1">
-                                  {prospect.bu_address_vehicles.map((v, i) => (
-                                    <div key={i} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
-                                      <div>
-                                        <span className="font-mono font-medium">{v.regnr}</span>
-                                        <span className="text-muted-foreground ml-2">{v.description}</span>
-                                      </div>
-                                      {v.status && (
-                                        <Badge variant="outline" className={v.status === 'I Trafik' ? 'bg-green-50' : 'bg-red-50'}>
-                                          {v.status}
-                                        </Badge>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm whitespace-nowrap">
-                        {calculatePossession(prospect.date_acquired)}
-                      </TableCell>
+                      {ALL_COLUMNS.filter(c => isColumnVisible(c.id)).map(column => (
+                        <TableCell key={column.id} className="text-sm">
+                          {renderCell(prospect, column.id)}
+                        </TableCell>
+                      ))}
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <Popover>
                           <PopoverTrigger asChild>
@@ -615,6 +789,14 @@ export function BilprospektView({
                             <div className="space-y-3">
                               <h4 className="font-medium">Detaljer: {prospect.reg_number}</h4>
                               <div className="grid grid-cols-2 gap-2 text-sm">
+                                <div className="text-muted-foreground">Märke:</div>
+                                <div>{prospect.brand}</div>
+                                <div className="text-muted-foreground">Modell:</div>
+                                <div>{prospect.model || '-'}</div>
+                                <div className="text-muted-foreground">År:</div>
+                                <div>{prospect.car_year || '-'}</div>
+                                <div className="text-muted-foreground">Bränsle:</div>
+                                <div>{prospect.fuel || '-'}</div>
                                 <div className="text-muted-foreground">Typ:</div>
                                 <div>{prospect.kaross || '-'}</div>
                                 <div className="text-muted-foreground">Växellåda:</div>
@@ -629,16 +811,8 @@ export function BilprospektView({
                                 <div>{prospect.fwd === 'Ja' ? 'Ja' : 'Nej'}</div>
                                 <div className="text-muted-foreground">I trafik:</div>
                                 <div>{prospect.in_service || '-'}</div>
-                                <div className="text-muted-foreground">Ny/Begagnad:</div>
-                                <div>{prospect.new_or_old || '-'}</div>
-                                <div className="text-muted-foreground">Inköpsplats:</div>
-                                <div className="truncate" title={prospect.seller_name || ''}>{prospect.seller_name || '-'}</div>
                                 <div className="text-muted-foreground">Chassi:</div>
                                 <div className="font-mono text-xs truncate" title={prospect.chassis || ''}>{prospect.chassis || '-'}</div>
-                                <div className="text-muted-foreground">Finansiering:</div>
-                                <div>
-                                  {prospect.credit ? 'Kredit' : prospect.leasing ? 'Leasing' : 'Kontant'}
-                                </div>
                               </div>
                               {hasBiluppgifterData(prospect) && (
                                 <div className="pt-2 border-t text-xs text-muted-foreground">
