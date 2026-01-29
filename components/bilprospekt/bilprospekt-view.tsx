@@ -325,7 +325,7 @@ export function BilprospektView({
         action: {
           label: '📋 Kopiera',
           onClick: () => {
-            navigator.clipboard.writeText('cd ~/Desktop/biluppgifter-api && uvicorn server:app --port 3456')
+            navigator.clipboard.writeText('cd ~/Desktop/biluppgifter-api && source venv/bin/activate && uvicorn server:app --port 3456')
             toast.success('Kommando kopierat! Klistra in i Terminal.')
           }
         },
@@ -387,7 +387,7 @@ export function BilprospektView({
         action: {
           label: '📋 Kopiera',
           onClick: () => {
-            navigator.clipboard.writeText('cd ~/Desktop/biluppgifter-api && uvicorn server:app --port 3456')
+            navigator.clipboard.writeText('cd ~/Desktop/biluppgifter-api && source venv/bin/activate && uvicorn server:app --port 3456')
             toast.success('Kommando kopierat! Klistra in i Terminal.')
           }
         },

@@ -979,7 +979,7 @@ function IntegrationsSettings({ carInfoTokens, biluppgifterSettings }: { carInfo
               </div>
               <Button
                 onClick={() => {
-                  navigator.clipboard.writeText('cd ~/Desktop/biluppgifter-api && uvicorn server:app --port 3456')
+                  navigator.clipboard.writeText('cd ~/Desktop/biluppgifter-api && source venv/bin/activate && uvicorn server:app --port 3456')
                   toast.success('Kommando kopierat! Klistra in i Terminal.')
                 }}
                 className="gap-2 bg-blue-600 hover:bg-blue-700 shrink-0"
