@@ -321,7 +321,15 @@ export function BilprospektView({
     const isHealthy = await checkBiluppgifterStatus()
     if (!isHealthy) {
       toast.error('Biluppgifter API är inte tillgänglig', {
-        description: 'Starta biluppgifter-api: cd biluppgifter-api && uvicorn server:app --port 3456',
+        description: 'Klicka för att kopiera startkommando',
+        action: {
+          label: '📋 Kopiera',
+          onClick: () => {
+            navigator.clipboard.writeText('cd ~/Desktop/biluppgifter-api && uvicorn server:app --port 3456')
+            toast.success('Kommando kopierat! Klistra in i Terminal.')
+          }
+        },
+        duration: 10000,
       })
       return
     }
@@ -375,7 +383,15 @@ export function BilprospektView({
     const isHealthy = await checkBiluppgifterStatus()
     if (!isHealthy) {
       toast.error('Biluppgifter API är inte tillgänglig', {
-        description: 'Starta biluppgifter-api: cd biluppgifter-api && uvicorn server:app --port 3456',
+        description: 'Klicka för att kopiera startkommando',
+        action: {
+          label: '📋 Kopiera',
+          onClick: () => {
+            navigator.clipboard.writeText('cd ~/Desktop/biluppgifter-api && uvicorn server:app --port 3456')
+            toast.success('Kommando kopierat! Klistra in i Terminal.')
+          }
+        },
+        duration: 10000,
       })
       return
     }
