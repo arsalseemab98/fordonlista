@@ -438,8 +438,10 @@ export function BilprospektView({
                       </TableCell>
                       <TableCell className="text-sm">
                         {prospect.fwd === 'Ja' ? (
-                          <Badge variant="outline" className="bg-blue-50 text-blue-800">4WD</Badge>
-                        ) : '-'}
+                          <Badge variant="outline" className="bg-blue-50 text-blue-800">Ja</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">Nej</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-sm font-mono text-xs max-w-[120px] truncate" title={prospect.chassis || ''}>
                         {prospect.chassis || '-'}
@@ -447,7 +449,7 @@ export function BilprospektView({
                       <TableCell className="text-sm">
                         {prospect.credit && <Badge variant="outline" className="bg-yellow-50 text-yellow-800 mr-1">Kredit</Badge>}
                         {prospect.leasing && <Badge variant="outline" className="bg-purple-50 text-purple-800">Leasing</Badge>}
-                        {!prospect.credit && !prospect.leasing && '-'}
+                        {!prospect.credit && !prospect.leasing && <span className="text-muted-foreground">Kontant</span>}
                       </TableCell>
                     </TableRow>
                   ))
