@@ -992,19 +992,31 @@ function IntegrationsSettings({ carInfoTokens, biluppgifterSettings }: { carInfo
 
           {/* Cookie Instructions */}
           <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-            <div className="flex gap-3">
-              <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-              <div className="space-y-2">
-                <p className="font-semibold text-amber-900">2. Uppdatera cookies (vid 403-fel)</p>
-                <p className="text-sm text-amber-700">cf_clearance löper ut var ~2 timme. Så här förnyar du:</p>
-                <ol className="text-sm text-amber-700 space-y-1 list-decimal list-inside">
-                  <li>Logga in på <a href="https://biluppgifter.se" target="_blank" rel="noopener noreferrer" className="underline font-medium">biluppgifter.se</a></li>
-                  <li>Tryck F12 → Application → Cookies</li>
-                  <li>Kopiera <code className="bg-amber-100 px-1 rounded">session</code> och <code className="bg-amber-100 px-1 rounded">cf_clearance</code></li>
-                  <li>Uppdatera <code className="bg-amber-100 px-1 rounded">~/Desktop/biluppgifter-api/.env</code></li>
-                  <li>Starta om servern</li>
-                </ol>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-amber-900">2. Uppdatera cookies (vid 403-fel)</p>
+                  <p className="text-sm text-amber-700 mt-1">cf_clearance löper ut var ~2 timme</p>
+                  <ol className="text-sm text-amber-700 mt-2 space-y-0.5 list-decimal list-inside">
+                    <li>Öppna <a href="https://biluppgifter.se" target="_blank" rel="noopener noreferrer" className="underline font-medium">biluppgifter.se</a> → F12 → Console</li>
+                    <li>Klistra in scriptet → Enter</li>
+                    <li>Fyll i cookies → Kopiera → Klistra i .env</li>
+                  </ol>
+                </div>
               </div>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const script = `(function(){const m=document.createElement('div');m.innerHTML='<div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:system-ui"><div style="background:white;padding:24px;border-radius:12px;max-width:600px;width:90%"><h2 style="margin:0 0 16px;color:#1e40af">🍪 Kopiera Cookies till .env</h2><p style="color:#666;margin-bottom:16px">Gå till <b>Application → Cookies</b> och kopiera värdena:</p><div style="margin-bottom:12px"><label style="font-weight:bold;color:#333">session:</label><input id="cs" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-family:monospace;font-size:12px" placeholder="Klistra in session..."></div><div style="margin-bottom:12px"><label style="font-weight:bold;color:#d97706">cf_clearance:</label><input id="cc" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-family:monospace;font-size:12px" placeholder="Klistra in cf_clearance..."></div><div style="background:#f1f5f9;padding:12px;border-radius:8px;margin-bottom:16px"><label style="font-weight:bold;color:#333;display:block;margin-bottom:8px">📋 .env format:</label><textarea id="eo" readonly style="width:100%;height:60px;padding:8px;border:1px solid #ddd;border-radius:4px;font-family:monospace;font-size:11px;resize:none"></textarea></div><div style="display:flex;gap:8px"><button id="bc" style="flex:1;padding:12px;background:#2563eb;color:white;border:none;border-radius:6px;font-weight:bold;cursor:pointer">📋 Kopiera .env</button><button id="bx" style="padding:12px 24px;background:#e5e7eb;border:none;border-radius:6px;cursor:pointer">Stäng</button></div></div></div>';document.body.appendChild(m);const u=()=>{document.getElementById('eo').value='BILUPPGIFTER_SESSION='+document.getElementById('cs').value+'\\nBILUPPGIFTER_CF_CLEARANCE='+document.getElementById('cc').value;};document.getElementById('cs').oninput=u;document.getElementById('cc').oninput=u;document.getElementById('bc').onclick=()=>{navigator.clipboard.writeText(document.getElementById('eo').value);alert('✅ Kopierat! Klistra in i .env');};document.getElementById('bx').onclick=()=>m.remove();})();`;
+                  navigator.clipboard.writeText(script)
+                  toast.success('Script kopierat! Klistra in i Console på biluppgifter.se')
+                }}
+                className="gap-2 shrink-0 border-amber-300 text-amber-700 hover:bg-amber-100"
+              >
+                <ClipboardPaste className="h-4 w-4" />
+                Kopiera script
+              </Button>
             </div>
           </div>
 
