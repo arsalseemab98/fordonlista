@@ -19,6 +19,8 @@ export default async function BilprospektPage({
   const fuelParam = typeof params.fuel === 'string' ? params.fuel : undefined
   const yearFromParam = typeof params.year_from === 'string' ? parseInt(params.year_from) : undefined
   const yearToParam = typeof params.year_to === 'string' ? parseInt(params.year_to) : undefined
+  const possessionFromParam = typeof params.possession_from === 'string' ? parseInt(params.possession_from) : undefined
+  const possessionToParam = typeof params.possession_to === 'string' ? parseInt(params.possession_to) : undefined
   const search = typeof params.search === 'string' ? params.search : undefined
   const page = typeof params.page === 'string' ? parseInt(params.page) : 0
   const pageSize = 50
@@ -36,6 +38,19 @@ export default async function BilprospektPage({
   if (fuelParam) query = query.ilike('fuel', `%${fuelParam}%`)
   if (yearFromParam) query = query.gte('car_year', yearFromParam)
   if (yearToParam) query = query.lte('car_year', yearToParam)
+
+  // Filter by possession time (months since date_acquired)
+  if (possessionFromParam) {
+    const dateFrom = new Date()
+    dateFrom.setMonth(dateFrom.getMonth() - possessionFromParam)
+    query = query.lte('date_acquired', dateFrom.toISOString().split('T')[0])
+  }
+  if (possessionToParam) {
+    const dateTo = new Date()
+    dateTo.setMonth(dateTo.getMonth() - possessionToParam)
+    query = query.gte('date_acquired', dateTo.toISOString().split('T')[0])
+  }
+
   if (search) {
     query = query.or(`reg_number.ilike.%${search}%,owner_name.ilike.%${search}%,municipality.ilike.%${search}%`)
   }
@@ -74,6 +89,8 @@ export default async function BilprospektPage({
             fuel: fuelParam,
             yearFrom: yearFromParam,
             yearTo: yearToParam,
+            possessionFrom: possessionFromParam,
+            possessionTo: possessionToParam,
             search,
           }}
           availableBrands={brands.sort()}

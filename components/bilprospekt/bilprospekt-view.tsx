@@ -68,6 +68,8 @@ interface BilprospektViewProps {
     fuel?: string
     yearFrom?: number
     yearTo?: number
+    possessionFrom?: number
+    possessionTo?: number
     search?: string
   }
   availableBrands: string[]
@@ -189,7 +191,7 @@ export function BilprospektView({
           </CardTitle>
         </CardHeader>
         <CardContent className="pb-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
             {/* Region */}
             <Select
               value={currentFilters.region || '25'}
@@ -255,6 +257,24 @@ export function BilprospektView({
               className="w-full"
             />
 
+            {/* Possession From */}
+            <Input
+              type="number"
+              placeholder="Innehav från (mån)"
+              value={currentFilters.possessionFrom || ''}
+              onChange={(e) => updateFilters({ possession_from: e.target.value || undefined })}
+              className="w-full"
+            />
+
+            {/* Possession To */}
+            <Input
+              type="number"
+              placeholder="Innehav till (mån)"
+              value={currentFilters.possessionTo || ''}
+              onChange={(e) => updateFilters({ possession_to: e.target.value || undefined })}
+              className="w-full"
+            />
+
             {/* Search */}
             <div className="flex gap-2">
               <Input
@@ -282,6 +302,11 @@ export function BilprospektView({
             {currentFilters.fuel && (
               <Badge variant="outline" className="bg-amber-50">{currentFilters.fuel}</Badge>
             )}
+            {(currentFilters.possessionFrom || currentFilters.possessionTo) && (
+              <Badge variant="outline" className="bg-blue-50">
+                Innehav: {currentFilters.possessionFrom || 0}-{currentFilters.possessionTo || '∞'} mån
+              </Badge>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -300,22 +325,25 @@ export function BilprospektView({
                     />
                   </TableHead>
                   <TableHead>Reg.nr</TableHead>
-                  <TableHead>Märke/Modell</TableHead>
+                  <TableHead>Märke</TableHead>
+                  <TableHead>Modell</TableHead>
+                  <TableHead>Typ</TableHead>
                   <TableHead>År</TableHead>
                   <TableHead>Bränsle</TableHead>
-                  <TableHead>Färg</TableHead>
                   <TableHead>Växel</TableHead>
                   <TableHead>HK</TableHead>
                   <TableHead>Mil</TableHead>
                   <TableHead>Ägare</TableHead>
                   <TableHead>Ort</TableHead>
+                  <TableHead>Köpt</TableHead>
                   <TableHead>Innehav</TableHead>
+                  <TableHead>Finansiering</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {prospects.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={12} className="h-32 text-center">
+                    <TableCell colSpan={15} className="h-32 text-center">
                       <div className="flex flex-col items-center gap-2 text-muted-foreground">
                         <Database className="w-10 h-10 opacity-20" />
                         <p>Inga prospekt hittades</p>
@@ -341,20 +369,15 @@ export function BilprospektView({
                           {prospect.reg_number}
                         </span>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Car className="w-4 h-4 text-muted-foreground" />
-                          <span className="font-medium">{prospect.brand}</span>
-                          <span className="text-muted-foreground">{prospect.model}</span>
-                        </div>
-                      </TableCell>
+                      <TableCell className="font-medium">{prospect.brand}</TableCell>
+                      <TableCell className="text-sm">{prospect.model || '-'}</TableCell>
+                      <TableCell className="text-sm">{prospect.kaross || '-'}</TableCell>
                       <TableCell>{prospect.car_year || '-'}</TableCell>
                       <TableCell>
                         <Badge variant="secondary" className={getFuelBadgeColor(prospect.fuel)}>
                           {prospect.fuel || '-'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm">{prospect.color || '-'}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={prospect.transmission === 'Automat' ? 'bg-purple-50' : ''}>
                           {prospect.transmission === 'Automat' ? 'A' : 'M'}
@@ -364,7 +387,7 @@ export function BilprospektView({
                       <TableCell className="text-sm">{prospect.mileage || '-'}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          {prospect.leasing ? (
+                          {prospect.owner_type === 'company' ? (
                             <Building2 className="w-4 h-4 text-purple-500" />
                           ) : (
                             <User className="w-4 h-4 text-muted-foreground" />
@@ -376,7 +399,15 @@ export function BilprospektView({
                       </TableCell>
                       <TableCell className="text-sm">{prospect.municipality || '-'}</TableCell>
                       <TableCell className="text-sm whitespace-nowrap">
+                        {prospect.date_acquired ? new Date(prospect.date_acquired).toLocaleDateString('sv-SE') : '-'}
+                      </TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">
                         {calculatePossession(prospect.date_acquired)}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {prospect.credit && <Badge variant="outline" className="bg-yellow-50 text-yellow-800 mr-1">Kredit</Badge>}
+                        {prospect.leasing && <Badge variant="outline" className="bg-purple-50 text-purple-800">Leasing</Badge>}
+                        {!prospect.credit && !prospect.leasing && '-'}
                       </TableCell>
                     </TableRow>
                   ))
