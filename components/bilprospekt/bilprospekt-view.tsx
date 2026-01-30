@@ -54,14 +54,39 @@ import {
   Download,
   Eye,
   EyeOff,
+  History,
+  Users,
+  TrendingDown,
+  Calendar,
 } from 'lucide-react'
 import { fetchMileageForProspects, checkBiluppgifterStatus } from '@/app/bilprospekt/actions'
 import { toast } from 'sonner'
 
 interface AddressVehicle {
   regnr: string
-  description: string
+  description?: string
+  model?: string
+  color?: string
   status?: string
+  mileage?: number
+  year?: number
+  date_acquired?: string
+  ownership_time?: string
+}
+
+interface MileageHistoryEntry {
+  date: string
+  mileage_mil: number
+  mileage_km: number
+  type: string
+}
+
+interface OwnerHistoryEntry {
+  date: string
+  name?: string
+  type: string
+  owner_class: string
+  details?: string
 }
 
 interface Prospect {
@@ -102,6 +127,9 @@ interface Prospect {
   bu_owner_phone: string | null
   bu_owner_vehicles: AddressVehicle[] | null
   bu_address_vehicles: AddressVehicle[] | null
+  bu_mileage_history: MileageHistoryEntry[] | null
+  bu_owner_history: OwnerHistoryEntry[] | null
+  bu_owner_name: string | null
   bu_fetched_at: string | null
 }
 
@@ -150,6 +178,8 @@ const ALL_COLUMNS = [
   { id: 'bu_annual_tax', label: 'Skatt/år', group: 'biluppgifter', default: true },
   { id: 'bu_inspection_until', label: 'Besiktning', group: 'biluppgifter', default: true },
   { id: 'bu_address_vehicles', label: 'Fordon', group: 'biluppgifter', default: true },
+  { id: 'bu_mileage_history', label: 'Milhistorik', group: 'biluppgifter', default: false },
+  { id: 'bu_owner_history', label: 'Ägarhistorik', group: 'biluppgifter', default: false },
   { id: 'date_acquired', label: 'Köpt', group: 'owner', default: false },
   { id: 'possession', label: 'Innehav', group: 'owner', default: true },
   { id: 'seller_name', label: 'Inköpsplats', group: 'owner', default: false },
@@ -588,15 +618,111 @@ export function BilprospektView({
                 <div className="max-h-48 overflow-y-auto space-y-1">
                   {prospect.bu_address_vehicles.map((v, i) => (
                     <div key={i} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
-                      <div>
+                      <div className="flex-1">
                         <span className="font-mono font-medium">{v.regnr}</span>
-                        <span className="text-muted-foreground ml-2">{v.description}</span>
+                        <span className="text-muted-foreground ml-2">{v.model || v.description}</span>
+                        {v.year && (
+                          <span className="text-muted-foreground ml-1">({v.year})</span>
+                        )}
+                        {v.color && (
+                          <span className="text-muted-foreground ml-1">• {v.color}</span>
+                        )}
+                        {v.ownership_time && (
+                          <span className="text-muted-foreground ml-1">• {v.ownership_time}</span>
+                        )}
+                        {v.mileage && (
+                          <span className="text-muted-foreground ml-1">• {v.mileage.toLocaleString()} mil</span>
+                        )}
                       </div>
                       {v.status && (
-                        <Badge variant="outline" className={v.status === 'I Trafik' ? 'bg-green-50' : 'bg-red-50'}>
+                        <Badge variant="outline" className={
+                          v.status === 'I Trafik' ? 'bg-green-50' :
+                          v.status === 'Avställd' ? 'bg-yellow-50' : 'bg-red-50'
+                        }>
                           {v.status}
                         </Badge>
                       )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+        ) : '-'
+      case 'bu_mileage_history':
+        return (prospect.bu_mileage_history && prospect.bu_mileage_history.length > 0) ? (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1" onClick={(e) => e.stopPropagation()}>
+                <TrendingDown className="w-3 h-3" />
+                {prospect.bu_mileage_history.length}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72">
+              <div className="space-y-2">
+                <h4 className="font-medium flex items-center gap-2">
+                  <History className="w-4 h-4" />
+                  Mätarhistorik
+                </h4>
+                <div className="max-h-64 overflow-y-auto space-y-1">
+                  {prospect.bu_mileage_history.map((m, i) => {
+                    const prevMileage = prospect.bu_mileage_history?.[i + 1]?.mileage_mil
+                    const diff = prevMileage ? m.mileage_mil - prevMileage : null
+                    return (
+                      <div key={i} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-3 h-3 text-muted-foreground" />
+                          <span className="text-muted-foreground">{m.date}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-medium">{m.mileage_mil.toLocaleString()} mil</span>
+                          {diff !== null && (
+                            <span className="text-xs text-muted-foreground ml-2">(+{diff.toLocaleString()})</span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                {prospect.bu_mileage_history.length > 1 && (
+                  <div className="pt-2 border-t text-xs text-muted-foreground">
+                    Total körning: {(prospect.bu_mileage_history[0].mileage_mil - prospect.bu_mileage_history[prospect.bu_mileage_history.length - 1].mileage_mil).toLocaleString()} mil
+                  </div>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+        ) : '-'
+      case 'bu_owner_history':
+        return (prospect.bu_owner_history && prospect.bu_owner_history.length > 0) ? (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1" onClick={(e) => e.stopPropagation()}>
+                <Users className="w-3 h-3" />
+                {prospect.bu_owner_history.length}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80">
+              <div className="space-y-2">
+                <h4 className="font-medium flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  Ägarhistorik
+                </h4>
+                <div className="max-h-64 overflow-y-auto space-y-1">
+                  {prospect.bu_owner_history.map((h, i) => (
+                    <div key={i} className="p-2 bg-muted/50 rounded text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{h.name || h.type}</span>
+                        <span className="text-muted-foreground text-xs">{h.date}</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        <Badge variant="outline" className={
+                          h.owner_class === 'person' ? 'bg-blue-50' :
+                          h.owner_class === 'company' ? 'bg-purple-50' : 'bg-gray-50'
+                        }>
+                          {h.type}
+                        </Badge>
+                      </div>
                     </div>
                   ))}
                 </div>
