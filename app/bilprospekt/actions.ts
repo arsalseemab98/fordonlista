@@ -40,6 +40,7 @@ export async function fetchBiluppgifterForProspect(bpId: number, regNumber: stri
     .from('bilprospekt_prospects')
     .update({
       mileage: result.mileage ? Math.round(result.mileage / 10) : null, // Store in Swedish mil
+      bu_owner_name: result.owner_name,
       bu_num_owners: result.num_owners,
       bu_annual_tax: result.annual_tax,
       bu_inspection_until: result.inspection_until,
@@ -102,6 +103,9 @@ export async function fetchBiluppgifterForProspects(
       // Only update fields that have values
       if (result.mileage !== undefined) {
         updateData.mileage = Math.round(result.mileage / 10)
+      }
+      if (result.owner_name) {
+        updateData.bu_owner_name = result.owner_name
       }
       if (result.num_owners !== undefined) {
         updateData.bu_num_owners = result.num_owners
