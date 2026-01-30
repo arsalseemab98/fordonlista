@@ -6,37 +6,61 @@ import Link from 'next/link'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Checkbox } from '@/components/ui/checkbox'
+import { DeleteConfirmDialog } from '@/components/ui/delete-confirm-dialog'
+import { LeadDetailModal } from '@/components/shared/lead-detail-modal'
+import { DynamicTable } from '@/components/shared/dynamic-table'
+import { LEAD_COLUMNS, LEAD_COLUMN_GROUPS, STORAGE_KEYS } from '@/lib/table-columns'
+import {
+  renderLeadCell,
+  type LeadData,
+  type LeadVehicle,
+} from '@/components/shared/lead-cell-renderers'
+import {
+  type MileageHistoryEntry,
+  type OwnerHistoryEntry,
+  type AddressVehicle,
+} from '@/components/shared/vehicle-popovers'
+import { FilterPresets } from '@/components/ui/filter-presets'
 import {
   Phone,
-  Car,
-  MapPin,
-  Clock,
   Star,
-  ArrowRight,
   Upload,
   Trash2,
-  Inbox
+  Inbox,
+  PhoneCall,
+  Clock,
+  X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { FilterPresets } from '@/components/ui/filter-presets'
-import { formatDistanceToNow } from 'date-fns'
-import { sv } from 'date-fns/locale'
 import { deleteLead, bulkDeleteLeads, restoreLeads } from '@/app/actions/leads'
 import { toast } from 'sonner'
-import { DeleteConfirmDialog } from '@/components/ui/delete-confirm-dialog'
-import { DeleteIconButton } from '@/components/ui/delete-icon-button'
 
 interface Vehicle {
   id: string
-  reg_nr?: string
-  make?: string
-  model?: string
-  mileage?: number
-  year?: number
-  in_traffic?: boolean
+  reg_nr: string | null
+  make: string | null
+  model: string | null
+  year: number | null
+  fuel_type: string | null
+  mileage: number | null
+  color: string | null
+  transmission: string | null
+  horsepower: number | null
+  in_traffic: boolean
+  four_wheel_drive?: boolean
+  engine_cc?: number | null
   is_interesting?: boolean
   ai_score?: number
+  antal_agare: number | null
+  skatt: number | null
+  besiktning_till: string | null
+  mileage_history: MileageHistoryEntry[] | null
+  owner_history: OwnerHistoryEntry[] | unknown[] | null
+  owner_vehicles: AddressVehicle[] | unknown[] | null
+  address_vehicles: AddressVehicle[] | unknown[] | null
+  owner_gender: string | null
+  owner_type: string | null
+  biluppgifter_fetched_at: string | null
 }
 
 interface CallLog {
@@ -47,10 +71,15 @@ interface CallLog {
 
 interface Lead {
   id: string
-  phone?: string
-  owner_info?: string
-  location?: string
+  phone: string | null
+  owner_info: string | null
+  location: string | null
   status: string
+  source: string | null
+  county: string | null
+  owner_age: number | null
+  owner_gender: string | null
+  owner_type: string | null
   created_at: string
   vehicles: Vehicle[]
   call_logs: CallLog[]
@@ -59,34 +88,40 @@ interface Lead {
 interface ToCallListProps {
   leads: Lead[]
   newCount: number
+  toCallCount: number
   callbackCount: number
   noAnswerCount: number
   currentFilter: string
 }
 
-const STATUS_STYLES: Record<string, { label: string; className: string }> = {
-  new: { label: 'Ny', className: 'bg-blue-100 text-blue-700' },
-  callback: { label: 'Ring tillbaka', className: 'bg-purple-100 text-purple-700' },
-  no_answer: { label: 'Inget svar', className: 'bg-yellow-100 text-yellow-700' },
-}
-
-function formatMileage(mileage?: number): string {
-  if (!mileage) return '-'
-  return `${mileage.toLocaleString('sv-SE')} km`
-}
-
-export function ToCallList({ leads, newCount, callbackCount, noAnswerCount, currentFilter }: ToCallListProps) {
+export function ToCallList({ leads, newCount, toCallCount, callbackCount, noAnswerCount, currentFilter }: ToCallListProps) {
   const router = useRouter()
   const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set())
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
   const [leadToDelete, setLeadToDelete] = useState<Lead | null>(null)
-  const [selectionMode, setSelectionMode] = useState(false)
+  const [copiedPhone, setCopiedPhone] = useState<string | null>(null)
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+
+  const copyPhone = async (phone: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    try {
+      await navigator.clipboard.writeText(phone)
+      setCopiedPhone(phone)
+      toast.success('Telefonnummer kopierat!')
+      setTimeout(() => setCopiedPhone(null), 2000)
+    } catch {
+      toast.error('Kunde inte kopiera')
+    }
+  }
 
   const filters = [
-    { key: 'all', label: 'Alla', count: newCount + callbackCount + noAnswerCount, icon: Inbox },
+    { key: 'all', label: 'Alla', count: newCount + toCallCount + callbackCount + noAnswerCount, icon: Inbox },
     { key: 'new', label: 'Nya', count: newCount, icon: Star },
+    { key: 'to_call', label: 'Att ringa', count: toCallCount, icon: PhoneCall },
     { key: 'callback', label: 'Ring tillbaka', count: callbackCount, icon: Phone },
     { key: 'no_answer', label: 'Inget svar', count: noAnswerCount, icon: Clock },
   ]
@@ -103,29 +138,8 @@ export function ToCallList({ leads, newCount, callbackCount, noAnswerCount, curr
     router.push(`/to-call${params.toString() ? '?' + params.toString() : ''}`)
   }
 
-  // Current filters object for FilterPresets
   const currentFilters = {
     status: currentFilter
-  }
-
-  const toggleSelect = (leadId: string, e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    const newSelected = new Set(selectedLeads)
-    if (newSelected.has(leadId)) {
-      newSelected.delete(leadId)
-    } else {
-      newSelected.add(leadId)
-    }
-    setSelectedLeads(newSelected)
-  }
-
-  const toggleSelectAll = () => {
-    if (selectedLeads.size === leads.length) {
-      setSelectedLeads(new Set())
-    } else {
-      setSelectedLeads(new Set(leads.map(l => l.id)))
-    }
   }
 
   const handleDeleteClick = (lead: Lead, e: React.MouseEvent) => {
@@ -183,7 +197,6 @@ export function ToCallList({ leads, newCount, callbackCount, noAnswerCount, curr
 
     if (result.success) {
       setSelectedLeads(new Set())
-      setSelectionMode(false)
       router.refresh()
       toast.success(`${deletedIds.length} leads flyttade till papperskorgen`, {
         action: {
@@ -204,10 +217,27 @@ export function ToCallList({ leads, newCount, callbackCount, noAnswerCount, curr
     }
   }
 
-  const exitSelectionMode = () => {
-    setSelectionMode(false)
-    setSelectedLeads(new Set())
+  const handleRowClick = (lead: Lead) => {
+    setSelectedLead(lead)
+    setIsModalOpen(true)
   }
+
+  // Convert Lead to LeadData for renderLeadCell
+  const toLeadData = (lead: Lead): LeadData => ({
+    id: lead.id,
+    phone: lead.phone,
+    owner_info: lead.owner_info,
+    location: lead.location,
+    status: lead.status,
+    source: lead.source,
+    county: lead.county,
+    owner_age: lead.owner_age,
+    owner_gender: lead.owner_gender,
+    owner_type: lead.owner_type,
+    created_at: lead.created_at,
+    vehicles: lead.vehicles as LeadVehicle[],
+    call_logs: lead.call_logs,
+  })
 
   return (
     <div className="space-y-6">
@@ -242,7 +272,6 @@ export function ToCallList({ leads, newCount, callbackCount, noAnswerCount, curr
           )
         })}
 
-        {/* Filter presets */}
         <FilterPresets
           page="to-call"
           currentFilters={currentFilters as { [key: string]: string | string[] | boolean | number | null | undefined }}
@@ -251,97 +280,62 @@ export function ToCallList({ leads, newCount, callbackCount, noAnswerCount, curr
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-600 rounded-lg">
+                <Star className="h-5 w-5 text-white" />
+              </div>
               <div>
                 <p className="text-2xl font-bold text-blue-700">{newCount}</p>
-                <p className="text-sm text-gray-500">Nya leads</p>
-              </div>
-              <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                <Star className="h-5 w-5 text-blue-600" />
+                <p className="text-xs text-blue-600">Nya leads</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
+        <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-600 rounded-lg">
+                <PhoneCall className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-green-700">{toCallCount}</p>
+                <p className="text-xs text-green-600">Att ringa</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-purple-600 rounded-lg">
+                <Phone className="h-5 w-5 text-white" />
+              </div>
               <div>
                 <p className="text-2xl font-bold text-purple-700">{callbackCount}</p>
-                <p className="text-sm text-gray-500">Ring tillbaka</p>
-              </div>
-              <div className="h-10 w-10 rounded-full bg-purple-100 flex items-center justify-center">
-                <Phone className="h-5 w-5 text-purple-600" />
+                <p className="text-xs text-purple-600">Ring tillbaka</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
+        <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200">
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-yellow-600 rounded-lg">
+                <Clock className="h-5 w-5 text-white" />
+              </div>
               <div>
                 <p className="text-2xl font-bold text-yellow-700">{noAnswerCount}</p>
-                <p className="text-sm text-gray-500">Inget svar</p>
-              </div>
-              <div className="h-10 w-10 rounded-full bg-yellow-100 flex items-center justify-center">
-                <Clock className="h-5 w-5 text-yellow-600" />
+                <p className="text-xs text-yellow-600">Inget svar</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Selection Actions Bar */}
-      {leads.length > 0 && (
-        <Card>
-          <CardContent className="py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                {selectionMode ? (
-                  <>
-                    <Checkbox
-                      checked={selectedLeads.size === leads.length && leads.length > 0}
-                      onCheckedChange={toggleSelectAll}
-                    />
-                    <span className="text-sm text-gray-500">
-                      {selectedLeads.size > 0 ? `${selectedLeads.size} valda` : 'Välj leads'}
-                    </span>
-                    <Button variant="ghost" size="sm" onClick={exitSelectionMode}>
-                      Avbryt
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSelectionMode(true)}
-                    className="gap-2"
-                  >
-                    Välj flera
-                  </Button>
-                )}
-              </div>
-
-              {selectedLeads.size > 0 && (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={handleBulkDeleteClick}
-                  disabled={isDeleting}
-                  className="gap-2"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Ta bort ({selectedLeads.size})
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Lead list */}
+      {/* Leads Table */}
       {leads.length === 0 ? (
         <Card>
           <CardContent className="py-12">
@@ -367,141 +361,122 @@ export function ToCallList({ leads, newCount, callbackCount, noAnswerCount, curr
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {leads.map((lead, index) => {
-            const primaryVehicle = lead.vehicles?.[0]
-            const lastCall = lead.call_logs?.[0]
-            const status = STATUS_STYLES[lead.status] || STATUS_STYLES.new
-            const isInteresting = lead.vehicles?.some((v: Vehicle) => v.is_interesting)
-            const isSelected = selectedLeads.has(lead.id)
-
-            return (
-              <div key={lead.id} className="relative">
-                <Link href={selectionMode ? '#' : `/leads/${lead.id}`}>
-                  <Card
-                    className={cn(
-                      "hover:shadow-md transition-all cursor-pointer",
-                      index === 0 && !selectionMode && "ring-2 ring-blue-500 ring-offset-2",
-                      isInteresting && "border-yellow-300 bg-yellow-50/50",
-                      isSelected && "ring-2 ring-blue-500 bg-blue-50"
-                    )}
-                    onClick={(e) => {
-                      if (selectionMode) {
-                        toggleSelect(lead.id, e)
-                      }
-                    }}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-4">
-                        {/* Selection checkbox or Priority number */}
-                        {selectionMode ? (
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={() => {}}
-                            className="shrink-0"
-                          />
-                        ) : (
-                          <div className={cn(
-                            "flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-bold",
-                            index === 0
-                              ? "bg-blue-600 text-white"
-                              : "bg-gray-100 text-gray-600"
-                          )}>
-                            {index + 1}
-                          </div>
-                        )}
-
-                        {/* Main info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            {lead.phone ? (
-                              <span className="font-medium text-lg">{lead.phone}</span>
-                            ) : (
-                              <span className="text-gray-400">Ingen telefon</span>
-                            )}
-                            <Badge className={status.className}>{status.label}</Badge>
-                            {isInteresting && (
-                              <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-4 text-sm text-gray-500">
-                            {primaryVehicle && (
-                              <span className="flex items-center gap-1">
-                                <Car className="h-4 w-4" />
-                                <span className="font-mono">{primaryVehicle.reg_nr}</span>
-                                {primaryVehicle.make && ` - ${primaryVehicle.make}`}
-                                {primaryVehicle.model && ` ${primaryVehicle.model}`}
-                              </span>
-                            )}
-                            {lead.location && (
-                              <span className="flex items-center gap-1">
-                                <MapPin className="h-4 w-4" />
-                                {lead.location}
-                              </span>
-                            )}
-                          </div>
-
-                          {lastCall && (
-                            <div className="mt-1 text-xs text-gray-400">
-                              Senast ringd: {formatDistanceToNow(new Date(lastCall.called_at), {
-                                addSuffix: true,
-                                locale: sv
-                              })} - {lastCall.result}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Vehicle stats */}
-                        {primaryVehicle && (
-                          <div className="hidden md:flex items-center gap-6 text-sm">
-                            <div className="text-center">
-                              <p className="text-gray-400">Miltal</p>
-                              <p className={cn(
-                                "font-medium",
-                                primaryVehicle.mileage && primaryVehicle.mileage > 200000
-                                  ? "text-orange-600"
-                                  : ""
-                              )}>
-                                {formatMileage(primaryVehicle.mileage)}
-                              </p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-gray-400">År</p>
-                              <p className="font-medium">{primaryVehicle.year || '-'}</p>
-                            </div>
-                            {!primaryVehicle.in_traffic && (
-                              <Badge variant="outline" className="text-orange-600 border-orange-200">
-                                Avställd
-                              </Badge>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Actions */}
-                        <div className="flex items-center gap-2 shrink-0">
-                          {!selectionMode && (
-                            <DeleteIconButton
-                              onClick={(e) => handleDeleteClick(lead, e)}
-                              className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50"
-                            />
-                          )}
-                          {!selectionMode && (
-                            <Button size="sm" className="gap-1">
-                              Öppna
-                              <ArrowRight className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              </div>
-            )
-          })}
-        </div>
+        <DynamicTable
+          data={leads}
+          columns={LEAD_COLUMNS}
+          columnGroups={LEAD_COLUMN_GROUPS}
+          storageKey={STORAGE_KEYS.toCall}
+          getItemId={(lead) => lead.id}
+          onRowClick={handleRowClick}
+          selectedIds={selectedLeads}
+          onSelectionChange={setSelectedLeads}
+          renderCell={(columnId, lead, index) => {
+            const vehicle = lead.vehicles?.[0]
+            // Custom actions for to-call page
+            if (columnId === 'actions') {
+              return (
+                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                  <Link href={`/leads/${lead.id}`} onClick={(e) => e.stopPropagation()}>
+                    <Button size="sm" className="gap-1">
+                      Ring
+                      <Phone className="h-3 w-3" />
+                    </Button>
+                  </Link>
+                </div>
+              )
+            }
+            return renderLeadCell({
+              columnId,
+              lead: toLeadData(lead),
+              vehicle: vehicle as LeadVehicle | undefined,
+              onRowClick: () => handleRowClick(lead),
+              onCopyPhone: copyPhone,
+              onDelete: (e) => handleDeleteClick(lead, e),
+              copiedPhone,
+            })
+          }}
+          rowClassName={(lead, index) => cn(
+            index === 0 && 'bg-blue-50/50',
+            lead.vehicles?.some((v: Vehicle) => v.is_interesting) && 'bg-yellow-50/50'
+          )}
+          renderSelectionBar={(count, clearSelection) => (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearSelection}
+                className="text-gray-500"
+              >
+                <X className="h-4 w-4 mr-1" />
+                Avmarkera
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleBulkDeleteClick}
+                disabled={isDeleting}
+                className="gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                Ta bort ({count})
+              </Button>
+            </div>
+          )}
+        />
       )}
+
+      {/* Detail Modal */}
+      <LeadDetailModal
+        lead={selectedLead ? {
+          id: selectedLead.id,
+          phone: selectedLead.phone,
+          owner_info: selectedLead.owner_info,
+          location: selectedLead.location,
+          status: selectedLead.status,
+          source: selectedLead.source,
+          county: selectedLead.county,
+          owner_age: selectedLead.owner_age,
+          owner_gender: selectedLead.owner_gender,
+          owner_type: selectedLead.owner_type,
+          created_at: selectedLead.created_at,
+          vehicles: selectedLead.vehicles.map(v => ({
+            id: v.id,
+            reg_nr: v.reg_nr,
+            make: v.make,
+            model: v.model,
+            year: v.year,
+            fuel_type: v.fuel_type,
+            mileage: v.mileage,
+            color: v.color,
+            transmission: v.transmission,
+            horsepower: v.horsepower,
+            in_traffic: v.in_traffic,
+            four_wheel_drive: v.four_wheel_drive ?? false,
+            engine_cc: v.engine_cc ?? null,
+            antal_agare: v.antal_agare,
+            skatt: v.skatt,
+            besiktning_till: v.besiktning_till,
+            mileage_history: v.mileage_history as { date: string; mileage_km: number; mileage_mil?: number; type?: string }[] | null,
+            owner_history: v.owner_history as { date: string; name?: string; type: string; owner_class?: string; details?: string }[] | null,
+            owner_vehicles: v.owner_vehicles as { regnr: string; description?: string; model?: string; color?: string; status?: string; mileage?: number; year?: number; ownership_time?: string }[] | null,
+            address_vehicles: v.address_vehicles as { regnr: string; description?: string; model?: string; color?: string; status?: string; mileage?: number; year?: number; ownership_time?: string }[] | null,
+            owner_gender: v.owner_gender,
+            owner_type: v.owner_type,
+            biluppgifter_fetched_at: v.biluppgifter_fetched_at,
+          }))
+        } : null}
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        onUpdate={() => router.refresh()}
+        actions={selectedLead && (
+          <Link href={`/leads/${selectedLead.id}`}>
+            <Button className="gap-2 bg-green-600 hover:bg-green-700">
+              <Phone className="h-4 w-4" />
+              Gå till samtalssida
+            </Button>
+          </Link>
+        )}
+      />
 
       {/* Single Delete Dialog */}
       <DeleteConfirmDialog

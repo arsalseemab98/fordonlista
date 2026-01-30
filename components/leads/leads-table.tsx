@@ -3,50 +3,58 @@
 import { useState, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Checkbox } from '@/components/ui/checkbox'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { DeleteConfirmDialog } from '@/components/ui/delete-confirm-dialog'
-import { DeleteIconButton } from '@/components/ui/delete-icon-button'
+import { LeadDetailModal } from '@/components/shared/lead-detail-modal'
+import { DynamicTable } from '@/components/shared/dynamic-table'
+import { LEAD_COLUMNS, LEAD_COLUMN_GROUPS, STORAGE_KEYS } from '@/lib/table-columns'
+import {
+  renderLeadCell,
+  type LeadData,
+  type LeadVehicle,
+} from '@/components/shared/lead-cell-renderers'
+import {
+  type MileageHistoryEntry,
+  type OwnerHistoryEntry,
+  type AddressVehicle,
+} from '@/components/shared/vehicle-popovers'
 import {
   ChevronLeft,
   ChevronRight,
   Phone,
-  Car,
-  MapPin,
-  Clock,
-  AlertCircle,
-  Star,
-  ExternalLink,
   Trash2,
+  X,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { formatDistanceToNow } from 'date-fns'
-import { sv } from 'date-fns/locale'
 import { toast } from 'sonner'
 import { deleteLead, bulkDeleteLeads, restoreLeads } from '@/app/actions/leads'
 
 interface Vehicle {
   id: string
-  reg_nr?: string
+  reg_nr?: string | null
   chassis_nr?: string
-  make?: string
-  model?: string
-  mileage?: number
-  year?: number
-  fuel_type?: string
+  make?: string | null
+  model?: string | null
+  mileage?: number | null
+  year?: number | null
+  fuel_type?: string | null
+  color?: string | null
+  transmission?: string | null
+  horsepower?: number | null
   in_traffic?: boolean
+  four_wheel_drive?: boolean
+  engine_cc?: number | null
   is_interesting?: boolean
   ai_score?: number
+  antal_agare?: number | null
+  skatt?: number | null
+  besiktning_till?: string | null
+  mileage_history?: MileageHistoryEntry[] | null
+  owner_history?: OwnerHistoryEntry[] | null
+  owner_vehicles?: AddressVehicle[] | null
+  address_vehicles?: AddressVehicle[] | null
+  owner_gender?: string | null
+  owner_type?: string | null
+  biluppgifter_fetched_at?: string | null
 }
 
 interface CallLog {
@@ -58,11 +66,15 @@ interface CallLog {
 
 interface Lead {
   id: string
-  phone?: string
-  owner_info?: string
-  location?: string
+  phone?: string | null
+  owner_info?: string | null
+  location?: string | null
   status: string
-  source?: string
+  source?: string | null
+  county?: string | null
+  owner_age?: number | null
+  owner_gender?: string | null
+  owner_type?: string | null
   created_at: string
   updated_at: string
   bilprospekt_date?: string | null
@@ -76,22 +88,6 @@ interface LeadsTableProps {
   currentPage: number
 }
 
-const STATUS_STYLES: Record<string, { label: string; className: string }> = {
-  new: { label: 'Ny', className: 'bg-blue-100 text-blue-700' },
-  contacted: { label: 'Kontaktad', className: 'bg-gray-100 text-gray-700' },
-  interested: { label: 'Intresserad', className: 'bg-green-100 text-green-700' },
-  not_interested: { label: 'Ej intresserad', className: 'bg-red-100 text-red-700' },
-  no_answer: { label: 'Inget svar', className: 'bg-yellow-100 text-yellow-700' },
-  callback: { label: 'Ring tillbaka', className: 'bg-purple-100 text-purple-700' },
-  booked: { label: 'Bokad', className: 'bg-emerald-100 text-emerald-700' },
-  completed: { label: 'Avslutad', className: 'bg-gray-100 text-gray-600' },
-}
-
-function formatMileage(mileage?: number): string {
-  if (!mileage) return '-'
-  return `${mileage.toLocaleString('sv-SE')} km`
-}
-
 export function LeadsTable({ leads, totalPages, currentPage }: LeadsTableProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -101,6 +97,9 @@ export function LeadsTable({ leads, totalPages, currentPage }: LeadsTableProps) 
   const [deleteLeadId, setDeleteLeadId] = useState<string | null>(null)
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [copiedPhone, setCopiedPhone] = useState<string | null>(null)
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
   const goToPage = (page: number) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -108,25 +107,22 @@ export function LeadsTable({ leads, totalPages, currentPage }: LeadsTableProps) 
     router.push(`/leads?${params.toString()}`)
   }
 
-  const toggleSelection = useCallback((leadId: string) => {
-    setSelectedIds(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(leadId)) {
-        newSet.delete(leadId)
-      } else {
-        newSet.add(leadId)
-      }
-      return newSet
-    })
-  }, [])
-
-  const toggleSelectAll = useCallback(() => {
-    if (selectedIds.size === leads.length) {
-      setSelectedIds(new Set())
-    } else {
-      setSelectedIds(new Set(leads.map(l => l.id)))
+  const copyPhone = async (phone: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      await navigator.clipboard.writeText(phone)
+      setCopiedPhone(phone)
+      toast.success('Telefonnummer kopierat!')
+      setTimeout(() => setCopiedPhone(null), 2000)
+    } catch {
+      toast.error('Kunde inte kopiera')
     }
-  }, [leads, selectedIds.size])
+  }
+
+  const handleRowClick = (lead: Lead) => {
+    setSelectedLead(lead)
+    setIsModalOpen(true)
+  }
 
   const handleDeleteSingle = useCallback(async () => {
     if (!deleteLeadId) return
@@ -202,20 +198,59 @@ export function LeadsTable({ leads, totalPages, currentPage }: LeadsTableProps) 
     }
   }, [selectedIds, router])
 
+  // Convert Lead to LeadData for renderLeadCell
+  const toLeadData = (lead: Lead): LeadData => ({
+    id: lead.id,
+    phone: lead.phone,
+    owner_info: lead.owner_info,
+    location: lead.location,
+    status: lead.status,
+    source: lead.source,
+    county: lead.county,
+    owner_age: lead.owner_age,
+    owner_gender: lead.owner_gender,
+    owner_type: lead.owner_type,
+    created_at: lead.created_at,
+    bilprospekt_date: lead.bilprospekt_date,
+    vehicles: lead.vehicles as LeadVehicle[],
+    call_logs: lead.call_logs,
+  })
+
   return (
     <div className="space-y-4">
-      {/* Selection bar */}
-      {selectedIds.size > 0 && (
-        <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
-          <span className="text-sm text-blue-700">
-            {selectedIds.size} lead{selectedIds.size > 1 ? 's' : ''} markerade
-          </span>
+      <DynamicTable
+        data={leads}
+        columns={LEAD_COLUMNS}
+        columnGroups={LEAD_COLUMN_GROUPS}
+        storageKey={STORAGE_KEYS.leads}
+        getItemId={(lead) => lead.id}
+        onRowClick={handleRowClick}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+        renderCell={(columnId, lead) => {
+          const vehicle = lead.vehicles?.[0]
+          return renderLeadCell({
+            columnId,
+            lead: toLeadData(lead),
+            vehicle: vehicle as LeadVehicle | undefined,
+            onRowClick: () => handleRowClick(lead),
+            onCopyPhone: copyPhone,
+            onDelete: (e) => {
+              e.stopPropagation()
+              setDeleteLeadId(lead.id)
+            },
+            copiedPhone,
+          })
+        }}
+        renderSelectionBar={(count, clearSelection) => (
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setSelectedIds(new Set())}
+              onClick={clearSelection}
+              className="gap-1"
             >
+              <X className="h-4 w-4" />
               Avmarkera
             </Button>
             <Button
@@ -225,189 +260,16 @@ export function LeadsTable({ leads, totalPages, currentPage }: LeadsTableProps) 
               className="gap-2"
             >
               <Trash2 className="h-4 w-4" />
-              Radera {selectedIds.size}
+              Radera {count}
             </Button>
           </div>
-        </div>
-      )}
-
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gray-50">
-                <TableHead className="w-[50px]">
-                  <Checkbox
-                    checked={leads.length > 0 && selectedIds.size === leads.length}
-                    onCheckedChange={toggleSelectAll}
-                    aria-label="Välj alla"
-                  />
-                </TableHead>
-                <TableHead className="w-[200px]">Kontakt</TableHead>
-                <TableHead>Fordon</TableHead>
-                <TableHead className="w-[120px]">Miltal</TableHead>
-                <TableHead className="w-[100px]">Status</TableHead>
-                <TableHead className="w-[100px]">BP Datum</TableHead>
-                <TableHead className="w-[140px]">Senaste kontakt</TableHead>
-                <TableHead className="w-[100px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {leads.map((lead) => {
-                const primaryVehicle = lead.vehicles?.[0]
-                const lastCall = lead.call_logs?.[0]
-                const status = STATUS_STYLES[lead.status] || STATUS_STYLES.new
-
-                return (
-                  <TableRow
-                    key={lead.id}
-                    className={cn(
-                      "hover:bg-gray-50 cursor-pointer",
-                      selectedIds.has(lead.id) && "bg-blue-50"
-                    )}
-                    onClick={() => router.push(`/leads/${lead.id}`)}
-                  >
-                    {/* Checkbox */}
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedIds.has(lead.id)}
-                        onCheckedChange={() => toggleSelection(lead.id)}
-                        onClick={(e) => e.stopPropagation()}
-                        aria-label={`Välj ${lead.owner_info || 'lead'}`}
-                      />
-                    </TableCell>
-
-                    {/* Contact info */}
-                    <TableCell>
-                      <div className="space-y-1">
-                        {lead.phone ? (
-                          <div className="flex items-center gap-1.5 text-sm font-medium">
-                            <Phone className="h-3.5 w-3.5 text-gray-400" />
-                            {lead.phone}
-                          </div>
-                        ) : (
-                          <span className="text-sm text-gray-400">Ingen telefon</span>
-                        )}
-                        {lead.owner_info && (
-                          <p className="text-xs text-gray-500 truncate max-w-[180px]">
-                            {lead.owner_info}
-                          </p>
-                        )}
-                        {lead.location && (
-                          <div className="flex items-center gap-1 text-xs text-gray-400">
-                            <MapPin className="h-3 w-3" />
-                            {lead.location}
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-
-                    {/* Vehicle info */}
-                    <TableCell>
-                      {primaryVehicle ? (
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-sm font-medium bg-gray-100 px-2 py-0.5 rounded">
-                              {primaryVehicle.reg_nr || 'Saknar reg.nr'}
-                            </span>
-                            {primaryVehicle.is_interesting && (
-                              <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                            )}
-                            {!primaryVehicle.in_traffic && (
-                              <Badge variant="outline" className="text-xs text-orange-600 border-orange-200">
-                                Avställd
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-600">
-                            {[primaryVehicle.make, primaryVehicle.model, primaryVehicle.year]
-                              .filter(Boolean)
-                              .join(' ') || '-'}
-                          </p>
-                          {lead.vehicles.length > 1 && (
-                            <span className="text-xs text-blue-600">
-                              +{lead.vehicles.length - 1} fler fordon
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-sm text-gray-400">Inget fordon</span>
-                      )}
-                    </TableCell>
-
-                    {/* Mileage */}
-                    <TableCell>
-                      <span className={cn(
-                        "text-sm",
-                        primaryVehicle?.mileage && primaryVehicle.mileage > 200000
-                          ? "text-orange-600"
-                          : "text-gray-700"
-                      )}>
-                        {formatMileage(primaryVehicle?.mileage)}
-                      </span>
-                    </TableCell>
-
-                    {/* Status */}
-                    <TableCell>
-                      <Badge className={cn("font-medium", status.className)}>
-                        {status.label}
-                      </Badge>
-                    </TableCell>
-
-                    {/* BP Datum */}
-                    <TableCell>
-                      {lead.bilprospekt_date ? (
-                        <span className="text-sm text-green-700 font-medium">
-                          {new Date(lead.bilprospekt_date).toLocaleDateString('sv-SE')}
-                        </span>
-                      ) : (
-                        <span className="text-sm text-gray-400">-</span>
-                      )}
-                    </TableCell>
-
-                    {/* Last contact */}
-                    <TableCell>
-                      {lastCall ? (
-                        <div className="text-xs text-gray-500">
-                          <div className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {formatDistanceToNow(new Date(lastCall.called_at), {
-                              addSuffix: true,
-                              locale: sv
-                            })}
-                          </div>
-                          <span className="text-gray-400">{lastCall.result}</span>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-400">Aldrig kontaktad</span>
-                      )}
-                    </TableCell>
-
-                    {/* Actions */}
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            router.push(`/leads/${lead.id}`)
-                          }}
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </Button>
-                        <DeleteIconButton
-                          onClick={() => setDeleteLeadId(lead.id)}
-                        />
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+        )}
+        emptyState={
+          <div className="py-12 text-center text-muted-foreground">
+            Inga leads hittades
+          </div>
+        }
+      />
 
       {/* Pagination */}
       {totalPages > 1 && (
@@ -437,6 +299,59 @@ export function LeadsTable({ leads, totalPages, currentPage }: LeadsTableProps) 
           </div>
         </div>
       )}
+
+      {/* Detail Modal */}
+      <LeadDetailModal
+        lead={selectedLead ? {
+          id: selectedLead.id,
+          phone: selectedLead.phone || null,
+          owner_info: selectedLead.owner_info || null,
+          location: selectedLead.location || null,
+          status: selectedLead.status,
+          source: selectedLead.source || null,
+          county: selectedLead.county || null,
+          owner_age: selectedLead.owner_age || null,
+          owner_gender: selectedLead.owner_gender || null,
+          owner_type: selectedLead.owner_type || null,
+          created_at: selectedLead.created_at,
+          vehicles: selectedLead.vehicles.map(v => ({
+            id: v.id,
+            reg_nr: v.reg_nr || null,
+            make: v.make || null,
+            model: v.model || null,
+            year: v.year || null,
+            fuel_type: v.fuel_type || null,
+            mileage: v.mileage || null,
+            color: v.color || null,
+            transmission: v.transmission || null,
+            horsepower: v.horsepower || null,
+            in_traffic: v.in_traffic ?? true,
+            four_wheel_drive: v.four_wheel_drive ?? false,
+            engine_cc: v.engine_cc ?? null,
+            antal_agare: v.antal_agare || null,
+            skatt: v.skatt || null,
+            besiktning_till: v.besiktning_till || null,
+            mileage_history: v.mileage_history as { date: string; mileage_km: number; mileage_mil?: number; type?: string }[] | null,
+            owner_history: v.owner_history as { date: string; name?: string; type: string; owner_class?: string; details?: string }[] | null,
+            owner_vehicles: v.owner_vehicles as { regnr: string; description?: string; model?: string; color?: string; status?: string; mileage?: number; year?: number; ownership_time?: string }[] | null,
+            address_vehicles: v.address_vehicles as { regnr: string; description?: string; model?: string; color?: string; status?: string; mileage?: number; year?: number; ownership_time?: string }[] | null,
+            owner_gender: v.owner_gender || null,
+            owner_type: v.owner_type || null,
+            biluppgifter_fetched_at: v.biluppgifter_fetched_at || null,
+          }))
+        } : null}
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        onUpdate={() => router.refresh()}
+        actions={selectedLead && (
+          <Link href={`/leads/${selectedLead.id}`}>
+            <Button className="gap-2">
+              <Phone className="h-4 w-4" />
+              Gå till lead
+            </Button>
+          </Link>
+        )}
+      />
 
       {/* Single Delete Dialog */}
       <DeleteConfirmDialog

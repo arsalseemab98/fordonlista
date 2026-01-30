@@ -7,14 +7,13 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
+import { DynamicTable } from '@/components/shared/dynamic-table'
+import { LEAD_COLUMNS, LEAD_COLUMN_GROUPS, STORAGE_KEYS } from '@/lib/table-columns'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+  renderLeadCell,
+  type LeadData,
+  type LeadVehicle,
+} from '@/components/shared/lead-cell-renderers'
 import {
   Tooltip,
   TooltipContent,
@@ -31,6 +30,12 @@ import {
 } from '@/components/ui/dialog'
 import { DeleteConfirmDialog } from '@/components/ui/delete-confirm-dialog'
 import { DeleteIconButton } from '@/components/ui/delete-icon-button'
+import { LeadDetailModal } from '@/components/shared/lead-detail-modal'
+import {
+  type MileageHistoryEntry,
+  type OwnerHistoryEntry,
+  type AddressVehicle,
+} from '@/components/shared/vehicle-popovers'
 import {
   Popover,
   PopoverContent,
@@ -45,16 +50,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   Phone,
-  Mail,
   Search,
   X,
   Loader2,
   Car,
-  Copy,
-  Check,
   MessageSquare,
   Calendar,
-  Clock,
   ExternalLink,
   Filter,
   PhoneCall,
@@ -66,7 +67,7 @@ import {
   Send,
   FileText,
   MoreHorizontal,
-  ArrowRight
+  ArrowRight,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -83,14 +84,28 @@ interface Vehicle {
   model?: string
   year?: number
   mileage?: number
+  color?: string
+  transmission?: string
+  horsepower?: number
+  fuel_type?: string
   in_traffic?: boolean
+  four_wheel_drive?: boolean
+  engine_cc?: number
   is_interesting?: boolean
   ai_score?: number
   carinfo_fetched_at?: string
   antal_agare?: number
+  skatt?: number
   valuation_company?: number
   valuation_private?: number
   besiktning_till?: string
+  mileage_history?: MileageHistoryEntry[] | null
+  owner_history?: OwnerHistoryEntry[] | null
+  owner_vehicles?: AddressVehicle[] | null
+  address_vehicles?: AddressVehicle[] | null
+  owner_gender?: string
+  owner_type?: string
+  biluppgifter_fetched_at?: string
   senaste_avställning?: string
   senaste_påställning?: string
   senaste_agarbyte?: string
@@ -122,6 +137,9 @@ interface Lead {
   bilprospekt_date?: string | null
   extra_data?: Record<string, unknown>
   created_at: string
+  owner_age?: number
+  owner_gender?: string
+  owner_type?: string
   vehicles: Vehicle[]
   call_logs: CallLog[]
 }
@@ -172,25 +190,6 @@ const FILTER_TABS = [
   { value: 'pending', label: 'Pending', icon: Filter },
 ]
 
-function formatMileage(mileage?: number): string {
-  if (!mileage) return '-'
-  return `${mileage.toLocaleString('sv-SE')} km`
-}
-
-function formatValuation(value?: number): string {
-  if (!value) return '-'
-  return `${(value / 1000).toFixed(0)}k`
-}
-
-function formatDate(dateStr?: string): string {
-  if (!dateStr) return '-'
-  try {
-    return format(new Date(dateStr), 'yy-MM-dd')
-  } catch {
-    return '-'
-  }
-}
-
 export function HistorikView({
   leads,
   totalCount,
@@ -226,6 +225,11 @@ export function HistorikView({
   const [deleteLeadId, setDeleteLeadId] = useState<string | null>(null)
   const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // Lead detail modal
+  const [detailModalLead, setDetailModalLead] = useState<Lead | null>(null)
+  const [detailModalOpen, setDetailModalOpen] = useState(false)
+  const [copiedPhone, setCopiedPhone] = useState<string | null>(null)
 
   const updateFilter = useCallback((key: string, value: string | null) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -414,6 +418,81 @@ export function HistorikView({
       setIsDeleting(false)
     }
   }, [selectedIds, router])
+
+  // Copy phone to clipboard
+  const handleCopyPhone = async (phone: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      await navigator.clipboard.writeText(phone)
+      setCopiedPhone(phone)
+      toast.success('Telefonnummer kopierat!')
+      setTimeout(() => setCopiedPhone(null), 2000)
+    } catch {
+      toast.error('Kunde inte kopiera')
+    }
+  }
+
+  // Open detail modal
+  const handleOpenDetailModal = (lead: Lead) => {
+    setDetailModalLead(lead)
+    setDetailModalOpen(true)
+  }
+
+  // Convert Lead to LeadData for renderLeadCell
+  const toLeadData = (lead: Lead): LeadData => ({
+    id: lead.id,
+    phone: lead.phone,
+    owner_info: lead.owner_info,
+    location: lead.location,
+    status: lead.status,
+    county: lead.county,
+    owner_age: lead.owner_age,
+    owner_gender: lead.owner_gender,
+    owner_type: lead.owner_type,
+    created_at: lead.created_at,
+    bilprospekt_date: lead.bilprospekt_date,
+    prospect_type: lead.prospect_type,
+    letter_sent: lead.letter_sent,
+    letter_sent_date: lead.letter_sent_date,
+    sent_to_call_at: lead.sent_to_call_at,
+    sent_to_brev_at: lead.sent_to_brev_at,
+    data_period_start: lead.data_period_start,
+    vehicles: lead.vehicles.map(v => ({
+      id: v.id,
+      reg_nr: v.reg_nr,
+      make: v.make,
+      model: v.model,
+      year: v.year,
+      fuel_type: v.fuel_type,
+      mileage: v.mileage,
+      color: v.color,
+      transmission: v.transmission,
+      horsepower: v.horsepower,
+      in_traffic: v.in_traffic,
+      four_wheel_drive: v.four_wheel_drive,
+      engine_cc: v.engine_cc,
+      is_interesting: v.is_interesting,
+      ai_score: v.ai_score,
+      antal_agare: v.antal_agare,
+      skatt: v.skatt,
+      besiktning_till: v.besiktning_till,
+      mileage_history: v.mileage_history,
+      owner_history: v.owner_history,
+      owner_vehicles: v.owner_vehicles,
+      address_vehicles: v.address_vehicles,
+      owner_gender: v.owner_gender,
+      owner_type: v.owner_type,
+      biluppgifter_fetched_at: v.biluppgifter_fetched_at,
+      valuation_company: v.valuation_company,
+      valuation_private: v.valuation_private,
+      senaste_avstallning: v.senaste_avställning,
+      senaste_pastallning: v.senaste_påställning,
+      senaste_agarbyte: v.senaste_agarbyte,
+      antal_foretagsannonser: v.antal_foretagsannonser,
+      antal_privatannonser: v.antal_privatannonser,
+    })) as LeadVehicle[],
+    call_logs: lead.call_logs,
+  })
 
   const getResultBadgeColor = (result: string) => {
     switch (result.toLowerCase()) {
@@ -798,457 +877,229 @@ export function HistorikView({
       </div>
 
       {/* Table */}
-      <Card>
-        <CardContent className="p-0 overflow-x-auto">
-          {leads.length === 0 ? (
-            <div className="text-center py-16 text-gray-500">
-              <Car className="h-12 w-12 mx-auto text-gray-300 mb-4" />
-              <p className="font-medium">Ingen historik hittades</p>
-              <p className="text-sm mt-1">
-                {currentFilter === 'called'
-                  ? 'Inga leads har ringts ännu'
-                  : currentFilter === 'letter_sent'
-                    ? 'Inga brev har skickats ännu'
-                    : 'Ingen aktivitet har registrerats ännu'
-                }
-              </p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gray-50">
-                  <TableHead className="w-[50px]">
-                    <Checkbox
-                      checked={leads.length > 0 && selectedIds.size === leads.length}
-                      onCheckedChange={toggleSelectAll}
-                      aria-label="Välj alla"
+      <DynamicTable
+        data={leads}
+        columns={LEAD_COLUMNS}
+        columnGroups={LEAD_COLUMN_GROUPS}
+        storageKey={STORAGE_KEYS.historik}
+        defaultColumns={[
+          'reg_number', 'brand', 'model', 'car_year', 'mileage',
+          'owner_history', 'address_vehicles', 'owner_name', 'county',
+          'prospekt_type', 'status', 'activity', 'bp_date', 'data_date',
+          'antal_agare', 'valuation_company', 'valuation_private',
+          'besiktning_till', 'senaste_avstallning', 'senaste_pastallning',
+          'senaste_agarbyte', 'antal_foretagsannonser', 'antal_privatannonser',
+          'in_traffic', 'actions'
+        ]}
+        getItemId={(lead) => lead.id}
+        onRowClick={handleOpenDetailModal}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+        renderCell={(columnId, lead) => {
+          const vehicle = lead.vehicles?.[0]
+          const leadData = toLeadData(lead)
+
+          // Custom prospekt_type with saved types color
+          if (columnId === 'prospekt_type') {
+            if (!lead.prospect_type) return <span className="text-gray-400 text-sm">-</span>
+            const savedType = savedProspectTypes.find(t => t.name === lead.prospect_type)
+            return (
+              <Badge variant="outline" className="text-xs">
+                <span className="flex items-center gap-1.5">
+                  {savedType && (
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: savedType.color }}
                     />
-                  </TableHead>
-                  <TableHead className="w-[100px]">Reg.nr</TableHead>
-                  <TableHead>Märke / Modell</TableHead>
-                  <TableHead className="w-[60px]">År</TableHead>
-                  <TableHead className="w-[90px]">Miltal</TableHead>
-                  <TableHead>Ägare</TableHead>
-                  <TableHead className="w-[100px]">Län</TableHead>
-                  <TableHead className="w-[120px]">Prospekt-typ</TableHead>
-                  <TableHead className="w-[100px]">Status</TableHead>
-                  <TableHead className="w-[120px]">Aktivitet</TableHead>
-                  <TableHead className="w-[90px]">BP Datum</TableHead>
-                  <TableHead className="w-[90px]">Datum</TableHead>
-                  <TableHead className="w-[60px] text-center">Ägare</TableHead>
-                  <TableHead className="w-[70px] text-center">Värd. F</TableHead>
-                  <TableHead className="w-[70px] text-center">Värd. P</TableHead>
-                  <TableHead className="w-[80px] text-center">Besikt.</TableHead>
-                  <TableHead className="w-[80px] text-center">Avställd</TableHead>
-                  <TableHead className="w-[80px] text-center">Påställd</TableHead>
-                  <TableHead className="w-[80px] text-center">Ägarbyte</TableHead>
-                  <TableHead className="w-[60px] text-center">Företag</TableHead>
-                  <TableHead className="w-[60px] text-center">Privat</TableHead>
-                  <TableHead className="w-[50px] text-center">Trafik</TableHead>
-                  <TableHead className="w-[100px] text-center">Åtgärder</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {leads.map((lead) => {
-                  const primaryVehicle = lead.vehicles?.[0]
-                  const callCount = lead.call_logs?.length || 0
+                  )}
+                  {savedType?.description || lead.prospect_type}
+                </span>
+              </Badge>
+            )
+          }
 
-                  return (
-                    <TableRow
-                      key={lead.id}
-                      className={cn(
-                        "hover:bg-gray-50",
-                        selectedIds.has(lead.id) && "bg-blue-50"
-                      )}
-                    >
-                      {/* Checkbox */}
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedIds.has(lead.id)}
-                          onCheckedChange={() => toggleSelection(lead.id)}
-                          aria-label={`Välj ${lead.owner_info || 'lead'}`}
-                        />
-                      </TableCell>
-
-                      {/* Reg.nr */}
-                      <TableCell>
-                        {primaryVehicle?.reg_nr ? (
-                          <div className="flex items-center gap-1">
-                            <span className="font-mono text-xs font-medium bg-gray-100 px-1.5 py-0.5 rounded">
-                              {primaryVehicle.reg_nr}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => copyRegNr(primaryVehicle.reg_nr!, primaryVehicle.id)}
-                            >
-                              {copiedId === primaryVehicle.id ? (
-                                <Check className="h-3 w-3 text-green-500" />
-                              ) : (
-                                <Copy className="h-3 w-3 text-gray-400" />
-                              )}
-                            </Button>
-                          </div>
-                        ) : (
-                          <span className="text-gray-400 text-xs">-</span>
-                        )}
-                      </TableCell>
-
-                      {/* Make / Model */}
-                      <TableCell>
-                        <span className="text-sm">
-                          {[primaryVehicle?.make, primaryVehicle?.model]
-                            .filter(Boolean)
-                            .join(' ') || '-'}
-                        </span>
-                      </TableCell>
-
-                      {/* Year */}
-                      <TableCell>
-                        <span className="text-sm text-gray-600">
-                          {primaryVehicle?.year || '-'}
-                        </span>
-                      </TableCell>
-
-                      {/* Mileage */}
-                      <TableCell>
-                        <span className="text-sm text-gray-600">
-                          {formatMileage(primaryVehicle?.mileage)}
-                        </span>
-                      </TableCell>
-
-                      {/* Owner */}
-                      <TableCell>
-                        <div className="max-w-[150px]">
-                          <p className="text-sm truncate" title={lead.owner_info || ''}>
-                            {lead.owner_info || '-'}
-                          </p>
-                          {lead.location && (
-                            <p className="text-xs text-gray-400 truncate">
-                              {lead.location}
-                            </p>
-                          )}
-                        </div>
-                      </TableCell>
-
-                      {/* County */}
-                      <TableCell>
-                        <span className="text-sm text-gray-600">
-                          {lead.county || '-'}
-                        </span>
-                      </TableCell>
-
-                      {/* Prospekt-typ */}
-                      <TableCell>
-                        {lead.prospect_type ? (
-                          <Badge variant="outline" className="text-xs">
-                            <span className="flex items-center gap-1.5">
-                              {(() => {
-                                const savedType = savedProspectTypes.find(t => t.name === lead.prospect_type)
-                                return (
-                                  <>
-                                    {savedType && (
-                                      <span
-                                        className="w-2 h-2 rounded-full"
-                                        style={{ backgroundColor: savedType.color }}
-                                      />
-                                    )}
-                                    {savedType?.description || lead.prospect_type}
-                                  </>
-                                )
-                              })()}
-                            </span>
-                          </Badge>
-                        ) : (
-                          <span className="text-gray-400 text-sm">-</span>
-                        )}
-                      </TableCell>
-
-                      {/* Status */}
-                      <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "text-xs",
-                            lead.status === 'new' && "bg-blue-50 text-blue-700 border-blue-200",
-                            lead.status === 'pending_review' && "bg-yellow-50 text-yellow-700 border-yellow-200",
-                            lead.status === 'to_call' && "bg-purple-50 text-purple-700 border-purple-200",
-                            lead.status === 'called' && "bg-green-50 text-green-700 border-green-200",
-                            lead.status === 'interested' && "bg-emerald-50 text-emerald-700 border-emerald-200",
-                            lead.status === 'booked' && "bg-teal-50 text-teal-700 border-teal-200",
-                            lead.status === 'bought' && "bg-cyan-50 text-cyan-700 border-cyan-200",
-                            lead.status === 'not_interested' && "bg-gray-50 text-gray-700 border-gray-200",
-                            lead.status === 'do_not_call' && "bg-red-50 text-red-700 border-red-200",
-                            lead.status === 'callback' && "bg-orange-50 text-orange-700 border-orange-200",
-                            lead.status === 'no_answer' && "bg-slate-50 text-slate-700 border-slate-200"
-                          )}
+          // Custom actions for historik page
+          if (columnId === 'actions') {
+            const callCount = lead.call_logs?.length || 0
+            return (
+              <div className="flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => handleOpenDetailModal(lead)}
+                      >
+                        <ExternalLink className="h-4 w-4 text-gray-500" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Visa detaljer</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                {callCount > 0 && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => openDetailDialog(lead)}
                         >
-                          {lead.status === 'new' && 'Ny'}
-                          {lead.status === 'pending_review' && 'Granskas'}
-                          {lead.status === 'to_call' && 'Att ringa'}
-                          {lead.status === 'called' && 'Ringd'}
-                          {lead.status === 'interested' && 'Intresserad'}
-                          {lead.status === 'booked' && 'Bokad'}
-                          {lead.status === 'bought' && 'Köpt'}
-                          {lead.status === 'not_interested' && 'Ej intresserad'}
-                          {lead.status === 'do_not_call' && 'Ring ej'}
-                          {lead.status === 'callback' && 'Återkom'}
-                          {lead.status === 'no_answer' && 'Inget svar'}
-                          {!['new', 'pending_review', 'to_call', 'called', 'interested', 'booked', 'bought', 'not_interested', 'do_not_call', 'callback', 'no_answer'].includes(lead.status) && lead.status}
-                        </Badge>
-                      </TableCell>
+                          <MessageSquare className="h-4 w-4 text-gray-500" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Visa samtalshistorik</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => router.push(`/leads/${lead.id}`)}
+                      >
+                        <ArrowRight className="h-4 w-4 text-gray-500" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Visa lead</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <DeleteIconButton
+                  onClick={() => setDeleteLeadId(lead.id)}
+                  tooltip="Radera lead"
+                />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <MoreHorizontal className="h-4 w-4 text-gray-500" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={async () => {
+                        const result = await bulkActivateLeads([lead.id], 'new', 'call')
+                        if (result.success) {
+                          toast.success('Skickad till ringlistan')
+                          router.refresh()
+                        } else {
+                          toast.error(result.error || 'Kunde inte skicka')
+                        }
+                      }}
+                    >
+                      <Send className="h-4 w-4 mr-2 text-blue-600" />
+                      Skicka till ring
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={async () => {
+                        const result = await bulkActivateLeads([lead.id], 'new', 'brev')
+                        if (result.success) {
+                          toast.success('Skickad till brevlistan')
+                          router.refresh()
+                        } else {
+                          toast.error(result.error || 'Kunde inte skicka')
+                        }
+                      }}
+                    >
+                      <FileText className="h-4 w-4 mr-2 text-orange-600" />
+                      Skicka till brev
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => router.push(`/leads/${lead.id}`)}>
+                      <ArrowRight className="h-4 w-4 mr-2" />
+                      Gå till leads
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )
+          }
 
-                      {/* Activity indicators - moved to match playground */}
-                      <TableCell>
-                        <div className="flex flex-wrap items-center gap-1">
-                          {lead.sent_to_call_at && (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger>
-                                  <Badge variant="outline" className="gap-1 bg-blue-50 text-blue-700 border-blue-200 text-xs">
-                                    <Send className="h-3 w-3" />
-                                    Ring
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent>Till ringlistan {formatDate(lead.sent_to_call_at)}</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
-                          {callCount > 0 && (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger>
-                                  <Badge variant="outline" className="gap-1 bg-green-50 text-green-700 border-green-200 text-xs">
-                                    <PhoneCall className="h-3 w-3" />
-                                    {callCount}x
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent>Ringd {callCount} gånger</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
-                          {lead.sent_to_brev_at && (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger>
-                                  <Badge variant="outline" className="gap-1 bg-orange-50 text-orange-700 border-orange-200 text-xs">
-                                    <FileText className="h-3 w-3" />
-                                    Brev
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent>Till brevlistan {formatDate(lead.sent_to_brev_at)}</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
-                          {lead.letter_sent && (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger>
-                                  <Badge variant="outline" className="gap-1 bg-amber-50 text-amber-700 border-amber-200 text-xs">
-                                    <MailCheck className="h-3 w-3" />
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent>Brev skickat {lead.letter_sent_date ? formatDate(lead.letter_sent_date) : ''}</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
-                        </div>
-                      </TableCell>
-
-                      {/* BP Datum */}
-                      <TableCell>
-                        {lead.bilprospekt_date ? (
-                          <span className="text-sm text-green-700 font-medium">
-                            {new Date(lead.bilprospekt_date).toLocaleDateString('sv-SE')}
-                          </span>
-                        ) : (
-                          <span className="text-sm text-gray-400">-</span>
-                        )}
-                      </TableCell>
-
-                      {/* Datum */}
-                      <TableCell>
-                        <span className="text-sm text-gray-600">
-                          {lead.data_period_start ? formatDate(lead.data_period_start) : '-'}
-                        </span>
-                      </TableCell>
-
-                      {/* Antal ägare */}
-                      <TableCell className="text-center">
-                        <span className="text-sm text-gray-600">
-                          {primaryVehicle?.antal_agare ?? '-'}
-                        </span>
-                      </TableCell>
-
-                      {/* Värdering Företag */}
-                      <TableCell className="text-center">
-                        <span className="text-sm text-gray-600">
-                          {formatValuation(primaryVehicle?.valuation_company)}
-                        </span>
-                      </TableCell>
-
-                      {/* Värdering Privat */}
-                      <TableCell className="text-center">
-                        <span className="text-sm text-gray-600">
-                          {formatValuation(primaryVehicle?.valuation_private)}
-                        </span>
-                      </TableCell>
-
-                      {/* Besiktning */}
-                      <TableCell className="text-center">
-                        <span className="text-sm text-gray-600">
-                          {formatDate(primaryVehicle?.besiktning_till)}
-                        </span>
-                      </TableCell>
-
-                      {/* Avställd */}
-                      <TableCell className="text-center">
-                        <span className="text-sm text-gray-600">
-                          {formatDate(primaryVehicle?.senaste_avställning)}
-                        </span>
-                      </TableCell>
-
-                      {/* Påställd */}
-                      <TableCell className="text-center">
-                        <span className="text-sm text-gray-600">
-                          {formatDate(primaryVehicle?.senaste_påställning)}
-                        </span>
-                      </TableCell>
-
-                      {/* Ägarbyte */}
-                      <TableCell className="text-center">
-                        <span className="text-sm text-gray-600">
-                          {formatDate(primaryVehicle?.senaste_agarbyte)}
-                        </span>
-                      </TableCell>
-
-                      {/* Företag annonser */}
-                      <TableCell className="text-center">
-                        <span className="text-sm text-gray-600">
-                          {primaryVehicle?.antal_foretagsannonser ?? '-'}
-                        </span>
-                      </TableCell>
-
-                      {/* Privat annonser */}
-                      <TableCell className="text-center">
-                        <span className="text-sm text-gray-600">
-                          {primaryVehicle?.antal_privatannonser ?? '-'}
-                        </span>
-                      </TableCell>
-
-                      {/* Trafik */}
-                      <TableCell className="text-center">
-                        {primaryVehicle?.in_traffic !== undefined ? (
-                          primaryVehicle.in_traffic ? (
-                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs">
-                              Ja
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 text-xs">
-                              Nej
-                            </Badge>
-                          )
-                        ) : (
-                          <span className="text-gray-400 text-xs">-</span>
-                        )}
-                      </TableCell>
-
-                      {/* Actions */}
-                      <TableCell className="text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          {callCount > 0 && (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7"
-                                    onClick={() => openDetailDialog(lead)}
-                                  >
-                                    <MessageSquare className="h-4 w-4 text-gray-500" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Visa samtalshistorik</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => router.push(`/leads/${lead.id}`)}
-                                >
-                                  <ExternalLink className="h-4 w-4 text-gray-500" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Visa lead</TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                          <DeleteIconButton
-                            onClick={() => setDeleteLeadId(lead.id)}
-                            tooltip="Radera lead"
-                          />
-
-                          {/* More actions dropdown */}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreHorizontal className="h-4 w-4 text-gray-500" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={async () => {
-                                  const result = await bulkActivateLeads([lead.id], 'new', 'call')
-                                  if (result.success) {
-                                    toast.success('Skickad till ringlistan')
-                                    router.refresh()
-                                  } else {
-                                    toast.error(result.error || 'Kunde inte skicka')
-                                  }
-                                }}
-                              >
-                                <Send className="h-4 w-4 mr-2 text-blue-600" />
-                                Skicka till ring
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={async () => {
-                                  const result = await bulkActivateLeads([lead.id], 'new', 'brev')
-                                  if (result.success) {
-                                    toast.success('Skickad till brevlistan')
-                                    router.refresh()
-                                  } else {
-                                    toast.error(result.error || 'Kunde inte skicka')
-                                  }
-                                }}
-                              >
-                                <FileText className="h-4 w-4 mr-2 text-orange-600" />
-                                Skicka till brev
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => router.push(`/leads/${lead.id}`)}
-                              >
-                                <ArrowRight className="h-4 w-4 mr-2" />
-                                Gå till leads
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+          return renderLeadCell({
+            columnId,
+            lead: leadData,
+            vehicle: vehicle as LeadVehicle | undefined,
+            onRowClick: () => handleOpenDetailModal(lead),
+            onCopyPhone: handleCopyPhone,
+            copiedPhone,
+          })
+        }}
+        renderSelectionBar={(count, clearSel) => (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={clearSel}
+            >
+              Avmarkera alla
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                const result = await bulkActivateLeads(Array.from(selectedIds), 'new', 'call')
+                if (result.success) {
+                  toast.success(`${selectedIds.size} leads skickade till ringlistan`)
+                  clearSel()
+                  router.refresh()
+                } else {
+                  toast.error(result.error || 'Kunde inte skicka till ringlistan')
+                }
+              }}
+              className="gap-2 text-blue-600 border-blue-200 hover:bg-blue-50"
+            >
+              <Send className="h-4 w-4" />
+              Skicka till ring
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                const result = await bulkActivateLeads(Array.from(selectedIds), 'new', 'brev')
+                if (result.success) {
+                  toast.success(`${selectedIds.size} leads skickade till brevlistan`)
+                  clearSel()
+                  router.refresh()
+                } else {
+                  toast.error(result.error || 'Kunde inte skicka till brevlistan')
+                }
+              }}
+              className="gap-2 text-orange-600 border-orange-200 hover:bg-orange-50"
+            >
+              <FileText className="h-4 w-4" />
+              Skicka till brev
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setShowBulkDeleteDialog(true)}
+              className="gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              Radera {count} leads
+            </Button>
+          </div>
+        )}
+        emptyState={
+          <div className="text-center py-16 text-gray-500">
+            <Car className="h-12 w-12 mx-auto text-gray-300 mb-4" />
+            <p className="font-medium">Ingen historik hittades</p>
+            <p className="text-sm mt-1">
+              {currentFilter === 'called'
+                ? 'Inga leads har ringts ännu'
+                : currentFilter === 'letter_sent'
+                  ? 'Inga brev har skickats ännu'
+                  : 'Ingen aktivitet har registrerats ännu'
+              }
+            </p>
+          </div>
+        }
+      />
 
       {/* Call History Detail Dialog */}
       <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
@@ -1369,6 +1220,51 @@ export function HistorikView({
         count={selectedIds.size}
         onConfirm={handleBulkDelete}
         isDeleting={isDeleting}
+      />
+
+      {/* Lead Detail Modal */}
+      <LeadDetailModal
+        lead={detailModalLead ? {
+          id: detailModalLead.id,
+          phone: detailModalLead.phone || null,
+          owner_info: detailModalLead.owner_info || null,
+          location: detailModalLead.location || null,
+          status: detailModalLead.status,
+          source: null,
+          county: detailModalLead.county || null,
+          owner_age: detailModalLead.owner_age || null,
+          owner_gender: detailModalLead.owner_gender || null,
+          owner_type: detailModalLead.owner_type || null,
+          created_at: detailModalLead.created_at,
+          vehicles: detailModalLead.vehicles.map(v => ({
+            id: v.id,
+            reg_nr: v.reg_nr || null,
+            make: v.make || null,
+            model: v.model || null,
+            year: v.year || null,
+            fuel_type: v.fuel_type || null,
+            mileage: v.mileage || null,
+            color: v.color || null,
+            transmission: v.transmission || null,
+            horsepower: v.horsepower || null,
+            in_traffic: v.in_traffic ?? true,
+            four_wheel_drive: v.four_wheel_drive ?? false,
+            engine_cc: v.engine_cc ?? null,
+            antal_agare: v.antal_agare || null,
+            skatt: v.skatt || null,
+            besiktning_till: v.besiktning_till || null,
+            mileage_history: v.mileage_history as { date: string; mileage_km: number; mileage_mil?: number; type?: string }[] | null,
+            owner_history: v.owner_history as { date: string; name?: string; type: string; owner_class?: string; details?: string }[] | null,
+            owner_vehicles: v.owner_vehicles as { regnr: string; description?: string; model?: string; color?: string; status?: string; mileage?: number; year?: number; ownership_time?: string }[] | null,
+            address_vehicles: v.address_vehicles as { regnr: string; description?: string; model?: string; color?: string; status?: string; mileage?: number; year?: number; ownership_time?: string }[] | null,
+            owner_gender: v.owner_gender || null,
+            owner_type: v.owner_type || null,
+            biluppgifter_fetched_at: v.biluppgifter_fetched_at || null,
+          }))
+        } : null}
+        open={detailModalOpen}
+        onOpenChange={setDetailModalOpen}
+        onUpdate={() => router.refresh()}
       />
     </div>
   )
