@@ -194,10 +194,7 @@ export async function fetchBiluppgifterComplete(regnr: string): Promise<Biluppgi
             result.owner_name = profileData.name
           }
           result.owner_age = profileData.age
-          // Only use address if it looks like a real address (not vehicle summary)
-          if (profileData.address && !profileData.address.includes('fordonet')) {
-            result.owner_address = profileData.address
-          }
+          result.owner_address = profileData.address
           result.owner_postal_code = profileData.postal_code
           result.owner_postal_city = profileData.postal_city
           result.owner_phone = profileData.phone
