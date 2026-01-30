@@ -24,6 +24,21 @@ async function getBiluppgifterApiUrl(): Promise<string> {
 
 // Interfaces for internal use - the API route handles the actual scraping
 
+export interface MileageHistoryEntry {
+  date: string
+  mileage_mil: number
+  mileage_km: number
+  type: string
+}
+
+export interface OwnerHistoryEntry {
+  date: string
+  name?: string
+  type: string
+  owner_class: string
+  details?: string
+}
+
 export interface BiluppgifterResult {
   success: boolean
   regnr: string
@@ -50,6 +65,9 @@ export interface BiluppgifterResult {
   // Other vehicles
   owner_vehicles?: Array<{ regnr: string; description: string }>
   address_vehicles?: Array<{ regnr: string; description: string; status?: string }>
+  // History data
+  mileage_history?: MileageHistoryEntry[]
+  owner_history?: OwnerHistoryEntry[]
   // Error
   error?: string
 }
@@ -146,6 +164,28 @@ function parseVehicleData(data: Record<string, unknown>, regnr: string): Biluppg
     result.owner_name = currentOwner.name
     result.owner_city = currentOwner.city
     result.owner_profile_id = currentOwner.profile_id
+  }
+
+  // Parse owner history
+  if (owner?.history && Array.isArray(owner.history)) {
+    result.owner_history = (owner.history as Array<Record<string, string>>).map(h => ({
+      date: h.date || '',
+      name: h.name,
+      type: h.type || '',
+      owner_class: h.owner_class || '',
+      details: h.details,
+    }))
+  }
+
+  // Parse mileage history
+  const mileageHistory = data.mileage_history as Array<Record<string, unknown>> | undefined
+  if (mileageHistory && Array.isArray(mileageHistory)) {
+    result.mileage_history = mileageHistory.map(m => ({
+      date: String(m.date || ''),
+      mileage_mil: Number(m.mileage_mil) || 0,
+      mileage_km: Number(m.mileage_km) || 0,
+      type: String(m.type || 'besiktning'),
+    }))
   }
 
   return result

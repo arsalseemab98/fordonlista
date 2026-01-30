@@ -51,6 +51,8 @@ export async function fetchBiluppgifterForProspect(bpId: number, regNumber: stri
       bu_owner_phone: result.owner_phone,
       bu_owner_vehicles: result.owner_vehicles || null,
       bu_address_vehicles: result.address_vehicles || null,
+      bu_mileage_history: result.mileage_history || null,
+      bu_owner_history: result.owner_history || null,
       bu_fetched_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
@@ -136,6 +138,12 @@ export async function fetchBiluppgifterForProspects(
       }
       if (result.address_vehicles) {
         updateData.bu_address_vehicles = result.address_vehicles
+      }
+      if (result.mileage_history) {
+        updateData.bu_mileage_history = result.mileage_history
+      }
+      if (result.owner_history) {
+        updateData.bu_owner_history = result.owner_history
       }
 
       const { error } = await supabase
