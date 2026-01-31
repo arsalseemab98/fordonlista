@@ -42,6 +42,7 @@ interface ScraperLog {
   error_message: string | null
   regioner_sokta: string[] | null
   marken_sokta: string[] | null
+  scrape_type: string | null
 }
 
 interface RecentCar {
@@ -184,6 +185,13 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
       return <Badge className="bg-blue-100 text-blue-700 text-xs"><Store className="w-3 h-3 mr-1" />Handlare</Badge>
     }
     return <Badge className="bg-teal-100 text-teal-700 text-xs"><User className="w-3 h-3 mr-1" />Privat</Badge>
+  }
+
+  const getScrapeTypeBadge = (type: string | null) => {
+    if (type === 'light') {
+      return <Badge className="bg-purple-100 text-purple-700 text-xs"><Zap className="w-3 h-3 mr-1" />Light</Badge>
+    }
+    return <Badge className="bg-indigo-100 text-indigo-700 text-xs"><Clock className="w-3 h-3 mr-1" />Full</Badge>
   }
 
   const getSoldReasonBadge = (reason: string | null) => {
@@ -554,7 +562,7 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Calendar className="w-5 h-5" />
-            Full Scrape Körningshistorik
+            Körningshistorik (Full & Light Scrape)
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -562,6 +570,7 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
             <TableHeader>
               <TableRow>
                 <TableHead>Tidpunkt</TableHead>
+                <TableHead>Typ</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Varaktighet</TableHead>
                 <TableHead className="text-right">Hittade</TableHead>
@@ -575,7 +584,7 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
             <TableBody>
               {logs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                     Inga körningar ännu
                   </TableCell>
                 </TableRow>
@@ -585,6 +594,7 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
                     <TableCell className="font-medium">
                       {formatDate(log.started_at)}
                     </TableCell>
+                    <TableCell>{getScrapeTypeBadge(log.scrape_type)}</TableCell>
                     <TableCell>{getStatusBadge(log.status)}</TableCell>
                     <TableCell>
                       {formatDuration(log.started_at, log.finished_at)}
