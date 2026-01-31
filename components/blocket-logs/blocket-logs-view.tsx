@@ -464,7 +464,13 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
           ) : (
             <>
               <div className="space-y-3">
-                {displayedSoldCars.map((car) => (
+                {displayedSoldCars.map((car) => {
+                  // Calculate days on market
+                  const publishedDate = new Date(car.forst_sedd)
+                  const soldDate = new Date(car.borttagen)
+                  const daysOnMarket = Math.floor((soldDate.getTime() - publishedDate.getTime()) / (1000 * 60 * 60 * 24))
+
+                  return (
                   <div key={car.id} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg border border-orange-100 hover:bg-orange-100 transition-colors">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -474,6 +480,11 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
                         {car.arsmodell && <span className="text-gray-600">{car.arsmodell}</span>}
                         {getSoldReasonBadge(car.borttagen_anledning)}
                         {getSellerBadge(car.saljare_typ)}
+                        {daysOnMarket >= 0 && (
+                          <Badge variant="outline" className="text-xs bg-white">
+                            {daysOnMarket === 0 ? 'Samma dag' : `${daysOnMarket} dagar`}
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-3 mt-1 text-sm text-gray-600 flex-wrap">
                         <span className="font-medium text-orange-700">{formatPrice(car.pris)}</span>
@@ -481,12 +492,17 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
                         {car.stad && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{car.stad}</span>}
                         {!car.stad && car.region && <span className="flex items-center gap-1 capitalize"><MapPin className="w-3 h-3" />{car.region}</span>}
                       </div>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                        <span>Publicerad: {formatDate(car.forst_sedd)}</span>
+                        <span>•</span>
+                        <span>Såld: {formatDate(car.borttagen)}</span>
+                      </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-xs text-gray-500">{formatTimeAgo(car.borttagen)}</span>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
               {recentSoldCars.length > 5 && (
                 <button
