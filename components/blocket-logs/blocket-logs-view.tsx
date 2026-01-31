@@ -26,9 +26,12 @@ import {
   Calendar,
   RefreshCw,
   ExternalLink,
-  Tag
+  Tag,
+  Trash2
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
+import { Button } from '@/components/ui/button'
+import { deleteScraperLog, deleteAllLogs } from '@/app/blocket-logs/actions'
 
 interface ScraperLog {
   id: number
@@ -106,6 +109,24 @@ interface BlocketLogsViewProps {
 export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, regionBreakdown }: BlocketLogsViewProps) {
   const [showAllNewCars, setShowAllNewCars] = useState(false)
   const [showAllSoldCars, setShowAllSoldCars] = useState(false)
+  const [isPending, startTransition] = useTransition()
+  const [deletingId, setDeletingId] = useState<number | null>(null)
+
+  const handleDeleteLog = async (logId: number) => {
+    if (!confirm('Vill du ta bort denna logg?')) return
+    setDeletingId(logId)
+    startTransition(async () => {
+      await deleteScraperLog(logId)
+      setDeletingId(null)
+    })
+  }
+
+  const handleDeleteAllLogs = async () => {
+    if (!confirm('Vill du ta bort ALLA loggar? Detta kan inte ångras.')) return
+    startTransition(async () => {
+      await deleteAllLogs()
+    })
+  }
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
@@ -560,10 +581,24 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
       {/* Logs Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="w-5 h-5" />
-            Körningshistorik (Full & Light Scrape)
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="w-5 h-5" />
+              Körningshistorik (Full & Light Scrape)
+            </CardTitle>
+            {logs.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                onClick={handleDeleteAllLogs}
+                disabled={isPending}
+              >
+                <Trash2 className="w-4 h-4 mr-1" />
+                Rensa alla
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -579,12 +614,13 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
                 <TableHead className="text-right">Prisändringar</TableHead>
                 <TableHead>Regioner</TableHead>
                 <TableHead>Fel</TableHead>
+                <TableHead className="w-10"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {logs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                     Inga körningar ännu
                   </TableCell>
                 </TableRow>
@@ -646,6 +682,17 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
                           </span>
                         </div>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-muted-foreground hover:text-red-600"
+                        onClick={() => handleDeleteLog(log.id)}
+                        disabled={isPending && deletingId === log.id}
+                      >
+                        <Trash2 className={`w-4 h-4 ${deletingId === log.id ? 'animate-spin' : ''}`} />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))
