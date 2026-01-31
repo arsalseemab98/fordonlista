@@ -19,14 +19,20 @@ export default async function BlocketLogsPage() {
     console.error('Error fetching blocket logs:', error)
   }
 
-  // Fetch database stats - total ads, dealers, private
-  const { data: dbStats } = await supabase
+  // Fetch database stats using count queries (not limited to 1000 rows)
+  const { count: totalAdsInDb } = await supabase
     .from('blocket_annonser')
-    .select('saljare_typ')
+    .select('*', { count: 'exact', head: true })
 
-  const totalAdsInDb = dbStats?.length || 0
-  const dealerAds = dbStats?.filter(a => a.saljare_typ === 'handlare').length || 0
-  const privateAds = dbStats?.filter(a => a.saljare_typ === 'privat').length || 0
+  const { count: dealerAds } = await supabase
+    .from('blocket_annonser')
+    .select('*', { count: 'exact', head: true })
+    .eq('saljare_typ', 'handlare')
+
+  const { count: privateAds } = await supabase
+    .from('blocket_annonser')
+    .select('*', { count: 'exact', head: true })
+    .eq('saljare_typ', 'privat')
 
   // Fetch active vs sold stats
   const { count: activeAds } = await supabase
@@ -108,9 +114,9 @@ export default async function BlocketLogsPage() {
             failedRuns,
             totalNewAds,
             totalAdsScanned,
-            totalAdsInDb,
-            dealerAds,
-            privateAds,
+            totalAdsInDb: totalAdsInDb || 0,
+            dealerAds: dealerAds || 0,
+            privateAds: privateAds || 0,
             activeAds: activeAds || 0,
             soldAds: soldAds || 0,
             newAdsToday: newAdsToday || 0,
