@@ -500,6 +500,11 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-xs text-gray-500">{formatTimeAgo(car.borttagen)}</span>
+                      {car.url && (
+                        <a href={car.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      )}
                     </div>
                   </div>
                 )})}
