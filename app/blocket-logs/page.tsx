@@ -86,17 +86,29 @@ export default async function BlocketLogsPage() {
     .select('*', { count: 'exact', head: true })
     .gte('borttagen', today.toISOString())
 
-  // Get per-region breakdown
-  const { data: regionStats } = await supabase
-    .from('blocket_annonser')
-    .select('region')
-    .is('borttagen', null)
+  // Get per-region breakdown using RPC to avoid 1000 row limit
+  const { data: regionStatsRaw } = await supabase.rpc('get_region_counts')
 
-  const regionBreakdown = regionStats?.reduce((acc, { region }) => {
-    const key = region || 'okänd'
-    acc[key] = (acc[key] || 0) + 1
-    return acc
-  }, {} as Record<string, number>) || {}
+  // Fallback: count each region separately if RPC doesn't exist
+  let regionBreakdown: Record<string, number> = {}
+
+  if (regionStatsRaw && Array.isArray(regionStatsRaw)) {
+    regionBreakdown = regionStatsRaw.reduce((acc: Record<string, number>, row: { region: string; count: number }) => {
+      acc[row.region || 'okänd'] = row.count
+      return acc
+    }, {})
+  } else {
+    // Fallback: separate count queries per region
+    const regions = ['norrbotten', 'vasterbotten', 'jamtland', 'vasternorrland']
+    for (const region of regions) {
+      const { count } = await supabase
+        .from('blocket_annonser')
+        .select('*', { count: 'exact', head: true })
+        .eq('region', region)
+        .is('borttagen', null)
+      regionBreakdown[region] = count || 0
+    }
+  }
 
   return (
     <div className="flex flex-col">
