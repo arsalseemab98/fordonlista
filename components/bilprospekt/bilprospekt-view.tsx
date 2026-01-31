@@ -61,6 +61,7 @@ import {
 } from 'lucide-react'
 import { fetchMileageForProspects, checkBiluppgifterStatus } from '@/app/bilprospekt/actions'
 import { toast } from 'sonner'
+import { ProspectDetailModal } from './prospect-detail-modal'
 
 interface AddressVehicle {
   regnr: string
@@ -131,6 +132,8 @@ interface Prospect {
   bu_owner_history: OwnerHistoryEntry[] | null
   bu_owner_name: string | null
   bu_fetched_at: string | null
+  sent_to_call_at: string | null
+  sent_to_brev_at: string | null
 }
 
 interface BilprospektViewProps {
@@ -169,7 +172,7 @@ const ALL_COLUMNS = [
   { id: 'fwd', label: '4WD', group: 'vehicle', default: false },
   { id: 'in_service', label: 'I trafik', group: 'vehicle', default: false },
   { id: 'chassis', label: 'Chassi', group: 'vehicle', default: false },
-  { id: 'owner_name', label: 'Ägare', group: 'owner', default: true },
+  { id: 'owner_name', label: 'Ägare', group: 'owner', default: false },
   { id: 'bu_owner_age', label: 'Ålder', group: 'biluppgifter', default: true },
   { id: 'bu_owner_phone', label: 'Telefon', group: 'biluppgifter', default: true },
   { id: 'bu_owner_address', label: 'Adress', group: 'biluppgifter', default: true },
@@ -208,7 +211,7 @@ const REGIONS = [
 
 const STORAGE_KEY = 'bilprospektVisibleColumns'
 const STORAGE_VERSION_KEY = 'bilprospektColumnsVersion'
-const CURRENT_VERSION = 2 // Increment when adding new columns
+const CURRENT_VERSION = 3 // Increment when changing default columns
 
 // Helper to merge saved columns with new defaults (for new columns added after user saved)
 function getMergedColumns(): Set<string> {
@@ -264,6 +267,8 @@ export function BilprospektView({
   const [searchTerm, setSearchTerm] = useState(currentFilters.search || '')
   const [isFetchingData, setIsFetchingData] = useState(false)
   const [fetchProgress, setFetchProgress] = useState<{ current: number; total: number } | null>(null)
+  const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
   // Column visibility state - initialize from localStorage with version-aware merging
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => getMergedColumns())
@@ -370,7 +375,7 @@ export function BilprospektView({
     // Show estimated time (5 items per batch, ~1s per item locally)
     const estimatedSeconds = Math.max(1, Math.ceil(selectedIds.size * 1.2))
 
-    toast.loading(`Hämtar biluppgifter för ${selectedIds.size} fordon...`, {
+    const toastId = toast.loading(`Hämtar biluppgifter för ${selectedIds.size} fordon...`, {
       description: selectedIds.size === 1 ? 'Tar ca 1 sekund...' : `Uppskattat ~${estimatedSeconds} sekunder.`,
     })
 
@@ -380,6 +385,8 @@ export function BilprospektView({
         .map(p => ({ bp_id: p.bp_id, reg_number: p.reg_number }))
 
       const result = await fetchMileageForProspects(selectedProspects)
+
+      toast.dismiss(toastId)
 
       if (result.success) {
         toast.success('Biluppgifter hämtade!', {
@@ -393,6 +400,7 @@ export function BilprospektView({
         })
       }
     } catch (error) {
+      toast.dismiss(toastId)
       console.error('Error fetching biluppgifter:', error)
       toast.error('Fel', {
         description: 'Ett oväntat fel uppstod.',
@@ -430,7 +438,7 @@ export function BilprospektView({
 
     const estimatedSeconds = Math.max(1, Math.ceil(unfetchedProspects.length * 1.2))
 
-    toast.loading(`Hämtar biluppgifter för ${unfetchedProspects.length} fordon...`, {
+    const toastId = toast.loading(`Hämtar biluppgifter för ${unfetchedProspects.length} fordon...`, {
       description: unfetchedProspects.length === 1 ? 'Tar ca 1 sekund...' : `Uppskattat ~${estimatedSeconds} sekunder.`,
     })
 
@@ -441,6 +449,8 @@ export function BilprospektView({
       }))
 
       const result = await fetchMileageForProspects(prospectsToFetch)
+
+      toast.dismiss(toastId)
 
       if (result.success) {
         toast.success('Biluppgifter hämtade!', {
@@ -453,6 +463,7 @@ export function BilprospektView({
         })
       }
     } catch (error) {
+      toast.dismiss(toastId)
       console.error('Error fetching biluppgifter:', error)
       toast.error('Fel', {
         description: 'Ett oväntat fel uppstod.',
@@ -493,11 +504,34 @@ export function BilprospektView({
   const renderCell = (prospect: Prospect, columnId: string) => {
     switch (columnId) {
       case 'reg_number':
+        const ownerDisplay = prospect.bu_owner_name || prospect.owner_name || 'Okänd ägare'
+        const genderType = prospect.owner_type === 'company' ? 'Företag' : prospect.owner_gender === 'M' ? 'Man' : prospect.owner_gender === 'K' ? 'Kvinna' : 'Okänd'
         return (
-          <div className="flex items-center gap-1">
-            <span className="font-mono text-sm font-medium text-blue-600">
+          <div className="flex items-center gap-1.5">
+            <div className="relative group/gender">
+              {prospect.owner_type === 'company' ? (
+                <Building2 className="w-4 h-4 text-purple-500 cursor-help" />
+              ) : prospect.owner_gender === 'M' ? (
+                <span className="text-blue-500 font-bold text-sm cursor-help">♂</span>
+              ) : prospect.owner_gender === 'K' ? (
+                <span className="text-pink-500 font-bold text-sm cursor-help">♀</span>
+              ) : (
+                <span className="text-muted-foreground text-sm cursor-help">○</span>
+              )}
+              <div className="absolute left-0 top-full mt-1 hidden group-hover/gender:block z-50 bg-popover border rounded-md shadow-md px-2 py-1 text-xs whitespace-nowrap">
+                <span className="font-medium">{genderType}:</span> {ownerDisplay}
+              </div>
+            </div>
+            <button
+              className="font-mono text-sm font-medium text-blue-600 hover:underline"
+              onClick={(e) => {
+                e.stopPropagation()
+                setSelectedProspect(prospect)
+                setIsModalOpen(true)
+              }}
+            >
               {prospect.reg_number}
-            </span>
+            </button>
             {hasBiluppgifterData(prospect) && (
               <CheckCircle2 className="w-3 h-3 text-green-600" />
             )}
@@ -516,9 +550,51 @@ export function BilprospektView({
           </Badge>
         )
       case 'mileage':
-        return prospect.mileage ? (
-          <span className="font-medium">{prospect.mileage.toLocaleString()}</span>
-        ) : '-'
+        if (!prospect.mileage) return '-'
+
+        // If we have mileage history, show tooltip on hover
+        if (prospect.bu_mileage_history && prospect.bu_mileage_history.length > 0) {
+          return (
+            <div className="relative group/mil">
+              <span className="font-medium cursor-help underline decoration-dotted">
+                {prospect.mileage.toLocaleString()} mil
+              </span>
+              <div className="absolute left-0 top-full mt-1 hidden group-hover/mil:block z-50 bg-popover border rounded-md shadow-md p-3 min-w-[280px]">
+                <h4 className="font-medium flex items-center gap-2 mb-2">
+                  <History className="w-4 h-4" />
+                  Mätarhistorik
+                </h4>
+                <div className="max-h-64 overflow-y-auto space-y-1">
+                  {prospect.bu_mileage_history.map((m, i) => {
+                    const prevMileage = prospect.bu_mileage_history?.[i + 1]?.mileage_mil
+                    const diff = prevMileage ? m.mileage_mil - prevMileage : null
+                    return (
+                      <div key={i} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-3 h-3 text-muted-foreground" />
+                          <span className="text-muted-foreground">{m.date}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-medium">{m.mileage_mil.toLocaleString()} mil</span>
+                          {diff !== null && (
+                            <span className="text-xs text-muted-foreground ml-2">(+{diff.toLocaleString()})</span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                {prospect.bu_mileage_history.length > 1 && (
+                  <div className="pt-2 border-t text-xs text-muted-foreground mt-2">
+                    Total körning: {(prospect.bu_mileage_history[0].mileage_mil - prospect.bu_mileage_history[prospect.bu_mileage_history.length - 1].mileage_mil).toLocaleString()} mil
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        }
+
+        return <span className="font-medium">{prospect.mileage.toLocaleString()} mil</span>
       case 'color':
         return prospect.color || '-'
       case 'kaross':
@@ -551,16 +627,9 @@ export function BilprospektView({
         )
       case 'owner_name':
         return (
-          <div className="flex items-center gap-1">
-            {prospect.owner_type === 'company' ? (
-              <Building2 className="w-4 h-4 text-purple-500" />
-            ) : (
-              <User className="w-4 h-4 text-muted-foreground" />
-            )}
-            <span className="max-w-[100px] truncate">
-              {prospect.owner_name?.split(',')[0] || '-'}
-            </span>
-          </div>
+          <span className="max-w-[120px] truncate block" title={prospect.owner_name || ''}>
+            {prospect.owner_name?.split(',')[0] || '-'}
+          </span>
         )
       case 'bu_owner_age':
         return prospect.bu_owner_age ? `${prospect.bu_owner_age} år` : '-'
@@ -590,13 +659,46 @@ export function BilprospektView({
       case 'bu_annual_tax':
         return prospect.bu_annual_tax ? `${prospect.bu_annual_tax.toLocaleString()} kr` : '-'
       case 'bu_inspection_until':
-        return prospect.bu_inspection_until ? (
-          <Badge variant="outline" className={
-            new Date(prospect.bu_inspection_until) < new Date() ? 'bg-red-50 text-red-800' : 'bg-green-50 text-green-800'
-          }>
+        if (!prospect.bu_inspection_until) return '-'
+
+        const isExpired = new Date(prospect.bu_inspection_until) < new Date()
+
+        // If we have mileage history (besiktning history), show on hover
+        if (prospect.bu_mileage_history && prospect.bu_mileage_history.length > 0) {
+          return (
+            <div className="relative group/besikt">
+              <Badge
+                variant="outline"
+                className={`cursor-help ${isExpired ? 'bg-red-50 text-red-800' : 'bg-green-50 text-green-800'}`}
+              >
+                {prospect.bu_inspection_until}
+              </Badge>
+              <div className="absolute left-0 top-full mt-1 hidden group-hover/besikt:block z-50 bg-popover border rounded-md shadow-md p-3 min-w-[280px]">
+                <h4 className="font-medium flex items-center gap-2 mb-2">
+                  <History className="w-4 h-4" />
+                  Besiktningshistorik
+                </h4>
+                <div className="max-h-64 overflow-y-auto space-y-1">
+                  {prospect.bu_mileage_history.map((m, i) => (
+                    <div key={i} className="flex items-center justify-between p-2 bg-muted/50 rounded text-sm">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-3 h-3 text-muted-foreground" />
+                        <span className="text-muted-foreground">{m.date}</span>
+                      </div>
+                      <span className="font-medium">{m.mileage_mil.toLocaleString()} mil</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )
+        }
+
+        return (
+          <Badge variant="outline" className={isExpired ? 'bg-red-50 text-red-800' : 'bg-green-50 text-green-800'}>
             {prospect.bu_inspection_until}
           </Badge>
-        ) : '-'
+        )
       case 'bu_address_vehicles':
         return (prospect.bu_address_vehicles && prospect.bu_address_vehicles.length > 0) ? (
           <Popover>
@@ -1008,7 +1110,34 @@ export function BilprospektView({
                     />
                   </TableHead>
                   {ALL_COLUMNS.filter(c => isColumnVisible(c.id)).map(column => (
-                    <TableHead key={column.id}>{column.label}</TableHead>
+                    <TableHead key={column.id}>
+                      {column.id === 'reg_number' ? (
+                        <div className="flex items-center gap-1">
+                          {column.label}
+                          <div className="relative group">
+                            <Info className="w-3 h-3 text-muted-foreground hover:text-foreground cursor-help" />
+                            <div className="absolute left-0 top-full mt-1 hidden group-hover:block z-50 bg-popover border rounded-md shadow-md p-2 text-sm whitespace-nowrap">
+                              <div className="flex items-center gap-2 py-0.5">
+                                <span className="text-blue-500 font-bold">♂</span>
+                                <span>Man</span>
+                              </div>
+                              <div className="flex items-center gap-2 py-0.5">
+                                <span className="text-pink-500 font-bold">♀</span>
+                                <span>Kvinna</span>
+                              </div>
+                              <div className="flex items-center gap-2 py-0.5">
+                                <Building2 className="w-4 h-4 text-purple-500" />
+                                <span>Företag</span>
+                              </div>
+                              <div className="flex items-center gap-2 py-0.5">
+                                <span className="text-muted-foreground">○</span>
+                                <span>Okänd</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : column.label}
+                    </TableHead>
                   ))}
                   <TableHead>Info</TableHead>
                 </TableRow>
@@ -1125,6 +1254,14 @@ export function BilprospektView({
           )}
         </CardContent>
       </Card>
+
+      {/* Prospect Detail Modal */}
+      <ProspectDetailModal
+        prospect={selectedProspect}
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
+        onUpdate={() => router.refresh()}
+      />
     </div>
   )
 }

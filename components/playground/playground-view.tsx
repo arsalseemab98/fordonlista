@@ -100,6 +100,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { DeleteConfirmDialog } from '@/components/ui/delete-confirm-dialog'
+import { LeadDetailModal } from '@/components/shared/lead-detail-modal'
 import { Settings2 } from 'lucide-react'
 import { FilterPresets } from '@/components/ui/filter-presets'
 import { createProspectType } from '@/app/prospekt-typer/actions'
@@ -439,6 +440,10 @@ export function PlaygroundView({
 
   // Mileage filter
   const [mileageFilter, setMileageFilter] = useState<string>('all')
+
+  // Detail modal state
+  const [detailModalLead, setDetailModalLead] = useState<Lead | null>(null)
+  const [detailModalOpen, setDetailModalOpen] = useState(false)
 
   // Filter leads by activity status and mileage for display
   const filteredLeads = useMemo(() => {
@@ -2779,9 +2784,15 @@ export function PlaygroundView({
                       <TableCell>
                         {primaryVehicle?.reg_nr ? (
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-sm font-medium bg-gray-100 px-2 py-1 rounded">
+                            <button
+                              className="font-mono text-sm font-medium bg-gray-100 px-2 py-1 rounded text-blue-600 hover:bg-blue-50 hover:text-blue-700 transition-colors cursor-pointer"
+                              onClick={() => {
+                                setDetailModalLead(lead)
+                                setDetailModalOpen(true)
+                              }}
+                            >
                               {primaryVehicle.reg_nr}
-                            </span>
+                            </button>
                             <Button
                               variant="ghost"
                               size="icon"
@@ -3914,6 +3925,51 @@ export function PlaygroundView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Lead Detail Modal */}
+      <LeadDetailModal
+        lead={detailModalLead ? {
+          id: detailModalLead.id,
+          phone: detailModalLead.phone || null,
+          owner_info: detailModalLead.owner_info || null,
+          location: detailModalLead.location || null,
+          status: detailModalLead.status,
+          source: null,
+          county: detailModalLead.county || null,
+          owner_age: null,
+          owner_gender: null,
+          owner_type: null,
+          created_at: detailModalLead.created_at,
+          vehicles: detailModalLead.vehicles.map(v => ({
+            id: v.id,
+            reg_nr: v.reg_nr || null,
+            make: v.make || null,
+            model: v.model || null,
+            year: v.year || null,
+            fuel_type: v.fuel_type || null,
+            mileage: v.mileage || null,
+            color: null,
+            transmission: null,
+            horsepower: null,
+            in_traffic: v.in_traffic ?? true,
+            four_wheel_drive: false,
+            engine_cc: null,
+            antal_agare: v.antal_agare || null,
+            skatt: null,
+            besiktning_till: v.besiktning_till || null,
+            mileage_history: v.mileage_history || null,
+            owner_history: null,
+            owner_vehicles: null,
+            address_vehicles: null,
+            owner_gender: null,
+            owner_type: null,
+            biluppgifter_fetched_at: v.carinfo_fetched_at || null,
+          }))
+        } : null}
+        open={detailModalOpen}
+        onOpenChange={setDetailModalOpen}
+        onUpdate={() => router.refresh()}
+      />
     </div>
   )
 }

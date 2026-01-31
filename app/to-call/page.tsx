@@ -10,16 +10,38 @@ interface PageProps {
   searchParams: Promise<{ status?: string }>
 }
 
+interface MileageHistoryEntry {
+  date: string
+  mileage_km: number
+  mileage_mil?: number
+}
+
 interface Vehicle {
   id: string
-  reg_nr?: string
-  make?: string
-  model?: string
-  mileage?: number
-  year?: number
-  in_traffic?: boolean
+  reg_nr: string | null
+  make: string | null
+  model: string | null
+  year: number | null
+  fuel_type: string | null
+  mileage: number | null
+  color: string | null
+  transmission: string | null
+  horsepower: number | null
+  in_traffic: boolean
+  four_wheel_drive?: boolean
+  engine_cc?: number | null
   is_interesting?: boolean
   ai_score?: number
+  antal_agare: number | null
+  skatt: number | null
+  besiktning_till: string | null
+  mileage_history: MileageHistoryEntry[] | null
+  owner_history: unknown[] | null
+  owner_vehicles: unknown[] | null
+  address_vehicles: unknown[] | null
+  owner_gender: string | null
+  owner_type: string | null
+  biluppgifter_fetched_at: string | null
 }
 
 interface CallLog {
@@ -30,10 +52,15 @@ interface CallLog {
 
 interface Lead {
   id: string
-  phone?: string
-  owner_info?: string
-  location?: string
+  phone: string | null
+  owner_info: string | null
+  location: string | null
   status: string
+  source: string | null
+  county: string | null
+  owner_age: number | null
+  owner_gender: string | null
+  owner_type: string | null
   created_at: string
   vehicles: Vehicle[]
   call_logs: CallLog[]
@@ -43,7 +70,7 @@ async function getLeadsToCall(statusFilter?: string) {
   const supabase = await createClient()
 
   // Determine which statuses to filter by
-  const validStatuses = ['new', 'callback', 'no_answer']
+  const validStatuses = ['new', 'to_call', 'callback', 'no_answer']
   const statusesToFetch = statusFilter && validStatuses.includes(statusFilter)
     ? [statusFilter]
     : validStatuses
@@ -52,17 +79,43 @@ async function getLeadsToCall(statusFilter?: string) {
   const { data: leads, error } = await supabase
     .from('leads')
     .select(`
-      *,
+      id,
+      phone,
+      owner_info,
+      location,
+      status,
+      source,
+      county,
+      owner_age,
+      owner_gender,
+      owner_type,
+      created_at,
       vehicles (
         id,
         reg_nr,
         make,
         model,
-        mileage,
         year,
+        fuel_type,
+        mileage,
+        color,
+        transmission,
+        horsepower,
         in_traffic,
+        four_wheel_drive,
+        engine_cc,
         is_interesting,
-        ai_score
+        ai_score,
+        antal_agare,
+        skatt,
+        besiktning_till,
+        mileage_history,
+        owner_history,
+        owner_vehicles,
+        address_vehicles,
+        owner_gender,
+        owner_type,
+        biluppgifter_fetched_at
       ),
       call_logs (
         id,
@@ -91,7 +144,7 @@ async function getLeadsToCall(statusFilter?: string) {
 
     if (aInteresting !== bInteresting) return bInteresting - aInteresting
 
-    const statusPriority: Record<string, number> = { callback: 3, new: 2, no_answer: 1 }
+    const statusPriority: Record<string, number> = { callback: 4, to_call: 3, new: 2, no_answer: 1 }
     const aPriority = statusPriority[a.status] || 0
     const bPriority = statusPriority[b.status] || 0
 
@@ -112,6 +165,7 @@ export default async function ToCallPage({ searchParams }: PageProps) {
   ])
 
   const newCount = leads.filter(l => l.status === 'new').length
+  const toCallCount = leads.filter(l => l.status === 'to_call').length
   const callbackCount = leads.filter(l => l.status === 'callback').length
   const noAnswerCount = leads.filter(l => l.status === 'no_answer').length
 
@@ -127,6 +181,7 @@ export default async function ToCallPage({ searchParams }: PageProps) {
         <ToCallList
           leads={leads}
           newCount={newCount}
+          toCallCount={toCallCount}
           callbackCount={callbackCount}
           noAnswerCount={noAnswerCount}
           currentFilter={statusFilter}

@@ -19,7 +19,8 @@ import {
   History,
   Layers,
   Trash2,
-  Database
+  Database,
+  Activity
 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -40,6 +41,7 @@ const navigation = [
 ]
 
 const secondaryNav = [
+  { name: 'Blocket Logs', href: '/blocket-logs', icon: Activity, description: 'Scraper-övervakning' },
   { name: 'Papperskorg', href: '/papperskorg', icon: Trash2, description: 'Raderade leads (30 dagar)' },
   { name: 'Inställningar', href: '/settings', icon: Settings, description: 'Konfigurera systemet' },
 ]
