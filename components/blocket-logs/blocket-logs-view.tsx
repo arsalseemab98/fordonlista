@@ -29,9 +29,10 @@ import {
   Tag,
   Trash2
 } from 'lucide-react'
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { deleteScraperLog, deleteAllLogs } from '@/app/blocket-logs/actions'
+import { useRouter } from 'next/navigation'
 
 interface ScraperLog {
   id: number
@@ -111,6 +112,15 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
   const [showAllSoldCars, setShowAllSoldCars] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const router = useRouter()
+
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      router.refresh()
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [router])
 
   const handleDeleteLog = async (logId: number) => {
     if (!confirm('Vill du ta bort denna logg?')) return
@@ -231,9 +241,17 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
     : 0
 
   // Check if scraper is currently running
-  const isRunning = logs.some(l => l.status === 'running')
-  const lastRun = logs[0]
-  const timeSinceLastRun = lastRun ? Math.floor((new Date().getTime() - new Date(lastRun.finished_at || lastRun.started_at).getTime()) / 60000) : null
+  const runningLog = logs.find(l => l.status === 'running')
+  const isRunning = !!runningLog
+  const lastCompletedRun = logs.find(l => l.status === 'completed')
+  const timeSinceLastRun = lastCompletedRun?.finished_at
+    ? Math.floor((new Date().getTime() - new Date(lastCompletedRun.finished_at).getTime()) / 60000)
+    : null
+
+  // Calculate running time if currently running
+  const runningTime = runningLog
+    ? Math.floor((new Date().getTime() - new Date(runningLog.started_at).getTime()) / 1000)
+    : null
 
   const displayedNewCars = showAllNewCars ? recentNewCars : recentNewCars.slice(0, 5)
   const displayedSoldCars = showAllSoldCars ? recentSoldCars : recentSoldCars.slice(0, 5)
@@ -241,16 +259,24 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
   return (
     <div className="space-y-6">
       {/* Live Status Banner */}
-      <Card className={isRunning ? "bg-blue-50 border-blue-300 animate-pulse" : "bg-green-50 border-green-200"}>
+      <Card className={isRunning ? "bg-blue-50 border-blue-300" : "bg-green-50 border-green-200"}>
         <CardContent className="py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {isRunning ? (
+              {isRunning && runningLog ? (
                 <>
-                  <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
+                  <RefreshCw className="w-6 h-6 text-blue-600 animate-spin" />
                   <div>
-                    <p className="font-medium text-blue-900">Scraper kör just nu...</p>
-                    <p className="text-sm text-blue-700">Hämtar nya annonser från Blocket</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-blue-900">
+                        {runningLog.scrape_type === 'light' ? '⚡ Light Scrape' : '🔄 Full Scrape'} kör...
+                      </p>
+                      {getScrapeTypeBadge(runningLog.scrape_type)}
+                    </div>
+                    <p className="text-sm text-blue-700">
+                      Körtid: {runningTime !== null ? (runningTime < 60 ? `${runningTime}s` : `${Math.floor(runningTime / 60)}m ${runningTime % 60}s`) : '-'}
+                      {runningLog.annonser_hittade ? ` • ${runningLog.annonser_hittade} hittade` : ''}
+                    </p>
                   </div>
                 </>
               ) : (
@@ -260,6 +286,7 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
                     <p className="font-medium text-green-900">Scraper aktiv</p>
                     <p className="text-sm text-green-700">
                       Senaste körning: {timeSinceLastRun !== null ? `${timeSinceLastRun} min sedan` : 'Ingen data'}
+                      {lastCompletedRun && ` (${lastCompletedRun.scrape_type === 'light' ? 'Light' : 'Full'})`}
                     </p>
                   </div>
                 </>
@@ -273,6 +300,12 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
           </div>
         </CardContent>
       </Card>
+
+      {/* Auto-refresh indicator */}
+      <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
+        <RefreshCw className="w-3 h-3" />
+        <span>Uppdateras automatiskt var 30:e sekund</span>
+      </div>
 
       {/* Schedule Info */}
       <Card className="bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200">
