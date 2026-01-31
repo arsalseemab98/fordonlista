@@ -170,7 +170,9 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
 
   const formatMileage = (miltal: number | null) => {
     if (!miltal) return '-'
-    return `${(miltal / 10).toLocaleString()} mil`
+    // miltal is stored in km, convert to Swedish "mil" (1 mil = 10 km)
+    const mil = Math.round(miltal / 10)
+    return `${mil.toLocaleString('sv-SE')} mil`
   }
 
   const getStatusBadge = (status: string) => {
