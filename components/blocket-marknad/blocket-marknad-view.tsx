@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { PriceCalculator } from './price-calculator'
+import { VehicleLookup } from './vehicle-lookup'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -817,6 +818,9 @@ export function BlocketMarknadView({
 
           {/* PRISVERKTYG */}
           <PriceCalculator segmentData={{ brands: segmentStats.brands, models: segmentStats.models }} />
+
+          {/* SÖK BIL - Blocket + Biluppgifter */}
+          <VehicleLookup segmentData={{ brands: segmentStats.brands, models: segmentStats.models }} />
 
           {/* DITT SEGMENT - Fokuserad marknadsanalys */}
           <Card className="border-2 border-orange-300 bg-orange-50/50">
