@@ -39,6 +39,7 @@ interface YearStats {
   year: string
   count: number
   avgPrice: number
+  avgMileage: number
 }
 
 interface BodyTypeStats {
@@ -277,8 +278,8 @@ export default async function BlocketMarknadPage() {
   }
 
   // Year statistics (årsmodell) - uses ALL active ads
-  // More detailed breakdown including older cars
-  const yearMap = new Map<string, { count: number; prices: number[] }>()
+  // More detailed breakdown including older cars, with mileage
+  const yearMap = new Map<string, { count: number; prices: number[]; mileages: number[] }>()
   allActiveAds?.forEach(ad => {
     if (!ad.arsmodell) return
     const yearGroup = ad.arsmodell >= 2024 ? '2024+' :
@@ -290,11 +291,12 @@ export default async function BlocketMarknadPage() {
                       ad.arsmodell >= 2000 ? '2000-2004' : 'Före 2000'
 
     if (!yearMap.has(yearGroup)) {
-      yearMap.set(yearGroup, { count: 0, prices: [] })
+      yearMap.set(yearGroup, { count: 0, prices: [], mileages: [] })
     }
     const stats = yearMap.get(yearGroup)!
     stats.count++
     if (ad.pris) stats.prices.push(ad.pris)
+    if (ad.miltal) stats.mileages.push(ad.miltal)
   })
 
   const yearStats: YearStats[] = Array.from(yearMap.entries())
@@ -303,6 +305,9 @@ export default async function BlocketMarknadPage() {
       count: stats.count,
       avgPrice: stats.prices.length > 0
         ? Math.round(stats.prices.reduce((a, b) => a + b, 0) / stats.prices.length)
+        : 0,
+      avgMileage: stats.mileages.length > 0
+        ? Math.round(stats.mileages.reduce((a, b) => a + b, 0) / stats.mileages.length)
         : 0
     }))
     .sort((a, b) => {

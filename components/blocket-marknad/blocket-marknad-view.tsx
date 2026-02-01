@@ -118,6 +118,7 @@ interface YearStats {
   year: string
   count: number
   avgPrice: number
+  avgMileage: number
 }
 
 interface BodyTypeStats {
@@ -474,40 +475,56 @@ export function BlocketMarknadView({
 
           {/* Vilken typ av bil är populärast? */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Årsmodell */}
-            <Card>
+            {/* Årsmodell + Mätarställning */}
+            <Card className="col-span-2">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Calendar className="w-5 h-5 text-blue-500" />
-                  Hur gamla är bilarna?
+                  Årsmodell & Mätarställning
                 </CardTitle>
-                <p className="text-sm text-muted-foreground">Årsmodell på bilar till salu</p>
+                <p className="text-sm text-muted-foreground">Ålder, pris och körda mil</p>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={250}>
-                  <PieChart>
-                    <Pie
-                      data={yearStats.map(y => ({ name: y.year, value: y.count }))}
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      dataKey="value"
-                      label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
-                    >
-                      {yearStats.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value) => [Number(value).toLocaleString() + ' bilar', 'Antal']} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="mt-4 grid grid-cols-2 gap-1.5">
-                  {yearStats.map((y, i) => (
-                    <div key={y.year} className="flex items-center gap-2 text-xs">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                      <span className="truncate">{y.year}: <strong>{formatPrice(y.avgPrice)}</strong></span>
+                <div className="grid grid-cols-2 gap-6">
+                  {/* Pie Chart */}
+                  <ResponsiveContainer width="100%" height={250}>
+                    <PieChart>
+                      <Pie
+                        data={yearStats.map(y => ({ name: y.year, value: y.count }))}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        dataKey="value"
+                        label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
+                      >
+                        {yearStats.map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value) => [Number(value).toLocaleString() + ' bilar', 'Antal']} />
+                    </PieChart>
+                  </ResponsiveContainer>
+
+                  {/* Detailed Table */}
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-4 gap-2 text-xs font-medium text-muted-foreground border-b pb-2">
+                      <span>Årsmodell</span>
+                      <span className="text-right">Antal</span>
+                      <span className="text-right">Snittpris</span>
+                      <span className="text-right">Snitt mil</span>
                     </div>
-                  ))}
+                    {yearStats.map((y, i) => (
+                      <div key={y.year} className="grid grid-cols-4 gap-2 text-sm items-center">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                          <span className="font-medium">{y.year}</span>
+                        </div>
+                        <span className="text-right text-muted-foreground">{y.count.toLocaleString()}</span>
+                        <span className="text-right font-medium">{formatPrice(y.avgPrice)}</span>
+                        <span className="text-right text-muted-foreground">{y.avgMileage.toLocaleString()} mil</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </CardContent>
             </Card>
