@@ -419,22 +419,24 @@ export default async function BlocketMarknadPage() {
     .eq('momsbil', true)
     .is('borttagen', null)
     .not('pris', 'is', null)
+    .limit(10000)
 
-  // Handlare utan moms (momsbil = false OR momsbil IS NULL)
+  // Handlare utan moms (momsbil = false)
   const { count: handlareUtanMomsCount } = await supabase
     .from('blocket_annonser')
     .select('*', { count: 'exact', head: true })
     .eq('saljare_typ', 'handlare')
-    .neq('momsbil', true)
+    .eq('momsbil', false)
     .is('borttagen', null)
 
   const { data: handlareUtanMomsPrices } = await supabase
     .from('blocket_annonser')
     .select('pris')
     .eq('saljare_typ', 'handlare')
-    .neq('momsbil', true)
+    .eq('momsbil', false)
     .is('borttagen', null)
     .not('pris', 'is', null)
+    .limit(10000)
 
   // Privatpersoner
   const { count: privatCount2 } = await supabase
@@ -449,6 +451,7 @@ export default async function BlocketMarknadPage() {
     .eq('saljare_typ', 'privat')
     .is('borttagen', null)
     .not('pris', 'is', null)
+    .limit(10000)
 
   const sellerMomsStats = {
     handlareMoms: {
