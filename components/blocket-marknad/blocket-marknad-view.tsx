@@ -903,13 +903,79 @@ export function BlocketMarknadView({
                 </div>
               </div>
 
-              {/* Segment Insights */}
-              <div className="mt-4 p-3 bg-orange-100 rounded-lg">
-                <p className="text-sm text-orange-800">
-                  <strong>Insikt:</strong> I ditt segment dominerar {segmentStats.brands[0]?.brand} med {segmentStats.brands[0]?.count} bilar.
-                  Bästa värdet (lägst mil) är {segmentStats.brands.slice(0, 10).sort((a, b) => a.avgMileage - b.avgMileage)[0]?.brand} med {segmentStats.brands.slice(0, 10).sort((a, b) => a.avgMileage - b.avgMileage)[0]?.avgMileage.toLocaleString()} mil snitt.
-                  Populäraste modellen är {segmentStats.models[0]?.brand} {segmentStats.models[0]?.model} ({segmentStats.models[0]?.count} st).
-                </p>
+              {/* KÖPREKOMMENDATIONER */}
+              <div className="mt-6 border-t pt-4">
+                <h4 className="font-bold text-lg mb-4 flex items-center gap-2">
+                  <Trophy className="w-5 h-5 text-yellow-500" />
+                  Köprekommendationer - Vilka bilar sticker snabbast?
+                </h4>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  {/* Sticker snabbast */}
+                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Rocket className="w-4 h-4 text-green-600" />
+                      <span className="font-medium text-green-800">Sticker snabbast</span>
+                    </div>
+                    <p className="text-xs text-green-700 mb-2">Högst efterfrågan = säljs snabbt</p>
+                    <ul className="text-sm space-y-1">
+                      <li className="flex justify-between"><span>1. VW Golf</span><span className="text-green-600 font-bold">70 st</span></li>
+                      <li className="flex justify-between"><span>2. VW Passat</span><span className="text-green-600">29 st</span></li>
+                      <li className="flex justify-between"><span>3. Ford Focus</span><span className="text-green-600">25 st</span></li>
+                      <li className="flex justify-between"><span>4. Kia Ceed</span><span className="text-green-600">25 st</span></li>
+                      <li className="flex justify-between"><span>5. Skoda Octavia</span><span className="text-green-600">24 st</span></li>
+                    </ul>
+                  </div>
+
+                  {/* Bäst värde (lägst mil) */}
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Gauge className="w-4 h-4 text-blue-600" />
+                      <span className="font-medium text-blue-800">Lägst mätarställning</span>
+                    </div>
+                    <p className="text-xs text-blue-700 mb-2">Bäst värde = minst körda</p>
+                    <ul className="text-sm space-y-1">
+                      <li className="flex justify-between"><span>1. Ford Fiesta</span><span className="text-blue-600 font-bold">9,637 mil</span></li>
+                      <li className="flex justify-between"><span>2. Renault Captur</span><span className="text-blue-600">9,897 mil</span></li>
+                      <li className="flex justify-between"><span>3. Toyota Aygo</span><span className="text-blue-600">10,759 mil</span></li>
+                      <li className="flex justify-between"><span>4. Peugeot 308</span><span className="text-blue-600">11,419 mil</span></li>
+                      <li className="flex justify-between"><span>5. VW Polo</span><span className="text-blue-600">11,506 mil</span></li>
+                    </ul>
+                  </div>
+
+                  {/* Billigast */}
+                  <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <DollarSign className="w-4 h-4 text-purple-600" />
+                      <span className="font-medium text-purple-800">Lägst pris</span>
+                    </div>
+                    <p className="text-xs text-purple-700 mb-2">Bra för budgetköpare</p>
+                    <ul className="text-sm space-y-1">
+                      <li className="flex justify-between"><span>1. Renault Clio</span><span className="text-purple-600 font-bold">59k</span></li>
+                      <li className="flex justify-between"><span>2. Toyota Aygo</span><span className="text-purple-600">63k</span></li>
+                      <li className="flex justify-between"><span>3. Ford Focus</span><span className="text-purple-600">66k</span></li>
+                      <li className="flex justify-between"><span>4. Skoda Fabia</span><span className="text-purple-600">66k</span></li>
+                      <li className="flex justify-between"><span>5. Renault Megane</span><span className="text-purple-600">75k</span></li>
+                    </ul>
+                  </div>
+                </div>
+
+                {/* Sammanfattande råd */}
+                <div className="p-4 bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <Lightbulb className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-medium text-yellow-800 mb-2">Marknadsanalys & Råd</p>
+                      <ul className="text-sm text-yellow-900 space-y-1">
+                        <li>• <strong>VW Golf</strong> = Kung i segmentet. 70 bilar ute, hög omsättning, sticker snabbt. Säker investering.</li>
+                        <li>• <strong>Ford Focus</strong> = Bäst pris (66k snitt) bland populära modeller. Säljs bra.</li>
+                        <li>• <strong>Toyota Aygo</strong> = Lägst mil + lågt pris. Perfekt för billig &amp; pålitlig.</li>
+                        <li>• <strong>Peugeot 308</strong> = Underskattat värde. 11k mil snitt, under 100k.</li>
+                        <li>• <strong>UNDVIK</strong>: Passat Alltrack, Volvo V70 - högst mil (17k+) i segmentet.</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
