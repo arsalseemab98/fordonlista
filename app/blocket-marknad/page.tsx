@@ -277,13 +277,17 @@ export default async function BlocketMarknadPage() {
   }
 
   // Year statistics (årsmodell) - uses ALL active ads
+  // More detailed breakdown including older cars
   const yearMap = new Map<string, { count: number; prices: number[] }>()
   allActiveAds?.forEach(ad => {
     if (!ad.arsmodell) return
     const yearGroup = ad.arsmodell >= 2024 ? '2024+' :
                       ad.arsmodell >= 2022 ? '2022-2023' :
                       ad.arsmodell >= 2020 ? '2020-2021' :
-                      ad.arsmodell >= 2015 ? '2015-2019' : 'Äldre'
+                      ad.arsmodell >= 2015 ? '2015-2019' :
+                      ad.arsmodell >= 2010 ? '2010-2014' :
+                      ad.arsmodell >= 2005 ? '2005-2009' :
+                      ad.arsmodell >= 2000 ? '2000-2004' : 'Före 2000'
 
     if (!yearMap.has(yearGroup)) {
       yearMap.set(yearGroup, { count: 0, prices: [] })
@@ -302,7 +306,7 @@ export default async function BlocketMarknadPage() {
         : 0
     }))
     .sort((a, b) => {
-      const order = ['2024+', '2022-2023', '2020-2021', '2015-2019', 'Äldre']
+      const order = ['2024+', '2022-2023', '2020-2021', '2015-2019', '2010-2014', '2005-2009', '2000-2004', 'Före 2000']
       return order.indexOf(a.year) - order.indexOf(b.year)
     })
 

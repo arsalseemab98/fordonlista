@@ -501,11 +501,11 @@ export function BlocketMarknadView({
                     <Tooltip formatter={(value) => [Number(value).toLocaleString() + ' bilar', 'Antal']} />
                   </PieChart>
                 </ResponsiveContainer>
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                  {yearStats.slice(0, 4).map((y, i) => (
-                    <div key={y.year} className="flex items-center gap-2 text-sm">
-                      <span className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i] }} />
-                      <span>{y.year}: <strong>{formatPrice(y.avgPrice)}</strong> snitt</span>
+                <div className="mt-4 grid grid-cols-2 gap-1.5">
+                  {yearStats.map((y, i) => (
+                    <div key={y.year} className="flex items-center gap-2 text-xs">
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                      <span className="truncate">{y.year}: <strong>{formatPrice(y.avgPrice)}</strong></span>
                     </div>
                   ))}
                 </div>
