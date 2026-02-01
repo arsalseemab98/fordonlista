@@ -1,6 +1,7 @@
 'use client'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { PriceCalculator } from './price-calculator'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -813,6 +814,9 @@ export function BlocketMarknadView({
               </div>
             </CardContent>
           </Card>
+
+          {/* PRISVERKTYG */}
+          <PriceCalculator segmentData={{ brands: segmentStats.brands, models: segmentStats.models }} />
 
           {/* DITT SEGMENT - Fokuserad marknadsanalys */}
           <Card className="border-2 border-orange-300 bg-orange-50/50">
