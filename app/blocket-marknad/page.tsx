@@ -201,10 +201,10 @@ export default async function BlocketMarknadPage() {
     })
   }
 
-  // Get brand statistics (top 20) - use publicerad for accurate counts
+  // Get brand statistics - uses ALL active ads for current market snapshot
   const brandMap = new Map<string, { count: number; prices: number[]; mileages: number[] }>()
 
-  allAds?.forEach(ad => {
+  allActiveAds?.forEach(ad => {
     if (!ad.marke) return
     const brand = ad.marke.toUpperCase()
 
@@ -232,10 +232,10 @@ export default async function BlocketMarknadPage() {
     .sort((a, b) => b.count - a.count)
     .slice(0, 30)
 
-  // Get model statistics (brand + model combination)
+  // Get model statistics (brand + model combination) - uses ALL active ads
   const modelMap = new Map<string, { brand: string; model: string; count: number; prices: number[]; mileages: number[] }>()
 
-  allAds?.forEach(ad => {
+  allActiveAds?.forEach(ad => {
     if (!ad.marke || !ad.modell) return
     const brand = ad.marke.toUpperCase()
     const model = ad.modell.toUpperCase()

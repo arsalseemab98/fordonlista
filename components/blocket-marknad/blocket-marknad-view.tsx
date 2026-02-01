@@ -657,6 +657,44 @@ export function BlocketMarknadView({
             </Card>
           </div>
 
+          {/* Top Märken - Pris & Mätarställning */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Car className="w-5 h-5 text-purple-500" />
+                Top 10 Märken - Pris & Mil
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">Snittpris och mätarställning per märke</p>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <div className="grid grid-cols-4 gap-2 text-xs font-medium text-muted-foreground border-b pb-2">
+                  <span>Märke</span>
+                  <span className="text-right">Antal</span>
+                  <span className="text-right">Snittpris</span>
+                  <span className="text-right">Snitt mil</span>
+                </div>
+                {brandStats.slice(0, 10).map((b, i) => (
+                  <div key={b.brand} className="grid grid-cols-4 gap-2 text-sm items-center py-1 hover:bg-gray-50 rounded">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                      <span className="font-medium truncate">{b.brand}</span>
+                    </div>
+                    <span className="text-right text-muted-foreground">{b.count.toLocaleString()}</span>
+                    <span className="text-right font-medium">{formatPrice(b.avgPrice)}</span>
+                    <span className="text-right text-muted-foreground">{b.avgMileage.toLocaleString()} mil</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 p-3 bg-purple-50 rounded-lg">
+                <p className="text-sm text-purple-700">
+                  <strong>Insikt:</strong> {brandStats[0]?.brand} dominerar med {brandStats[0]?.count} bilar.
+                  Lägst mil har {brandStats.slice(0, 10).sort((a, b) => a.avgMileage - b.avgMileage)[0]?.brand} ({brandStats.slice(0, 10).sort((a, b) => a.avgMileage - b.avgMileage)[0]?.avgMileage.toLocaleString()} mil snitt).
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Handlare vs Privat - Enkelt */}
           <Card>
             <CardHeader>
