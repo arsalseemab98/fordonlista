@@ -30,18 +30,19 @@ interface RegionMonthlyStats {
 export default async function BlocketMarknadPage() {
   const supabase = await createClient()
 
-  // Get date range - last 12 months
+  // Get date range - last 6 months (we only have real data from late Jan 2026)
   const now = new Date()
-  const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1)
+  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
 
-  // Fetch all ads for analysis (we need the full dataset for monthly breakdown)
+  // Fetch all ads for analysis - use 'publicerad' for when ad was actually posted on Blocket
+  // This gives accurate historical data, unlike 'forst_sedd' which is when our scraper found it
   const { data: allAds } = await supabase
     .from('blocket_annonser')
-    .select('id, marke, modell, pris, miltal, region, forst_sedd, borttagen, saljare_typ')
-    .gte('forst_sedd', twelveMonthsAgo.toISOString())
-    .order('forst_sedd', { ascending: false })
+    .select('id, marke, modell, pris, miltal, region, publicerad, forst_sedd, borttagen, saljare_typ')
+    .gte('publicerad', sixMonthsAgo.toISOString())
+    .order('publicerad', { ascending: false })
 
-  // Calculate monthly statistics
+  // Calculate monthly statistics using PUBLICERAD (actual Blocket publish date)
   const monthlyStatsMap = new Map<string, {
     newAds: number
     soldAds: number
@@ -49,8 +50,8 @@ export default async function BlocketMarknadPage() {
     daysOnMarket: number[]
   }>()
 
-  // Initialize last 12 months
-  for (let i = 0; i < 12; i++) {
+  // Initialize last 6 months
+  for (let i = 0; i < 6; i++) {
     const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
     monthlyStatsMap.set(monthKey, {
@@ -61,11 +62,13 @@ export default async function BlocketMarknadPage() {
     })
   }
 
-  // Process ads
+  // Process ads - use publicerad for "new ads" count
   allAds?.forEach(ad => {
-    // Count new ads by month
-    const firstSeenDate = new Date(ad.forst_sedd)
-    const newMonthKey = `${firstSeenDate.getFullYear()}-${String(firstSeenDate.getMonth() + 1).padStart(2, '0')}`
+    if (!ad.publicerad) return
+
+    // Count new ads by month using PUBLICERAD (actual publish date)
+    const publishedDate = new Date(ad.publicerad)
+    const newMonthKey = `${publishedDate.getFullYear()}-${String(publishedDate.getMonth() + 1).padStart(2, '0')}`
 
     if (monthlyStatsMap.has(newMonthKey)) {
       const stats = monthlyStatsMap.get(newMonthKey)!
@@ -82,8 +85,8 @@ export default async function BlocketMarknadPage() {
         const stats = monthlyStatsMap.get(soldMonthKey)!
         stats.soldAds++
 
-        // Calculate days on market
-        const daysOnMarket = Math.floor((soldDate.getTime() - firstSeenDate.getTime()) / (1000 * 60 * 60 * 24))
+        // Calculate days on market (from publish to sold)
+        const daysOnMarket = Math.floor((soldDate.getTime() - publishedDate.getTime()) / (1000 * 60 * 60 * 24))
         if (daysOnMarket >= 0 && daysOnMarket < 365) {
           stats.daysOnMarket.push(daysOnMarket)
         }
@@ -93,16 +96,16 @@ export default async function BlocketMarknadPage() {
 
   // Convert to array and calculate aggregates
   const monthlyStats: MonthlyStats[] = []
-  let runningActiveAds = 0
 
-  // Get total active ads at start of period
+  // For active ads calculation, we need to track cumulative
+  // Start with ads published before our time range that are still active
   const { count: initialActiveCount } = await supabase
     .from('blocket_annonser')
     .select('*', { count: 'exact', head: true })
-    .lt('forst_sedd', twelveMonthsAgo.toISOString())
-    .or(`borttagen.is.null,borttagen.gte.${twelveMonthsAgo.toISOString()}`)
+    .lt('publicerad', sixMonthsAgo.toISOString())
+    .is('borttagen', null)
 
-  runningActiveAds = initialActiveCount || 0
+  let runningActiveAds = initialActiveCount || 0
 
   // Sort months chronologically
   const sortedMonths = Array.from(monthlyStatsMap.entries())
@@ -133,7 +136,7 @@ export default async function BlocketMarknadPage() {
     })
   }
 
-  // Get brand statistics (top 20)
+  // Get brand statistics (top 20) - use publicerad for accurate counts
   const brandMap = new Map<string, { count: number; prices: number[]; mileages: number[] }>()
 
   allAds?.forEach(ad => {
@@ -164,13 +167,13 @@ export default async function BlocketMarknadPage() {
     .sort((a, b) => b.count - a.count)
     .slice(0, 20)
 
-  // Get region monthly breakdown
+  // Get region monthly breakdown - use publicerad
   const regionMonthlyMap = new Map<string, Map<string, number>>()
 
   allAds?.forEach(ad => {
-    if (!ad.region) return
+    if (!ad.region || !ad.publicerad) return
     const region = ad.region.toLowerCase()
-    const date = new Date(ad.forst_sedd)
+    const date = new Date(ad.publicerad)
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 
     if (!regionMonthlyMap.has(region)) {
@@ -234,11 +237,14 @@ export default async function BlocketMarknadPage() {
     .select('*', { count: 'exact', head: true })
     .not('borttagen', 'is', null)
 
+  // Scraper start date for info display
+  const scraperStartDate = '2026-01-30'
+
   return (
     <div className="flex flex-col">
       <Header
         title="Blocket Marknad"
-        description="Marknadsanalys för bilar i Norrland - trender, priser och statistik"
+        description="Marknadsanalys för bilar i Norrland - baserat på Blockets publiceringsdatum"
       />
 
       <div className="flex-1 p-6">
@@ -253,6 +259,7 @@ export default async function BlocketMarknadPage() {
             dealerAds: dealerCount || 0,
             privateAds: privateCount || 0,
           }}
+          scraperStartDate={scraperStartDate}
         />
       </div>
     </div>

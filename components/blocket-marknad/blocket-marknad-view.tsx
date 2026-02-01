@@ -21,7 +21,8 @@ import {
   MapPin,
   Calendar,
   Activity,
-  PieChart as PieChartIcon
+  PieChart as PieChartIcon,
+  Info
 } from 'lucide-react'
 import { useState } from 'react'
 import {
@@ -84,6 +85,7 @@ interface BlocketMarknadViewProps {
   regionMonthlyStats: RegionMonthlyStats[]
   priceRanges: PriceRange[]
   totals: Totals
+  scraperStartDate?: string
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
@@ -93,7 +95,8 @@ export function BlocketMarknadView({
   brandStats,
   regionMonthlyStats,
   priceRanges,
-  totals
+  totals,
+  scraperStartDate
 }: BlocketMarknadViewProps) {
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null)
 
@@ -167,6 +170,28 @@ export function BlocketMarknadView({
 
   return (
     <div className="space-y-6">
+      {/* Data Source Info Banner */}
+      <Card className="bg-blue-50 border-blue-200">
+        <CardContent className="py-4">
+          <div className="flex items-start gap-3">
+            <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-blue-800">
+              <p className="font-medium mb-1">Om statistiken</p>
+              <p>
+                Data baseras på <strong>Blockets publiceringsdatum</strong> (när annonsen lades upp på Blocket),
+                inte när vår scraper hittade den. Detta ger korrekt historisk statistik.
+                {scraperStartDate && (
+                  <span className="block mt-1 text-blue-600">
+                    Scraper startade: {new Date(scraperStartDate).toLocaleDateString('sv-SE')} •
+                    Sålda-data endast tillgänglig från detta datum
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card className="bg-gradient-to-br from-blue-50 to-sky-50 border-blue-200">
