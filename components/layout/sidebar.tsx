@@ -42,6 +42,7 @@ const navigation = [
 
 const secondaryNav = [
   { name: 'Blocket Logs', href: '/blocket-logs', icon: Activity, description: 'Scraper-övervakning' },
+  { name: 'Blocket Marknad', href: '/blocket-marknad', icon: TrendingUp, description: 'Marknadsanalys' },
   { name: 'Papperskorg', href: '/papperskorg', icon: Trash2, description: 'Raderade leads (30 dagar)' },
   { name: 'Inställningar', href: '/settings', icon: Settings, description: 'Konfigurera systemet' },
 ]
