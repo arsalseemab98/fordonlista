@@ -23,8 +23,12 @@ import {
   Calendar,
   Activity,
   PieChart as PieChartIcon,
-  Info
+  Info,
+  Search,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react'
+import { Input } from '@/components/ui/input'
 import { useState } from 'react'
 import {
   LineChart,
@@ -60,6 +64,14 @@ interface BrandStats {
   avgMileage: number
 }
 
+interface ModelStats {
+  brand: string
+  model: string
+  count: number
+  avgPrice: number
+  avgMileage: number
+}
+
 interface RegionMonthlyStats {
   region: string
   month: string
@@ -83,6 +95,7 @@ interface Totals {
 interface BlocketMarknadViewProps {
   monthlyStats: MonthlyStats[]
   brandStats: BrandStats[]
+  modelStats: ModelStats[]
   regionMonthlyStats: RegionMonthlyStats[]
   priceRanges: PriceRange[]
   totals: Totals
@@ -94,6 +107,7 @@ const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'
 export function BlocketMarknadView({
   monthlyStats,
   brandStats,
+  modelStats,
   regionMonthlyStats,
   priceRanges,
   totals,
@@ -101,6 +115,8 @@ export function BlocketMarknadView({
 }: BlocketMarknadViewProps) {
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null)
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null)
+  const [expandedBrand, setExpandedBrand] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const formatMonth = (monthStr: string) => {
     const [year, month] = monthStr.split('-')
@@ -441,6 +457,21 @@ export function BlocketMarknadView({
 
         {/* MÄRKEN TAB */}
         <TabsContent value="marken" className="space-y-6">
+          {/* Search Field */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  placeholder="Sök märke eller modell..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Brand Overview Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card>
@@ -453,7 +484,15 @@ export function BlocketMarknadView({
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Populäraste</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Antal modeller</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold">{modelStats.length}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">Populäraste märke</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{brandStats[0]?.brand || '-'}</div>
@@ -462,31 +501,158 @@ export function BlocketMarknadView({
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Dyraste (snitt)</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">Populäraste modell</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
-                  {[...brandStats].sort((a, b) => b.avgPrice - a.avgPrice)[0]?.brand || '-'}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {formatPrice([...brandStats].sort((a, b) => b.avgPrice - a.avgPrice)[0]?.avgPrice || 0)}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Lägst miltal (snitt)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {[...brandStats].filter(b => b.avgMileage > 0).sort((a, b) => a.avgMileage - b.avgMileage)[0]?.brand || '-'}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {[...brandStats].filter(b => b.avgMileage > 0).sort((a, b) => a.avgMileage - b.avgMileage)[0]?.avgMileage.toLocaleString() || 0} mil
-                </p>
+                <div className="text-2xl font-bold">{modelStats[0]?.model || '-'}</div>
+                <p className="text-xs text-muted-foreground">{modelStats[0]?.brand} - {modelStats[0]?.count || 0} st</p>
               </CardContent>
             </Card>
           </div>
+
+          {/* Top 20 Models */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5" />
+                Top 20 modeller (alla märken)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={500}>
+                <BarChart
+                  data={modelStats
+                    .filter(m => !searchQuery ||
+                      m.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                      m.model.toLowerCase().includes(searchQuery.toLowerCase())
+                    )
+                    .slice(0, 20)
+                    .map(m => ({
+                      name: `${m.brand} ${m.model}`,
+                      antal: m.count,
+                      pris: Math.round(m.avgPrice / 1000)
+                    }))}
+                  layout="vertical"
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis type="number" tick={{ fontSize: 12 }} />
+                  <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={140} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                    formatter={(value, name) => [
+                      name === 'antal' ? Number(value).toLocaleString() + ' st' : value + 'k kr',
+                      name === 'antal' ? 'Antal' : 'Snittpris'
+                    ]}
+                  />
+                  <Bar dataKey="antal" fill="#10b981" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* Expandable Brand Table with Models */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Car className="w-5 h-5" />
+                Märken & Modeller (klicka för att expandera)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-auto max-h-[700px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-8"></TableHead>
+                      <TableHead>Märke / Modell</TableHead>
+                      <TableHead className="text-right">Antal</TableHead>
+                      <TableHead className="text-right">Andel</TableHead>
+                      <TableHead className="text-right">Snittpris</TableHead>
+                      <TableHead className="text-right">Snittmil</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {brandStats
+                      .filter(brand =>
+                        !searchQuery ||
+                        brand.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        modelStats.some(m =>
+                          m.brand === brand.brand &&
+                          m.model.toLowerCase().includes(searchQuery.toLowerCase())
+                        )
+                      )
+                      .map((brand, index) => {
+                        const brandModels = modelStats
+                          .filter(m => m.brand === brand.brand)
+                          .filter(m => !searchQuery ||
+                            m.model.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            m.brand.toLowerCase().includes(searchQuery.toLowerCase())
+                          )
+                          .sort((a, b) => b.count - a.count)
+                        const isExpanded = expandedBrand === brand.brand
+
+                        return (
+                          <>
+                            <TableRow
+                              key={brand.brand}
+                              className={`cursor-pointer hover:bg-gray-50 ${isExpanded ? 'bg-blue-50' : ''}`}
+                              onClick={() => setExpandedBrand(isExpanded ? null : brand.brand)}
+                            >
+                              <TableCell>
+                                {isExpanded ? (
+                                  <ChevronDown className="w-4 h-4 text-blue-600" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4 text-gray-400" />
+                                )}
+                              </TableCell>
+                              <TableCell className="font-medium">
+                                <span className="flex items-center gap-2">
+                                  <span
+                                    className="w-3 h-3 rounded-full"
+                                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                                  />
+                                  {brand.brand}
+                                  <Badge variant="secondary" className="ml-2 text-xs">
+                                    {brandModels.length} modeller
+                                  </Badge>
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right font-bold">{brand.count}</TableCell>
+                              <TableCell className="text-right">
+                                {totals.activeAds > 0 ? ((brand.count / totals.activeAds) * 100).toFixed(1) : 0}%
+                              </TableCell>
+                              <TableCell className="text-right">{formatPrice(brand.avgPrice)}</TableCell>
+                              <TableCell className="text-right">
+                                {brand.avgMileage > 0 ? `${brand.avgMileage.toLocaleString()} mil` : '-'}
+                              </TableCell>
+                            </TableRow>
+                            {isExpanded && brandModels.map((model, modelIndex) => (
+                              <TableRow key={`${model.brand}-${model.model}`} className="bg-gray-50/50">
+                                <TableCell></TableCell>
+                                <TableCell className="pl-10 text-gray-600">
+                                  <span className="flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-gray-300" />
+                                    {model.model}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-right">{model.count}</TableCell>
+                                <TableCell className="text-right text-gray-500">
+                                  {brand.count > 0 ? ((model.count / brand.count) * 100).toFixed(1) : 0}%
+                                </TableCell>
+                                <TableCell className="text-right">{formatPrice(model.avgPrice)}</TableCell>
+                                <TableCell className="text-right">
+                                  {model.avgMileage > 0 ? `${model.avgMileage.toLocaleString()} mil` : '-'}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </>
+                        )
+                      })}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Brand Bar Chart */}
           <Card>
@@ -512,114 +678,6 @@ export function BlocketMarknadView({
                   <Bar dataKey="count" fill="#3b82f6" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          {/* Brand Click to Select */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Car className="w-5 h-5" />
-                Klicka på ett märke för detaljer
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2 mb-6">
-                {brandStats.map((brand, index) => (
-                  <button
-                    key={brand.brand}
-                    onClick={() => setSelectedBrand(selectedBrand === brand.brand ? null : brand.brand)}
-                    className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                      selectedBrand === brand.brand
-                        ? 'bg-blue-500 text-white border-blue-500'
-                        : 'bg-gray-50 hover:bg-gray-100 border-gray-200'
-                    }`}
-                  >
-                    {brand.brand} ({brand.count})
-                  </button>
-                ))}
-              </div>
-
-              {selectedBrand && (
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  {(() => {
-                    const brand = brandStats.find(b => b.brand === selectedBrand)
-                    if (!brand) return null
-                    return (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="text-center p-3 bg-white rounded-lg">
-                          <p className="text-sm text-gray-600">Antal annonser</p>
-                          <p className="text-2xl font-bold text-blue-600">{brand.count}</p>
-                        </div>
-                        <div className="text-center p-3 bg-white rounded-lg">
-                          <p className="text-sm text-gray-600">Genomsnittspris</p>
-                          <p className="text-2xl font-bold text-green-600">{formatPrice(brand.avgPrice)}</p>
-                        </div>
-                        <div className="text-center p-3 bg-white rounded-lg">
-                          <p className="text-sm text-gray-600">Genomsnittligt miltal</p>
-                          <p className="text-2xl font-bold text-purple-600">{brand.avgMileage.toLocaleString()} mil</p>
-                        </div>
-                        <div className="text-center p-3 bg-white rounded-lg">
-                          <p className="text-sm text-gray-600">Andel av marknad</p>
-                          <p className="text-2xl font-bold text-orange-600">
-                            {totals.activeAds > 0 ? ((brand.count / totals.activeAds) * 100).toFixed(1) : 0}%
-                          </p>
-                        </div>
-                      </div>
-                    )
-                  })()}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Full Brand Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="w-5 h-5" />
-                Alla märken (detaljerad tabell)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-auto max-h-[600px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>#</TableHead>
-                      <TableHead>Märke</TableHead>
-                      <TableHead className="text-right">Antal</TableHead>
-                      <TableHead className="text-right">Andel</TableHead>
-                      <TableHead className="text-right">Snittpris</TableHead>
-                      <TableHead className="text-right">Snittmil</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {brandStats.map((brand, index) => (
-                      <TableRow key={brand.brand} className={selectedBrand === brand.brand ? 'bg-blue-50' : ''}>
-                        <TableCell className="text-muted-foreground">{index + 1}</TableCell>
-                        <TableCell className="font-medium">
-                          <span className="flex items-center gap-2">
-                            <span
-                              className="w-3 h-3 rounded-full"
-                              style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                            />
-                            {brand.brand}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right font-bold">{brand.count}</TableCell>
-                        <TableCell className="text-right">
-                          {totals.activeAds > 0 ? ((brand.count / totals.activeAds) * 100).toFixed(1) : 0}%
-                        </TableCell>
-                        <TableCell className="text-right">{formatPrice(brand.avgPrice)}</TableCell>
-                        <TableCell className="text-right">
-                          {brand.avgMileage > 0 ? `${brand.avgMileage.toLocaleString()} mil` : '-'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>

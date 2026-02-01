@@ -21,6 +21,14 @@ interface BrandStats {
   avgMileage: number
 }
 
+interface ModelStats {
+  brand: string
+  model: string
+  count: number
+  avgPrice: number
+  avgMileage: number
+}
+
 interface RegionMonthlyStats {
   region: string
   month: string
@@ -169,7 +177,40 @@ export default async function BlocketMarknadPage() {
         : 0
     }))
     .sort((a, b) => b.count - a.count)
-    .slice(0, 20)
+    .slice(0, 30)
+
+  // Get model statistics (brand + model combination)
+  const modelMap = new Map<string, { brand: string; model: string; count: number; prices: number[]; mileages: number[] }>()
+
+  allAds?.forEach(ad => {
+    if (!ad.marke || !ad.modell) return
+    const brand = ad.marke.toUpperCase()
+    const model = ad.modell.toUpperCase()
+    const key = `${brand}|${model}`
+
+    if (!modelMap.has(key)) {
+      modelMap.set(key, { brand, model, count: 0, prices: [], mileages: [] })
+    }
+
+    const stats = modelMap.get(key)!
+    stats.count++
+    if (ad.pris) stats.prices.push(ad.pris)
+    if (ad.miltal) stats.mileages.push(ad.miltal)
+  })
+
+  const modelStats: ModelStats[] = Array.from(modelMap.values())
+    .map(stats => ({
+      brand: stats.brand,
+      model: stats.model,
+      count: stats.count,
+      avgPrice: stats.prices.length > 0
+        ? Math.round(stats.prices.reduce((a, b) => a + b, 0) / stats.prices.length)
+        : 0,
+      avgMileage: stats.mileages.length > 0
+        ? Math.round(stats.mileages.reduce((a, b) => a + b, 0) / stats.mileages.length)
+        : 0
+    }))
+    .sort((a, b) => b.count - a.count)
 
   // Get region monthly breakdown - use publicerad
   const regionMonthlyMap = new Map<string, Map<string, number>>()
@@ -255,6 +296,7 @@ export default async function BlocketMarknadPage() {
         <BlocketMarknadView
           monthlyStats={monthlyStats}
           brandStats={brandStats}
+          modelStats={modelStats}
           regionMonthlyStats={regionMonthlyStats}
           priceRanges={priceRanges}
           totals={{
