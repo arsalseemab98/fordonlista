@@ -178,14 +178,11 @@ export function BlocketMarknadView({
             <div className="text-sm text-blue-800">
               <p className="font-medium mb-1">Om statistiken</p>
               <p>
-                Data baseras på <strong>Blockets publiceringsdatum</strong> (när annonsen lades upp på Blocket),
-                inte när vår scraper hittade den. Detta ger korrekt historisk statistik.
-                {scraperStartDate && (
-                  <span className="block mt-1 text-blue-600">
-                    Scraper startade: {new Date(scraperStartDate).toLocaleDateString('sv-SE')} •
-                    Sålda-data endast tillgänglig från detta datum
-                  </span>
-                )}
+                Statistik från <strong>1 februari 2026</strong> och framåt.
+                Scraper startade 30 januari, så februari har komplett data för hela livscykeln (upplagd → såld).
+              </p>
+              <p className="mt-1 text-blue-600">
+                Ju längre scrapern körs, desto mer data samlas in för bättre trendanalys.
               </p>
             </div>
           </div>

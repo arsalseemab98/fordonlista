@@ -30,16 +30,16 @@ interface RegionMonthlyStats {
 export default async function BlocketMarknadPage() {
   const supabase = await createClient()
 
-  // Get date range - last 6 months (we only have real data from late Jan 2026)
+  // Get date range - start from Feb 1, 2026 (scraper started Jan 30, so Feb has complete data)
   const now = new Date()
-  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
+  const dataStartDate = new Date('2026-02-01T00:00:00Z')
 
   // Fetch all ads for analysis - use 'publicerad' for when ad was actually posted on Blocket
-  // This gives accurate historical data, unlike 'forst_sedd' which is when our scraper found it
+  // Only include ads published from Feb 1 onwards for accurate lifecycle tracking
   const { data: allAds } = await supabase
     .from('blocket_annonser')
     .select('id, marke, modell, pris, miltal, region, publicerad, forst_sedd, borttagen, saljare_typ')
-    .gte('publicerad', sixMonthsAgo.toISOString())
+    .gte('publicerad', dataStartDate.toISOString())
     .order('publicerad', { ascending: false })
 
   // Calculate monthly statistics using PUBLICERAD (actual Blocket publish date)
@@ -50,16 +50,20 @@ export default async function BlocketMarknadPage() {
     daysOnMarket: number[]
   }>()
 
-  // Initialize last 6 months
-  for (let i = 0; i < 6; i++) {
-    const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+  // Initialize months from Feb 2026 to current month
+  const startMonth = new Date('2026-02-01')
+  const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+
+  let iterDate = new Date(startMonth)
+  while (iterDate <= currentMonth) {
+    const monthKey = `${iterDate.getFullYear()}-${String(iterDate.getMonth() + 1).padStart(2, '0')}`
     monthlyStatsMap.set(monthKey, {
       newAds: 0,
       soldAds: 0,
       prices: [],
       daysOnMarket: []
     })
+    iterDate.setMonth(iterDate.getMonth() + 1)
   }
 
   // Process ads - use publicerad for "new ads" count
@@ -98,11 +102,11 @@ export default async function BlocketMarknadPage() {
   const monthlyStats: MonthlyStats[] = []
 
   // For active ads calculation, we need to track cumulative
-  // Start with ads published before our time range that are still active
+  // Start with ads published before Feb 1 that are still active
   const { count: initialActiveCount } = await supabase
     .from('blocket_annonser')
     .select('*', { count: 'exact', head: true })
-    .lt('publicerad', sixMonthsAgo.toISOString())
+    .lt('publicerad', dataStartDate.toISOString())
     .is('borttagen', null)
 
   let runningActiveAds = initialActiveCount || 0
