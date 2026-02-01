@@ -48,7 +48,8 @@ import {
   ArrowUp,
   ArrowDown,
   Package,
-  HelpCircle
+  HelpCircle,
+  Target
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { useState } from 'react'
@@ -160,6 +161,15 @@ interface MarketHealth {
   totalSoldTracked: number
 }
 
+interface SegmentStats {
+  totalCars: number
+  avgPrice: number
+  avgMileage: number
+  avgYear: number
+  brands: { brand: string; count: number; avgPrice: number; avgMileage: number }[]
+  models: { brand: string; model: string; count: number; avgPrice: number; avgMileage: number }[]
+}
+
 interface BlocketMarknadViewProps {
   monthlyStats: MonthlyStats[]
   brandStats: BrandStats[]
@@ -175,6 +185,7 @@ interface BlocketMarknadViewProps {
   saleSpeedStats: SaleSpeedStats[]
   sellerMomsStats: SellerMomsStats
   marketHealth: MarketHealth
+  segmentStats: SegmentStats
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
@@ -193,7 +204,8 @@ export function BlocketMarknadView({
   gearboxStats,
   saleSpeedStats,
   sellerMomsStats,
-  marketHealth
+  marketHealth,
+  segmentStats
 }: BlocketMarknadViewProps) {
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null)
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null)
@@ -798,6 +810,106 @@ export function BlocketMarknadView({
                   <p className="text-sm opacity-90">Typisk försäljningstid</p>
                   <p className="text-lg font-bold">{marketHealth.avgDaysOnMarket} dagar</p>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* DITT SEGMENT - Fokuserad marknadsanalys */}
+          <Card className="border-2 border-orange-300 bg-orange-50/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Target className="w-5 h-5 text-orange-500" />
+                Ditt Segment: 2000-2018, &lt;200k, &lt;20k mil
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {segmentStats.totalCars.toLocaleString()} bilar ({totals.activeAds > 0 ? Math.round((segmentStats.totalCars / totals.activeAds) * 100) : 0}% av marknaden)
+              </p>
+            </CardHeader>
+            <CardContent>
+              {/* Segment Overview */}
+              <div className="grid grid-cols-4 gap-4 mb-6">
+                <div className="p-4 bg-white rounded-lg text-center border">
+                  <p className="text-sm text-muted-foreground">Antal bilar</p>
+                  <p className="text-2xl font-bold text-orange-600">{segmentStats.totalCars.toLocaleString()}</p>
+                </div>
+                <div className="p-4 bg-white rounded-lg text-center border">
+                  <p className="text-sm text-muted-foreground">Snittpris</p>
+                  <p className="text-2xl font-bold text-green-600">{formatPrice(segmentStats.avgPrice)}</p>
+                </div>
+                <div className="p-4 bg-white rounded-lg text-center border">
+                  <p className="text-sm text-muted-foreground">Snitt mil</p>
+                  <p className="text-2xl font-bold text-blue-600">{segmentStats.avgMileage.toLocaleString()}</p>
+                </div>
+                <div className="p-4 bg-white rounded-lg text-center border">
+                  <p className="text-sm text-muted-foreground">Snitt årsmodell</p>
+                  <p className="text-2xl font-bold text-purple-600">{segmentStats.avgYear}</p>
+                </div>
+              </div>
+
+              {/* Segment Brands & Models */}
+              <div className="grid grid-cols-2 gap-6">
+                {/* Top Brands in Segment */}
+                <div>
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <Car className="w-4 h-4" />
+                    Top märken i segmentet
+                  </h4>
+                  <div className="space-y-1">
+                    <div className="grid grid-cols-4 gap-2 text-xs font-medium text-muted-foreground border-b pb-1">
+                      <span>Märke</span>
+                      <span className="text-right">Antal</span>
+                      <span className="text-right">Pris</span>
+                      <span className="text-right">Mil</span>
+                    </div>
+                    {segmentStats.brands.slice(0, 10).map((b, i) => (
+                      <div key={b.brand} className="grid grid-cols-4 gap-2 text-sm items-center py-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                          <span className="truncate text-xs font-medium">{b.brand}</span>
+                        </div>
+                        <span className="text-right text-xs text-muted-foreground">{b.count}</span>
+                        <span className="text-right text-xs font-medium">{formatPrice(b.avgPrice)}</span>
+                        <span className="text-right text-xs text-muted-foreground">{b.avgMileage.toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Top Models in Segment */}
+                <div>
+                  <h4 className="font-medium mb-3 flex items-center gap-2">
+                    <Gauge className="w-4 h-4" />
+                    Top modeller i segmentet
+                  </h4>
+                  <div className="space-y-1">
+                    <div className="grid grid-cols-4 gap-2 text-xs font-medium text-muted-foreground border-b pb-1">
+                      <span>Modell</span>
+                      <span className="text-right">Antal</span>
+                      <span className="text-right">Pris</span>
+                      <span className="text-right">Mil</span>
+                    </div>
+                    {segmentStats.models.slice(0, 10).map((m, i) => (
+                      <div key={`${m.brand}-${m.model}`} className="grid grid-cols-4 gap-2 text-sm items-center py-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                          <span className="truncate text-xs font-medium" title={`${m.brand} ${m.model}`}>{m.model}</span>
+                        </div>
+                        <span className="text-right text-xs text-muted-foreground">{m.count}</span>
+                        <span className="text-right text-xs font-medium">{formatPrice(m.avgPrice)}</span>
+                        <span className="text-right text-xs text-muted-foreground">{m.avgMileage.toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Segment Insights */}
+              <div className="mt-4 p-3 bg-orange-100 rounded-lg">
+                <p className="text-sm text-orange-800">
+                  <strong>Insikt:</strong> I ditt segment dominerar {segmentStats.brands[0]?.brand} med {segmentStats.brands[0]?.count} bilar.
+                  Bästa värdet (lägst mil) är {segmentStats.brands.slice(0, 10).sort((a, b) => a.avgMileage - b.avgMileage)[0]?.brand} med {segmentStats.brands.slice(0, 10).sort((a, b) => a.avgMileage - b.avgMileage)[0]?.avgMileage.toLocaleString()} mil snitt.
+                  Populäraste modellen är {segmentStats.models[0]?.brand} {segmentStats.models[0]?.model} ({segmentStats.models[0]?.count} st).
+                </p>
               </div>
             </CardContent>
           </Card>

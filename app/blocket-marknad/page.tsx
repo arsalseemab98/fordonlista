@@ -68,6 +68,15 @@ interface SaleSpeedStats {
   percentage: number
 }
 
+interface SegmentStats {
+  totalCars: number
+  avgPrice: number
+  avgMileage: number
+  avgYear: number
+  brands: { brand: string; count: number; avgPrice: number; avgMileage: number }[]
+  models: { brand: string; model: string; count: number; avgPrice: number; avgMileage: number }[]
+}
+
 export default async function BlocketMarknadPage() {
   const supabase = await createClient()
 
@@ -568,6 +577,83 @@ export default async function BlocketMarknadPage() {
   // Scraper start date for info display
   const scraperStartDate = '2026-01-30'
 
+  // ============================================
+  // SEGMENT ANALYSIS: 2000-2018, <200k, <20k mil
+  // Focus segment for the user's target market
+  // ============================================
+  const { data: segmentAds } = await supabase
+    .from('blocket_annonser')
+    .select('marke, modell, pris, miltal, arsmodell')
+    .is('borttagen', null)
+    .gte('arsmodell', 2000)
+    .lte('arsmodell', 2018)
+    .lt('pris', 200000)
+    .lt('miltal', 20000)
+    .limit(5000)
+
+  // Calculate segment brand stats
+  const segmentBrandMap = new Map<string, { count: number; prices: number[]; mileages: number[] }>()
+  const segmentModelMap = new Map<string, { brand: string; model: string; count: number; prices: number[]; mileages: number[] }>()
+
+  segmentAds?.forEach(ad => {
+    if (ad.marke) {
+      const brand = ad.marke.toUpperCase()
+      if (!segmentBrandMap.has(brand)) {
+        segmentBrandMap.set(brand, { count: 0, prices: [], mileages: [] })
+      }
+      const bStats = segmentBrandMap.get(brand)!
+      bStats.count++
+      if (ad.pris) bStats.prices.push(ad.pris)
+      if (ad.miltal) bStats.mileages.push(ad.miltal)
+
+      if (ad.modell) {
+        const model = ad.modell.toUpperCase()
+        const key = `${brand}|${model}`
+        if (!segmentModelMap.has(key)) {
+          segmentModelMap.set(key, { brand, model, count: 0, prices: [], mileages: [] })
+        }
+        const mStats = segmentModelMap.get(key)!
+        mStats.count++
+        if (ad.pris) mStats.prices.push(ad.pris)
+        if (ad.miltal) mStats.mileages.push(ad.miltal)
+      }
+    }
+  })
+
+  const segmentStats: SegmentStats = {
+    totalCars: segmentAds?.length || 0,
+    avgPrice: segmentAds && segmentAds.length > 0
+      ? Math.round(segmentAds.filter(a => a.pris).reduce((sum, a) => sum + (a.pris || 0), 0) / segmentAds.filter(a => a.pris).length)
+      : 0,
+    avgMileage: segmentAds && segmentAds.length > 0
+      ? Math.round(segmentAds.filter(a => a.miltal).reduce((sum, a) => sum + (a.miltal || 0), 0) / segmentAds.filter(a => a.miltal).length)
+      : 0,
+    avgYear: segmentAds && segmentAds.length > 0
+      ? Math.round(segmentAds.filter(a => a.arsmodell).reduce((sum, a) => sum + (a.arsmodell || 0), 0) / segmentAds.filter(a => a.arsmodell).length)
+      : 0,
+    brands: Array.from(segmentBrandMap.entries())
+      .map(([brand, stats]) => ({
+        brand,
+        count: stats.count,
+        avgPrice: stats.prices.length > 0 ? Math.round(stats.prices.reduce((a, b) => a + b, 0) / stats.prices.length) : 0,
+        avgMileage: stats.mileages.length > 0 ? Math.round(stats.mileages.reduce((a, b) => a + b, 0) / stats.mileages.length) : 0,
+      }))
+      .filter(b => b.count >= 5)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 15),
+    models: Array.from(segmentModelMap.values())
+      .map(stats => ({
+        brand: stats.brand,
+        model: stats.model,
+        count: stats.count,
+        avgPrice: stats.prices.length > 0 ? Math.round(stats.prices.reduce((a, b) => a + b, 0) / stats.prices.length) : 0,
+        avgMileage: stats.mileages.length > 0 ? Math.round(stats.mileages.reduce((a, b) => a + b, 0) / stats.mileages.length) : 0,
+      }))
+      .filter(m => m.count >= 5)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 20),
+  }
+
   return (
     <div className="flex flex-col">
       <Header
@@ -601,6 +687,7 @@ export default async function BlocketMarknadPage() {
             totalAdsTracked: allActiveAds?.length || 0,
             totalSoldTracked: allDaysOnMarket.length,
           }}
+          segmentStats={segmentStats}
         />
       </div>
     </div>
