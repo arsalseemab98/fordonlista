@@ -13,7 +13,6 @@ import {
 import {
   Car,
   TrendingUp,
-  TrendingDown,
   Store,
   User,
   DollarSign,
@@ -21,9 +20,27 @@ import {
   BarChart3,
   MapPin,
   Calendar,
-  Activity
+  Activity,
+  PieChart as PieChartIcon
 } from 'lucide-react'
 import { useState } from 'react'
+import {
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer
+} from 'recharts'
 
 interface MonthlyStats {
   month: string
@@ -69,6 +86,8 @@ interface BlocketMarknadViewProps {
   totals: Totals
 }
 
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
+
 export function BlocketMarknadView({
   monthlyStats,
   brandStats,
@@ -79,6 +98,12 @@ export function BlocketMarknadView({
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null)
 
   const formatMonth = (monthStr: string) => {
+    const [year, month] = monthStr.split('-')
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dec']
+    return `${months[parseInt(month) - 1]}`
+  }
+
+  const formatMonthFull = (monthStr: string) => {
     const [year, month] = monthStr.split('-')
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Maj', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dec']
     return `${months[parseInt(month) - 1]} ${year}`
@@ -97,30 +122,48 @@ export function BlocketMarknadView({
   // Get unique regions
   const regions = [...new Set(regionMonthlyStats.map(r => r.region))].sort()
 
-  // Calculate max values for chart scaling
-  const maxNewAds = Math.max(...monthlyStats.map(m => m.newAds), 1)
-  const maxSoldAds = Math.max(...monthlyStats.map(m => m.soldAds), 1)
-  const maxActiveAds = Math.max(...monthlyStats.map(m => m.activeAds), 1)
-  const maxPriceRange = Math.max(...priceRanges.map(p => p.count), 1)
-  const maxBrandCount = Math.max(...brandStats.map(b => b.count), 1)
+  // Prepare data for charts
+  const chartData = monthlyStats.map(m => ({
+    ...m,
+    monthLabel: formatMonth(m.month),
+    monthFull: formatMonthFull(m.month),
+    net: m.newAds - m.soldAds
+  }))
 
-  // Calculate trends
-  const currentMonth = monthlyStats[monthlyStats.length - 1]
-  const previousMonth = monthlyStats[monthlyStats.length - 2]
+  // Seller type pie data
+  const sellerTypeData = [
+    { name: 'Handlare', value: totals.dealerAds, color: '#3b82f6' },
+    { name: 'Privat', value: totals.privateAds, color: '#14b8a6' }
+  ]
 
-  const newAdsTrend = previousMonth && currentMonth
-    ? ((currentMonth.newAds - previousMonth.newAds) / (previousMonth.newAds || 1)) * 100
-    : 0
+  // Price range bar data
+  const priceRangeData = priceRanges.map(p => ({
+    range: p.label,
+    antal: p.count
+  }))
 
-  const soldAdsTrend = previousMonth && currentMonth
-    ? ((currentMonth.soldAds - previousMonth.soldAds) / (previousMonth.soldAds || 1)) * 100
-    : 0
+  // Brand bar data (top 10)
+  const brandChartData = brandStats.slice(0, 10).map(b => ({
+    brand: b.brand,
+    antal: b.count,
+    pris: Math.round(b.avgPrice / 1000)
+  }))
 
   // Get region data for selected month (latest)
   const latestMonth = monthlyStats[monthlyStats.length - 1]?.month
   const regionDataForMonth = regionMonthlyStats
     .filter(r => r.month === latestMonth)
     .sort((a, b) => b.count - a.count)
+
+  // Region chart data
+  const regionChartData = regions.map(region => {
+    const data: Record<string, string | number> = { region: region.charAt(0).toUpperCase() + region.slice(1) }
+    monthlyStats.forEach(m => {
+      const regionData = regionMonthlyStats.find(r => r.region === region && r.month === m.month)
+      data[formatMonth(m.month)] = regionData?.count || 0
+    })
+    return data
+  })
 
   return (
     <div className="space-y-6">
@@ -183,9 +226,9 @@ export function BlocketMarknadView({
         </Card>
       </div>
 
-      {/* Monthly Trend Charts */}
+      {/* Main Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* New vs Sold Ads Chart */}
+        {/* New vs Sold Line Chart */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -194,46 +237,39 @@ export function BlocketMarknadView({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {monthlyStats.map((month) => (
-                <div key={month.month} className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span className="font-medium">{formatMonth(month.month)}</span>
-                    <span className="text-muted-foreground">
-                      <span className="text-green-600">+{month.newAds}</span>
-                      {' / '}
-                      <span className="text-orange-600">-{month.soldAds}</span>
-                    </span>
-                  </div>
-                  <div className="flex gap-1 h-6">
-                    <div
-                      className="bg-green-500 rounded-l"
-                      style={{ width: `${(month.newAds / maxNewAds) * 50}%` }}
-                      title={`Nya: ${month.newAds}`}
-                    />
-                    <div
-                      className="bg-orange-500 rounded-r"
-                      style={{ width: `${(month.soldAds / maxSoldAds) * 50}%` }}
-                      title={`Sålda: ${month.soldAds}`}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-center gap-6 mt-4 text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-green-500 rounded" />
-                <span>Nya annonser</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-orange-500 rounded" />
-                <span>Sålda/borttagna</span>
-              </div>
-            </div>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="monthLabel" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                  formatter={(value, name) => [value, name === 'newAds' ? 'Nya' : 'Sålda']}
+                  labelFormatter={(label) => chartData.find(d => d.monthLabel === label)?.monthFull || String(label)}
+                />
+                <Legend formatter={(value) => value === 'newAds' ? 'Nya annonser' : 'Sålda/borttagna'} />
+                <Line
+                  type="monotone"
+                  dataKey="newAds"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  dot={{ fill: '#10b981', strokeWidth: 2 }}
+                  activeDot={{ r: 6 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="soldAds"
+                  stroke="#f97316"
+                  strokeWidth={2}
+                  dot={{ fill: '#f97316', strokeWidth: 2 }}
+                  activeDot={{ r: 6 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        {/* Active Ads Over Time */}
+        {/* Active Ads Area Chart */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -242,41 +278,40 @@ export function BlocketMarknadView({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {monthlyStats.map((month, index) => {
-                const prevActive = index > 0 ? monthlyStats[index - 1].activeAds : month.activeAds
-                const change = month.activeAds - prevActive
-                return (
-                  <div key={month.month} className="space-y-1">
-                    <div className="flex justify-between text-sm">
-                      <span className="font-medium">{formatMonth(month.month)}</span>
-                      <span className="flex items-center gap-2">
-                        <span className="font-bold">{month.activeAds.toLocaleString()}</span>
-                        {change !== 0 && (
-                          <span className={change > 0 ? 'text-green-600' : 'text-red-600'}>
-                            {change > 0 ? '+' : ''}{change}
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                    <div className="h-6 bg-gray-100 rounded overflow-hidden">
-                      <div
-                        className="h-full bg-blue-500 rounded"
-                        style={{ width: `${(month.activeAds / maxActiveAds) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="monthLabel" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                  formatter={(value) => [Number(value).toLocaleString(), 'Aktiva']}
+                  labelFormatter={(label) => chartData.find(d => d.monthLabel === label)?.monthFull || String(label)}
+                />
+                <defs>
+                  <linearGradient id="colorActive" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                  </linearGradient>
+                </defs>
+                <Area
+                  type="monotone"
+                  dataKey="activeAds"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  fillOpacity={1}
+                  fill="url(#colorActive)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
 
-      {/* Price and Time Stats */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Price Distribution */}
-        <Card>
+      {/* Price and Distribution Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Price Distribution Bar Chart */}
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <DollarSign className="w-5 h-5" />
@@ -284,83 +319,129 @@ export function BlocketMarknadView({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {priceRanges.map((range) => (
-                <div key={range.label} className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span className="font-medium">{range.label}</span>
-                    <span className="text-muted-foreground">{range.count.toLocaleString()} st</span>
-                  </div>
-                  <div className="h-6 bg-gray-100 rounded overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded"
-                      style={{ width: `${(range.count / maxPriceRange) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={priceRangeData} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis type="number" tick={{ fontSize: 12 }} />
+                <YAxis dataKey="range" type="category" tick={{ fontSize: 12 }} width={80} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                  formatter={(value) => [Number(value).toLocaleString() + ' st', 'Antal']}
+                />
+                <Bar dataKey="antal" radius={[0, 4, 4, 0]}>
+                  {priceRangeData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        {/* Average Price Trend */}
+        {/* Seller Type Pie Chart */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5" />
-              Genomsnittspris per månad
+              <PieChartIcon className="w-5 h-5" />
+              Säljare
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {monthlyStats.filter(m => m.avgPrice > 0).map((month) => (
-                <div key={month.month} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                  <span className="font-medium">{formatMonth(month.month)}</span>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <span className="font-bold text-lg">{formatPrice(month.avgPrice)}</span>
-                    </div>
-                    {month.medianDaysOnMarket > 0 && (
-                      <Badge variant="outline" className="text-xs">
-                        <Clock className="w-3 h-3 mr-1" />
-                        {month.medianDaysOnMarket}d median
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={sellerTypeData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={100}
+                  paddingAngle={5}
+                  dataKey="value"
+                  label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
+                  labelLine={false}
+                >
+                  {sellerTypeData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                  formatter={(value) => [Number(value).toLocaleString() + ' st', 'Antal']}
+                />
+              </PieChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
+
+      {/* Average Price Trend */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="w-5 h-5" />
+            Genomsnittspris per månad
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={chartData.filter(m => m.avgPrice > 0)}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis dataKey="monthLabel" tick={{ fontSize: 12 }} />
+              <YAxis
+                tick={{ fontSize: 12 }}
+                tickFormatter={(value) => `${Math.round(value / 1000)}k`}
+              />
+              <Tooltip
+                contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                formatter={(value) => [formatPrice(Number(value)), 'Snittpris']}
+                labelFormatter={(label) => chartData.find(d => d.monthLabel === label)?.monthFull || label}
+              />
+              <defs>
+                <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8}/>
+                  <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.1}/>
+                </linearGradient>
+              </defs>
+              <Area
+                type="monotone"
+                dataKey="avgPrice"
+                stroke="#8b5cf6"
+                strokeWidth={2}
+                fillOpacity={1}
+                fill="url(#colorPrice)"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
 
       {/* Brand Statistics */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Car className="w-5 h-5" />
-            Märkesstatistik (senaste 12 mån)
+            Top 10 märken (senaste 12 mån)
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Bar chart visualization */}
-            <div className="space-y-2">
-              {brandStats.slice(0, 10).map((brand) => (
-                <div key={brand.brand} className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span className="font-medium">{brand.brand}</span>
-                    <span className="text-muted-foreground">{brand.count} st</span>
-                  </div>
-                  <div className="h-5 bg-gray-100 rounded overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 rounded"
-                      style={{ width: `${(brand.count / maxBrandCount) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Bar chart */}
+            <ResponsiveContainer width="100%" height={400}>
+              <BarChart data={brandChartData} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis type="number" tick={{ fontSize: 12 }} />
+                <YAxis dataKey="brand" type="category" tick={{ fontSize: 12 }} width={100} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                  formatter={(value, name) => [
+                    name === 'antal' ? Number(value).toLocaleString() + ' st' : value + 'k kr',
+                    name === 'antal' ? 'Antal' : 'Snittpris'
+                  ]}
+                />
+                <Legend formatter={(value) => value === 'antal' ? 'Antal annonser' : 'Snittpris (tkr)'} />
+                <Bar dataKey="antal" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
 
             {/* Table with details */}
             <div className="overflow-auto max-h-[400px]">
@@ -374,9 +455,17 @@ export function BlocketMarknadView({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {brandStats.map((brand) => (
+                  {brandStats.map((brand, index) => (
                     <TableRow key={brand.brand}>
-                      <TableCell className="font-medium">{brand.brand}</TableCell>
+                      <TableCell className="font-medium">
+                        <span className="flex items-center gap-2">
+                          <span
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                          />
+                          {brand.brand}
+                        </span>
+                      </TableCell>
                       <TableCell className="text-right">{brand.count}</TableCell>
                       <TableCell className="text-right">{formatPrice(brand.avgPrice)}</TableCell>
                       <TableCell className="text-right">
@@ -396,12 +485,12 @@ export function BlocketMarknadView({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <MapPin className="w-5 h-5" />
-            Per region (senaste månaden)
+            Per region (senaste månaden: {formatMonthFull(latestMonth || '')})
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {regionDataForMonth.map((region) => (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            {regionDataForMonth.map((region, index) => (
               <div
                 key={region.region}
                 className={`p-4 rounded-lg border cursor-pointer transition-colors ${
@@ -413,44 +502,40 @@ export function BlocketMarknadView({
                   selectedRegion === region.region ? null : region.region
                 )}
               >
-                <p className="text-sm font-medium text-gray-700 capitalize">{region.region}</p>
+                <div className="flex items-center gap-2 mb-1">
+                  <span
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                  />
+                  <p className="text-sm font-medium text-gray-700 capitalize">{region.region}</p>
+                </div>
                 <p className="text-2xl font-bold text-gray-900">{region.count}</p>
                 <p className="text-xs text-gray-500">nya annonser</p>
               </div>
             ))}
           </div>
 
-          {/* Region trend over time */}
+          {/* Region trend chart */}
           {selectedRegion && (
-            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+            <div className="p-4 bg-gray-50 rounded-lg">
               <h4 className="font-medium mb-3 capitalize">{selectedRegion} - trend över tid</h4>
-              <div className="space-y-2">
-                {monthlyStats.map((month) => {
-                  const regionData = regionMonthlyStats.find(
-                    r => r.region === selectedRegion && r.month === month.month
-                  )
-                  const count = regionData?.count || 0
-                  const maxForRegion = Math.max(
-                    ...regionMonthlyStats
-                      .filter(r => r.region === selectedRegion)
-                      .map(r => r.count),
-                    1
-                  )
-
-                  return (
-                    <div key={month.month} className="flex items-center gap-3">
-                      <span className="w-20 text-sm">{formatMonth(month.month)}</span>
-                      <div className="flex-1 h-5 bg-gray-200 rounded overflow-hidden">
-                        <div
-                          className="h-full bg-blue-500 rounded"
-                          style={{ width: `${(count / maxForRegion) * 100}%` }}
-                        />
-                      </div>
-                      <span className="w-12 text-sm text-right">{count}</span>
-                    </div>
-                  )
-                })}
-              </div>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart
+                  data={monthlyStats.map(m => ({
+                    month: formatMonth(m.month),
+                    antal: regionMonthlyStats.find(r => r.region === selectedRegion && r.month === m.month)?.count || 0
+                  }))}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                    formatter={(value) => [value + ' st', 'Nya annonser']}
+                  />
+                  <Bar dataKey="antal" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           )}
         </CardContent>
@@ -482,7 +567,7 @@ export function BlocketMarknadView({
                 const net = month.newAds - month.soldAds
                 return (
                   <TableRow key={month.month}>
-                    <TableCell className="font-medium">{formatMonth(month.month)}</TableCell>
+                    <TableCell className="font-medium">{formatMonthFull(month.month)}</TableCell>
                     <TableCell className="text-right text-green-600">+{month.newAds}</TableCell>
                     <TableCell className="text-right text-orange-600">-{month.soldAds}</TableCell>
                     <TableCell className={`text-right font-medium ${net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
