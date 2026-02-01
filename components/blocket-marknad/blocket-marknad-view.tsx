@@ -26,7 +26,14 @@ import {
   Info,
   Search,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Globe,
+  Zap,
+  Palette,
+  Settings2,
+  Timer,
+  TrendingDown,
+  Sparkles
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { useState } from 'react'
@@ -92,6 +99,50 @@ interface Totals {
   privateAds: number
 }
 
+interface YearStats {
+  year: string
+  count: number
+  avgPrice: number
+}
+
+interface BodyTypeStats {
+  bodyType: string
+  count: number
+  avgPrice: number
+  avgDaysOnMarket: number
+}
+
+interface ColorStats {
+  color: string
+  count: number
+  avgPrice: number
+  avgDaysOnMarket: number
+}
+
+interface GearboxStats {
+  gearbox: string
+  count: number
+  avgPrice: number
+}
+
+interface SaleSpeedStats {
+  category: string
+  count: number
+  percentage: number
+}
+
+interface MomsbilStats {
+  momsbil: { count: number; avgPrice: number }
+  privatbil: { count: number; avgPrice: number }
+}
+
+interface MarketHealth {
+  marketGrowth: number
+  avgDaysOnMarket: number
+  totalAdsTracked: number
+  totalSoldTracked: number
+}
+
 interface BlocketMarknadViewProps {
   monthlyStats: MonthlyStats[]
   brandStats: BrandStats[]
@@ -100,6 +151,13 @@ interface BlocketMarknadViewProps {
   priceRanges: PriceRange[]
   totals: Totals
   scraperStartDate?: string
+  yearStats: YearStats[]
+  bodyTypeStats: BodyTypeStats[]
+  colorStats: ColorStats[]
+  gearboxStats: GearboxStats[]
+  saleSpeedStats: SaleSpeedStats[]
+  momsbilStats: MomsbilStats
+  marketHealth: MarketHealth
 }
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
@@ -111,7 +169,14 @@ export function BlocketMarknadView({
   regionMonthlyStats,
   priceRanges,
   totals,
-  scraperStartDate
+  scraperStartDate,
+  yearStats,
+  bodyTypeStats,
+  colorStats,
+  gearboxStats,
+  saleSpeedStats,
+  momsbilStats,
+  marketHealth
 }: BlocketMarknadViewProps) {
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null)
   const [selectedBrand, setSelectedBrand] = useState<string | null>(null)
@@ -257,11 +322,15 @@ export function BlocketMarknadView({
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="oversikt" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+      <Tabs defaultValue="total-marknad" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="total-marknad" className="flex items-center gap-2">
+            <Globe className="w-4 h-4" />
+            Total Marknad
+          </TabsTrigger>
           <TabsTrigger value="oversikt" className="flex items-center gap-2">
             <Activity className="w-4 h-4" />
-            Översikt
+            Trender
           </TabsTrigger>
           <TabsTrigger value="marken" className="flex items-center gap-2">
             <Car className="w-4 h-4" />
@@ -272,6 +341,359 @@ export function BlocketMarknadView({
             Regioner
           </TabsTrigger>
         </TabsList>
+
+        {/* TOTAL MARKNAD TAB - Enkel och tydlig */}
+        <TabsContent value="total-marknad" className="space-y-6">
+          {/* Marknadens hälsa - Enkla kort */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <div className="text-4xl mb-2">🚗</div>
+                  <p className="text-sm text-green-700 font-medium">Bilar till salu just nu</p>
+                  <p className="text-3xl font-bold text-green-600">{totals.activeAds.toLocaleString()}</p>
+                  <p className="text-xs text-green-600 mt-1">
+                    {marketHealth.marketGrowth >= 0 ? '📈' : '📉'} {marketHealth.marketGrowth >= 0 ? '+' : ''}{marketHealth.marketGrowth} från förra månaden
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-blue-50 to-sky-50 border-blue-200">
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <div className="text-4xl mb-2">✅</div>
+                  <p className="text-sm text-blue-700 font-medium">Bilar som sålts</p>
+                  <p className="text-3xl font-bold text-blue-600">{totals.soldAds.toLocaleString()}</p>
+                  <p className="text-xs text-blue-600 mt-1">Sedan februari 2026</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200">
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <div className="text-4xl mb-2">⏱️</div>
+                  <p className="text-sm text-amber-700 font-medium">Dagar att sälja (snitt)</p>
+                  <p className="text-3xl font-bold text-amber-600">{marketHealth.avgDaysOnMarket}</p>
+                  <p className="text-xs text-amber-600 mt-1">
+                    {marketHealth.avgDaysOnMarket < 30 ? '🚀 Snabb marknad!' : marketHealth.avgDaysOnMarket < 60 ? '👍 Normal hastighet' : '🐢 Långsam marknad'}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200">
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <div className="text-4xl mb-2">📊</div>
+                  <p className="text-sm text-purple-700 font-medium">Data vi följer</p>
+                  <p className="text-3xl font-bold text-purple-600">{marketHealth.totalAdsTracked.toLocaleString()}</p>
+                  <p className="text-xs text-purple-600 mt-1">Annonser totalt analyserade</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Hur snabbt säljs bilar? */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="w-5 h-5 text-yellow-500" />
+                Hur snabbt säljs bilar? ⚡
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Visar hur lång tid det tar innan en bil blir såld
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {saleSpeedStats.map((stat, index) => {
+                  const emoji = index === 0 ? '🚀' : index === 1 ? '⚡' : index === 2 ? '👍' : index === 3 ? '🐢' : '🦥'
+                  const bgColor = index === 0 ? 'bg-green-500' : index === 1 ? 'bg-emerald-400' : index === 2 ? 'bg-yellow-400' : index === 3 ? 'bg-orange-400' : 'bg-red-400'
+                  return (
+                    <div key={stat.category} className="space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium flex items-center gap-2">
+                          {emoji} {stat.category}
+                        </span>
+                        <span className="text-sm text-muted-foreground">
+                          {stat.count} bilar ({stat.percentage}%)
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-4 overflow-hidden">
+                        <div
+                          className={`h-full ${bgColor} rounded-full transition-all duration-500 flex items-center justify-end pr-2`}
+                          style={{ width: `${Math.max(stat.percentage, 2)}%` }}
+                        >
+                          {stat.percentage >= 10 && (
+                            <span className="text-xs text-white font-medium">{stat.percentage}%</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                <p className="text-sm text-blue-700">
+                  💡 <strong>Vad betyder detta?</strong> Om en bil säljs på 0-7 dagar är den supersnabb!
+                  De flesta bilar säljs inom 30 dagar om priset är rätt.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Vilken typ av bil är populärast? */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Årsmodell */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-blue-500" />
+                  Hur gamla är bilarna? 📅
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">Årsmodell på bilar till salu</p>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={250}>
+                  <PieChart>
+                    <Pie
+                      data={yearStats.map(y => ({ name: y.year, value: y.count }))}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      dataKey="value"
+                      label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
+                    >
+                      {yearStats.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => [Number(value).toLocaleString() + ' bilar', 'Antal']} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  {yearStats.slice(0, 4).map((y, i) => (
+                    <div key={y.year} className="flex items-center gap-2 text-sm">
+                      <span className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[i] }} />
+                      <span>{y.year}: <strong>{formatPrice(y.avgPrice)}</strong> snitt</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Kaross/Typ */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Car className="w-5 h-5 text-indigo-500" />
+                  Vilken typ av bil? 🚙
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">SUV, Sedan, Kombi och andra</p>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={bodyTypeStats.slice(0, 6)} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis type="number" tick={{ fontSize: 12 }} />
+                    <YAxis dataKey="bodyType" type="category" tick={{ fontSize: 12 }} width={80} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                      formatter={(value, name) => [
+                        name === 'count' ? Number(value).toLocaleString() + ' bilar' : value + ' dagar',
+                        name === 'count' ? 'Antal' : 'Snitt dagar till såld'
+                      ]}
+                    />
+                    <Bar dataKey="count" fill="#6366f1" radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="mt-4 p-3 bg-indigo-50 rounded-lg">
+                  <p className="text-sm text-indigo-700">
+                    🏆 <strong>{bodyTypeStats[0]?.bodyType || 'SUV'}</strong> är mest populär med {bodyTypeStats[0]?.count || 0} bilar!
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Färg och Växellåda */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Färger */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Palette className="w-5 h-5 text-pink-500" />
+                  Vilken färg är populärast? 🎨
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {colorStats.slice(0, 8).map((color, index) => {
+                    const totalColors = colorStats.reduce((sum, c) => sum + c.count, 0)
+                    const percentage = totalColors > 0 ? Math.round((color.count / totalColors) * 100) : 0
+                    const colorEmoji = color.color.toLowerCase().includes('svart') ? '⚫' :
+                                       color.color.toLowerCase().includes('vit') ? '⚪' :
+                                       color.color.toLowerCase().includes('grå') || color.color.toLowerCase().includes('silver') ? '🔘' :
+                                       color.color.toLowerCase().includes('blå') ? '🔵' :
+                                       color.color.toLowerCase().includes('röd') ? '🔴' :
+                                       color.color.toLowerCase().includes('grön') ? '🟢' :
+                                       color.color.toLowerCase().includes('gul') ? '🟡' : '🟤'
+                    return (
+                      <div key={color.color} className="flex items-center gap-3">
+                        <span className="text-xl">{colorEmoji}</span>
+                        <div className="flex-1">
+                          <div className="flex justify-between">
+                            <span className="text-sm font-medium">{color.color}</span>
+                            <span className="text-sm text-muted-foreground">{color.count} st ({percentage}%)</span>
+                          </div>
+                          <div className="w-full bg-gray-100 rounded-full h-2 mt-1">
+                            <div
+                              className="h-full bg-gradient-to-r from-pink-400 to-purple-500 rounded-full"
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="mt-4 p-3 bg-pink-50 rounded-lg">
+                  <p className="text-sm text-pink-700">
+                    💡 <strong>{colorStats[0]?.color || 'Svart'}</strong> säljs på {colorStats[0]?.avgDaysOnMarket || 0} dagar i snitt
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Växellåda */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings2 className="w-5 h-5 text-gray-600" />
+                  Automat eller Manuell? ⚙️
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex justify-center gap-8 py-6">
+                  {gearboxStats.map((g, index) => {
+                    const totalGearbox = gearboxStats.reduce((sum, gb) => sum + gb.count, 0)
+                    const percentage = totalGearbox > 0 ? Math.round((g.count / totalGearbox) * 100) : 0
+                    return (
+                      <div key={g.gearbox} className="text-center">
+                        <div className={`w-32 h-32 rounded-full flex items-center justify-center ${index === 0 ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                          <div>
+                            <p className="text-4xl">{g.gearbox === 'Automat' ? '🅰️' : 'Ⓜ️'}</p>
+                            <p className="text-2xl font-bold mt-2">{percentage}%</p>
+                          </div>
+                        </div>
+                        <p className="mt-3 font-medium">{g.gearbox}</p>
+                        <p className="text-sm text-muted-foreground">{g.count.toLocaleString()} bilar</p>
+                        <p className="text-xs text-muted-foreground">Snitt: {formatPrice(g.avgPrice)}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-700">
+                    💡 <strong>Tips!</strong> {gearboxStats[0]?.gearbox === 'Automat' ? 'Automat är vanligast - folk gillar bekvämlighet!' : 'Manuell är vanligast - kanske för lägre pris?'}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Handlare vs Privat - Enkelt */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Store className="w-5 h-5 text-blue-500" />
+                Vem säljer bilarna? 🏪
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">Bilhandlare vs Privatpersoner</p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-6">
+                <div className="text-center p-6 bg-blue-50 rounded-xl">
+                  <div className="text-5xl mb-3">🏢</div>
+                  <p className="text-lg font-bold text-blue-700">Bilhandlare</p>
+                  <p className="text-4xl font-bold text-blue-600 my-2">{totals.dealerAds.toLocaleString()}</p>
+                  <p className="text-sm text-blue-600">
+                    {totals.activeAds > 0 ? Math.round((totals.dealerAds / totals.activeAds) * 100) : 0}% av alla annonser
+                  </p>
+                </div>
+                <div className="text-center p-6 bg-teal-50 rounded-xl">
+                  <div className="text-5xl mb-3">👤</div>
+                  <p className="text-lg font-bold text-teal-700">Privatpersoner</p>
+                  <p className="text-4xl font-bold text-teal-600 my-2">{totals.privateAds.toLocaleString()}</p>
+                  <p className="text-sm text-teal-600">
+                    {totals.activeAds > 0 ? Math.round((totals.privateAds / totals.activeAds) * 100) : 0}% av alla annonser
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Momsbil info - Om data finns */}
+          {(momsbilStats.momsbil.count > 0 || momsbilStats.privatbil.count > 0) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <DollarSign className="w-5 h-5 text-green-500" />
+                  Momsbil vs Privatköpt 💰
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Momsbil = Företag kan dra av momsen (25%)
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="p-4 bg-green-50 rounded-lg text-center">
+                    <p className="text-sm text-green-700 font-medium mb-2">Momsbil 🏢</p>
+                    <p className="text-2xl font-bold text-green-600">{momsbilStats.momsbil.count.toLocaleString()}</p>
+                    <p className="text-sm text-green-600">Snitt: {formatPrice(momsbilStats.momsbil.avgPrice)}</p>
+                  </div>
+                  <div className="p-4 bg-gray-50 rounded-lg text-center">
+                    <p className="text-sm text-gray-700 font-medium mb-2">Privatköpt 👤</p>
+                    <p className="text-2xl font-bold text-gray-600">{momsbilStats.privatbil.count.toLocaleString()}</p>
+                    <p className="text-sm text-gray-600">Snitt: {formatPrice(momsbilStats.privatbil.avgPrice)}</p>
+                  </div>
+                </div>
+                <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
+                  <p className="text-sm text-yellow-800">
+                    💡 <strong>Tips!</strong> Momsbilar är ofta dyrare men har ofta lägre mil och är nyare -
+                    de har mest använts av företag som tjänstebilar.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Enkel sammanfattning */}
+          <Card className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3 mb-4">
+                <Sparkles className="w-6 h-6" />
+                <h3 className="text-xl font-bold">Sammanfattning av marknaden</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white/20 rounded-lg p-4">
+                  <p className="text-sm opacity-90">Mest populära biltyp</p>
+                  <p className="text-lg font-bold">{bodyTypeStats[0]?.bodyType || 'SUV'}</p>
+                </div>
+                <div className="bg-white/20 rounded-lg p-4">
+                  <p className="text-sm opacity-90">Vanligaste färgen</p>
+                  <p className="text-lg font-bold">{colorStats[0]?.color || 'Svart'}</p>
+                </div>
+                <div className="bg-white/20 rounded-lg p-4">
+                  <p className="text-sm opacity-90">Typisk försäljningstid</p>
+                  <p className="text-lg font-bold">{marketHealth.avgDaysOnMarket} dagar</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* ÖVERSIKT TAB */}
         <TabsContent value="oversikt" className="space-y-6">

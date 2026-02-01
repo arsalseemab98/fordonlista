@@ -35,6 +35,38 @@ interface RegionMonthlyStats {
   count: number
 }
 
+interface YearStats {
+  year: string
+  count: number
+  avgPrice: number
+}
+
+interface BodyTypeStats {
+  bodyType: string
+  count: number
+  avgPrice: number
+  avgDaysOnMarket: number
+}
+
+interface ColorStats {
+  color: string
+  count: number
+  avgPrice: number
+  avgDaysOnMarket: number
+}
+
+interface GearboxStats {
+  gearbox: string
+  count: number
+  avgPrice: number
+}
+
+interface SaleSpeedStats {
+  category: string
+  count: number
+  percentage: number
+}
+
 export default async function BlocketMarknadPage() {
   const supabase = await createClient()
 
@@ -46,7 +78,7 @@ export default async function BlocketMarknadPage() {
   // Only include ads published from Feb 1 onwards for accurate lifecycle tracking
   const { data: allAds } = await supabase
     .from('blocket_annonser')
-    .select('id, marke, modell, pris, miltal, region, publicerad, forst_sedd, borttagen, saljare_typ')
+    .select('id, marke, modell, arsmodell, pris, miltal, region, publicerad, forst_sedd, borttagen, saljare_typ, kaross, farg, vaxellada, momsbil')
     .gte('publicerad', dataStartDate.toISOString())
     .order('publicerad', { ascending: false })
 
@@ -212,6 +244,180 @@ export default async function BlocketMarknadPage() {
     }))
     .sort((a, b) => b.count - a.count)
 
+  // ============================================
+  // TOTAL MARKNAD - New statistics
+  // ============================================
+
+  // Helper function to calculate days on market
+  const calcDaysOnMarket = (publicerad: string, borttagen: string | null): number | null => {
+    if (!borttagen) return null
+    const days = Math.floor((new Date(borttagen).getTime() - new Date(publicerad).getTime()) / (1000 * 60 * 60 * 24))
+    return days >= 0 && days < 365 ? days : null
+  }
+
+  // Year statistics (årsmodell)
+  const yearMap = new Map<string, { count: number; prices: number[] }>()
+  allAds?.forEach(ad => {
+    if (!ad.arsmodell) return
+    const yearGroup = ad.arsmodell >= 2024 ? '2024+' :
+                      ad.arsmodell >= 2022 ? '2022-2023' :
+                      ad.arsmodell >= 2020 ? '2020-2021' :
+                      ad.arsmodell >= 2015 ? '2015-2019' : 'Äldre'
+
+    if (!yearMap.has(yearGroup)) {
+      yearMap.set(yearGroup, { count: 0, prices: [] })
+    }
+    const stats = yearMap.get(yearGroup)!
+    stats.count++
+    if (ad.pris) stats.prices.push(ad.pris)
+  })
+
+  const yearStats: YearStats[] = Array.from(yearMap.entries())
+    .map(([year, stats]) => ({
+      year,
+      count: stats.count,
+      avgPrice: stats.prices.length > 0
+        ? Math.round(stats.prices.reduce((a, b) => a + b, 0) / stats.prices.length)
+        : 0
+    }))
+    .sort((a, b) => {
+      const order = ['2024+', '2022-2023', '2020-2021', '2015-2019', 'Äldre']
+      return order.indexOf(a.year) - order.indexOf(b.year)
+    })
+
+  // Body type statistics (kaross)
+  const bodyTypeMap = new Map<string, { count: number; prices: number[]; daysOnMarket: number[] }>()
+  allAds?.forEach(ad => {
+    if (!ad.kaross) return
+    const bodyType = ad.kaross.charAt(0).toUpperCase() + ad.kaross.slice(1).toLowerCase()
+
+    if (!bodyTypeMap.has(bodyType)) {
+      bodyTypeMap.set(bodyType, { count: 0, prices: [], daysOnMarket: [] })
+    }
+    const stats = bodyTypeMap.get(bodyType)!
+    stats.count++
+    if (ad.pris) stats.prices.push(ad.pris)
+    const days = calcDaysOnMarket(ad.publicerad, ad.borttagen)
+    if (days !== null) stats.daysOnMarket.push(days)
+  })
+
+  const bodyTypeStats: BodyTypeStats[] = Array.from(bodyTypeMap.entries())
+    .map(([bodyType, stats]) => ({
+      bodyType,
+      count: stats.count,
+      avgPrice: stats.prices.length > 0
+        ? Math.round(stats.prices.reduce((a, b) => a + b, 0) / stats.prices.length)
+        : 0,
+      avgDaysOnMarket: stats.daysOnMarket.length > 0
+        ? Math.round(stats.daysOnMarket.reduce((a, b) => a + b, 0) / stats.daysOnMarket.length)
+        : 0
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10)
+
+  // Color statistics (färg)
+  const colorMap = new Map<string, { count: number; prices: number[]; daysOnMarket: number[] }>()
+  allAds?.forEach(ad => {
+    if (!ad.farg) return
+    const color = ad.farg.charAt(0).toUpperCase() + ad.farg.slice(1).toLowerCase()
+
+    if (!colorMap.has(color)) {
+      colorMap.set(color, { count: 0, prices: [], daysOnMarket: [] })
+    }
+    const stats = colorMap.get(color)!
+    stats.count++
+    if (ad.pris) stats.prices.push(ad.pris)
+    const days = calcDaysOnMarket(ad.publicerad, ad.borttagen)
+    if (days !== null) stats.daysOnMarket.push(days)
+  })
+
+  const colorStats: ColorStats[] = Array.from(colorMap.entries())
+    .map(([color, stats]) => ({
+      color,
+      count: stats.count,
+      avgPrice: stats.prices.length > 0
+        ? Math.round(stats.prices.reduce((a, b) => a + b, 0) / stats.prices.length)
+        : 0,
+      avgDaysOnMarket: stats.daysOnMarket.length > 0
+        ? Math.round(stats.daysOnMarket.reduce((a, b) => a + b, 0) / stats.daysOnMarket.length)
+        : 0
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10)
+
+  // Gearbox statistics (växellåda)
+  const gearboxMap = new Map<string, { count: number; prices: number[] }>()
+  allAds?.forEach(ad => {
+    if (!ad.vaxellada) return
+    const gearbox = ad.vaxellada.toLowerCase().includes('auto') ? 'Automat' : 'Manuell'
+
+    if (!gearboxMap.has(gearbox)) {
+      gearboxMap.set(gearbox, { count: 0, prices: [] })
+    }
+    const stats = gearboxMap.get(gearbox)!
+    stats.count++
+    if (ad.pris) stats.prices.push(ad.pris)
+  })
+
+  const gearboxStats: GearboxStats[] = Array.from(gearboxMap.entries())
+    .map(([gearbox, stats]) => ({
+      gearbox,
+      count: stats.count,
+      avgPrice: stats.prices.length > 0
+        ? Math.round(stats.prices.reduce((a, b) => a + b, 0) / stats.prices.length)
+        : 0
+    }))
+    .sort((a, b) => b.count - a.count)
+
+  // Sale speed statistics (hur snabbt säljs bilar?)
+  const allDaysOnMarket: number[] = []
+  allAds?.forEach(ad => {
+    const days = calcDaysOnMarket(ad.publicerad, ad.borttagen)
+    if (days !== null) allDaysOnMarket.push(days)
+  })
+
+  const saleSpeedStats: SaleSpeedStats[] = [
+    { category: 'Supersnabb (0-7 dagar)', count: allDaysOnMarket.filter(d => d <= 7).length, percentage: 0 },
+    { category: 'Snabb (8-14 dagar)', count: allDaysOnMarket.filter(d => d > 7 && d <= 14).length, percentage: 0 },
+    { category: 'Normal (15-30 dagar)', count: allDaysOnMarket.filter(d => d > 14 && d <= 30).length, percentage: 0 },
+    { category: 'Långsam (31-60 dagar)', count: allDaysOnMarket.filter(d => d > 30 && d <= 60).length, percentage: 0 },
+    { category: 'Mycket långsam (60+ dagar)', count: allDaysOnMarket.filter(d => d > 60).length, percentage: 0 },
+  ]
+
+  const totalSold2 = allDaysOnMarket.length
+  saleSpeedStats.forEach(s => {
+    s.percentage = totalSold2 > 0 ? Math.round((s.count / totalSold2) * 100) : 0
+  })
+
+  // Momsbil statistics
+  const momsbilCount = allAds?.filter(ad => ad.momsbil === true).length || 0
+  const privatbilCount = allAds?.filter(ad => ad.momsbil === false).length || 0
+  const momsbilPrices = allAds?.filter(ad => ad.momsbil === true && ad.pris).map(ad => ad.pris!) || []
+  const privatbilPrices = allAds?.filter(ad => ad.momsbil === false && ad.pris).map(ad => ad.pris!) || []
+
+  const momsbilStats = {
+    momsbil: {
+      count: momsbilCount,
+      avgPrice: momsbilPrices.length > 0 ? Math.round(momsbilPrices.reduce((a, b) => a + b, 0) / momsbilPrices.length) : 0
+    },
+    privatbil: {
+      count: privatbilCount,
+      avgPrice: privatbilPrices.length > 0 ? Math.round(privatbilPrices.reduce((a, b) => a + b, 0) / privatbilPrices.length) : 0
+    }
+  }
+
+  // Market health metrics
+  const lastMonthStats = monthlyStats[monthlyStats.length - 1]
+  const prevMonthStats = monthlyStats[monthlyStats.length - 2]
+
+  const marketGrowth = lastMonthStats && prevMonthStats
+    ? lastMonthStats.activeAds - prevMonthStats.activeAds
+    : 0
+
+  const avgDaysOnMarketTotal = allDaysOnMarket.length > 0
+    ? Math.round(allDaysOnMarket.reduce((a, b) => a + b, 0) / allDaysOnMarket.length)
+    : 0
+
   // Get region monthly breakdown - use publicerad
   const regionMonthlyMap = new Map<string, Map<string, number>>()
 
@@ -306,6 +512,18 @@ export default async function BlocketMarknadPage() {
             privateAds: privateCount || 0,
           }}
           scraperStartDate={scraperStartDate}
+          yearStats={yearStats}
+          bodyTypeStats={bodyTypeStats}
+          colorStats={colorStats}
+          gearboxStats={gearboxStats}
+          saleSpeedStats={saleSpeedStats}
+          momsbilStats={momsbilStats}
+          marketHealth={{
+            marketGrowth,
+            avgDaysOnMarket: avgDaysOnMarketTotal,
+            totalAdsTracked: allAds?.length || 0,
+            totalSoldTracked: allDaysOnMarket.length,
+          }}
         />
       </div>
     </div>
