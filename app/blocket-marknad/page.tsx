@@ -75,19 +75,23 @@ export default async function BlocketMarknadPage() {
   const dataStartDate = new Date('2026-02-01T00:00:00Z')
 
   // Fetch ads published from Feb 1 onwards for lifecycle tracking (new/sold per month)
+  // Note: Supabase default limit is 1000, so we increase it to get all data
   const { data: allAds } = await supabase
     .from('blocket_annonser')
     .select('id, marke, modell, arsmodell, pris, miltal, region, publicerad, forst_sedd, borttagen, saljare_typ, kaross, farg, vaxellada, momsbil')
     .gte('publicerad', dataStartDate.toISOString())
     .order('publicerad', { ascending: false })
+    .limit(10000)
 
   // Fetch ALL active ads for Total Marknad statistics (current market snapshot)
   // This includes ALL cars currently for sale, regardless of when they were published
+  // Note: Supabase default limit is 1000, so we need to increase it
   const { data: allActiveAds } = await supabase
     .from('blocket_annonser')
     .select('id, marke, modell, arsmodell, pris, miltal, region, publicerad, borttagen, saljare_typ, kaross, farg, vaxellada, momsbil')
     .is('borttagen', null)
     .order('publicerad', { ascending: false })
+    .limit(10000)
 
   // Fetch ALL sold ads for sale speed statistics
   // This includes ALL cars that have been sold, regardless of when they were published
@@ -96,6 +100,7 @@ export default async function BlocketMarknadPage() {
     .select('publicerad, borttagen')
     .not('borttagen', 'is', null)
     .order('borttagen', { ascending: false })
+    .limit(10000)
 
   // Calculate monthly statistics using PUBLICERAD (actual Blocket publish date)
   const monthlyStatsMap = new Map<string, {
