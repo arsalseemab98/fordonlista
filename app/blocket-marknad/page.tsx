@@ -89,6 +89,14 @@ export default async function BlocketMarknadPage() {
     .is('borttagen', null)
     .order('publicerad', { ascending: false })
 
+  // Fetch ALL sold ads for sale speed statistics
+  // This includes ALL cars that have been sold, regardless of when they were published
+  const { data: allSoldAds } = await supabase
+    .from('blocket_annonser')
+    .select('publicerad, borttagen')
+    .not('borttagen', 'is', null)
+    .order('borttagen', { ascending: false })
+
   // Calculate monthly statistics using PUBLICERAD (actual Blocket publish date)
   const monthlyStatsMap = new Map<string, {
     newAds: number
@@ -369,9 +377,9 @@ export default async function BlocketMarknadPage() {
     }))
     .sort((a, b) => b.count - a.count)
 
-  // Sale speed statistics (hur snabbt säljs bilar?)
+  // Sale speed statistics (hur snabbt säljs bilar?) - uses ALL sold ads
   const allDaysOnMarket: number[] = []
-  allAds?.forEach(ad => {
+  allSoldAds?.forEach(ad => {
     const days = calcDaysOnMarket(ad.publicerad, ad.borttagen)
     if (days !== null) allDaysOnMarket.push(days)
   })
@@ -390,19 +398,27 @@ export default async function BlocketMarknadPage() {
   })
 
   // Momsbil statistics - uses ALL active ads
-  const momsbilCount = allActiveAds?.filter(ad => ad.momsbil === true).length || 0
-  const privatbilCount = allActiveAds?.filter(ad => ad.momsbil === false).length || 0
-  const momsbilPrices = allActiveAds?.filter(ad => ad.momsbil === true && ad.pris).map(ad => ad.pris!) || []
-  const privatbilPrices = allActiveAds?.filter(ad => ad.momsbil === false && ad.pris).map(ad => ad.pris!) || []
+  // Note: momsbil can be true, false, or null (not specified)
+  const momsbilTrueCount = allActiveAds?.filter(ad => ad.momsbil === true).length || 0
+  const momsbilFalseCount = allActiveAds?.filter(ad => ad.momsbil === false).length || 0
+  const momsbilNullCount = allActiveAds?.filter(ad => ad.momsbil === null || ad.momsbil === undefined).length || 0
+
+  const momsbilTruePrices = allActiveAds?.filter(ad => ad.momsbil === true && ad.pris).map(ad => ad.pris!) || []
+  const momsbilFalsePrices = allActiveAds?.filter(ad => ad.momsbil === false && ad.pris).map(ad => ad.pris!) || []
+  const momsbilNullPrices = allActiveAds?.filter(ad => (ad.momsbil === null || ad.momsbil === undefined) && ad.pris).map(ad => ad.pris!) || []
 
   const momsbilStats = {
     momsbil: {
-      count: momsbilCount,
-      avgPrice: momsbilPrices.length > 0 ? Math.round(momsbilPrices.reduce((a, b) => a + b, 0) / momsbilPrices.length) : 0
+      count: momsbilTrueCount,
+      avgPrice: momsbilTruePrices.length > 0 ? Math.round(momsbilTruePrices.reduce((a, b) => a + b, 0) / momsbilTruePrices.length) : 0
     },
     privatbil: {
-      count: privatbilCount,
-      avgPrice: privatbilPrices.length > 0 ? Math.round(privatbilPrices.reduce((a, b) => a + b, 0) / privatbilPrices.length) : 0
+      count: momsbilFalseCount,
+      avgPrice: momsbilFalsePrices.length > 0 ? Math.round(momsbilFalsePrices.reduce((a, b) => a + b, 0) / momsbilFalsePrices.length) : 0
+    },
+    okant: {
+      count: momsbilNullCount,
+      avgPrice: momsbilNullPrices.length > 0 ? Math.round(momsbilNullPrices.reduce((a, b) => a + b, 0) / momsbilNullPrices.length) : 0
     }
   }
 

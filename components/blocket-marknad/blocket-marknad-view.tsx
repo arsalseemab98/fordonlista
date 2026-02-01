@@ -47,7 +47,8 @@ import {
   Trophy,
   ArrowUp,
   ArrowDown,
-  Package
+  Package,
+  HelpCircle
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { useState } from 'react'
@@ -148,6 +149,7 @@ interface SaleSpeedStats {
 interface MomsbilStats {
   momsbil: { count: number; avgPrice: number }
   privatbil: { count: number; avgPrice: number }
+  okant: { count: number; avgPrice: number }
 }
 
 interface MarketHealth {
@@ -674,19 +676,19 @@ export function BlocketMarknadView({
           </Card>
 
           {/* Momsbil info - Om data finns */}
-          {(momsbilStats.momsbil.count > 0 || momsbilStats.privatbil.count > 0) && (
+          {(momsbilStats.momsbil.count > 0 || momsbilStats.privatbil.count > 0 || momsbilStats.okant.count > 0) && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <DollarSign className="w-5 h-5 text-green-500" />
-                  Momsbil vs Privatköpt
+                  Momsuppgifter
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Momsbil = Företag kan dra av momsen (25%)
+                  Momsbil = Företag kan dra av momsen (25%). Många annonser saknar denna uppgift.
                 </p>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-3 gap-4">
                   <div className="p-4 bg-green-50 rounded-lg text-center">
                     <div className="flex items-center justify-center gap-2 mb-2">
                       <Building2 className="w-4 h-4 text-green-600" />
@@ -695,20 +697,27 @@ export function BlocketMarknadView({
                     <p className="text-2xl font-bold text-green-600">{momsbilStats.momsbil.count.toLocaleString()}</p>
                     <p className="text-sm text-green-600">Snitt: {formatPrice(momsbilStats.momsbil.avgPrice)}</p>
                   </div>
+                  <div className="p-4 bg-blue-50 rounded-lg text-center">
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <UserCircle className="w-4 h-4 text-blue-600" />
+                      <p className="text-sm text-blue-700 font-medium">Ej momsbil</p>
+                    </div>
+                    <p className="text-2xl font-bold text-blue-600">{momsbilStats.privatbil.count.toLocaleString()}</p>
+                    <p className="text-sm text-blue-600">Snitt: {formatPrice(momsbilStats.privatbil.avgPrice)}</p>
+                  </div>
                   <div className="p-4 bg-gray-50 rounded-lg text-center">
                     <div className="flex items-center justify-center gap-2 mb-2">
-                      <UserCircle className="w-4 h-4 text-gray-600" />
-                      <p className="text-sm text-gray-700 font-medium">Privatköpt</p>
+                      <HelpCircle className="w-4 h-4 text-gray-500" />
+                      <p className="text-sm text-gray-600 font-medium">Ej angivet</p>
                     </div>
-                    <p className="text-2xl font-bold text-gray-600">{momsbilStats.privatbil.count.toLocaleString()}</p>
-                    <p className="text-sm text-gray-600">Snitt: {formatPrice(momsbilStats.privatbil.avgPrice)}</p>
+                    <p className="text-2xl font-bold text-gray-500">{momsbilStats.okant.count.toLocaleString()}</p>
+                    <p className="text-sm text-gray-500">Snitt: {formatPrice(momsbilStats.okant.avgPrice)}</p>
                   </div>
                 </div>
                 <div className="mt-4 p-3 bg-yellow-50 rounded-lg flex items-start gap-2">
                   <Lightbulb className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
                   <p className="text-sm text-yellow-800">
-                    <strong>Tips!</strong> Momsbilar är ofta dyrare men har ofta lägre mil och är nyare -
-                    de har mest använts av företag som tjänstebilar.
+                    <strong>Tips!</strong> Momsbilar är ofta nyare tjänstebilar. Många handlare anger inte momsstatus.
                   </p>
                 </div>
               </CardContent>
