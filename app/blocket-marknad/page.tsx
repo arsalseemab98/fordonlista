@@ -397,28 +397,32 @@ export default async function BlocketMarknadPage() {
     s.percentage = totalSold2 > 0 ? Math.round((s.count / totalSold2) * 100) : 0
   })
 
-  // Momsbil statistics - uses ALL active ads
-  // Note: momsbil can be true, false, or null (not specified)
-  const momsbilTrueCount = allActiveAds?.filter(ad => ad.momsbil === true).length || 0
-  const momsbilFalseCount = allActiveAds?.filter(ad => ad.momsbil === false).length || 0
-  const momsbilNullCount = allActiveAds?.filter(ad => ad.momsbil === null || ad.momsbil === undefined).length || 0
+  // Seller + Moms statistics - breakdown by seller type and VAT status
+  // Bilhandlare med moms
+  const handlareMomsAds = allActiveAds?.filter(ad => ad.saljare_typ === 'handlare' && ad.momsbil === true) || []
+  // Bilhandlare utan moms (momsbil = false OR null)
+  const handlareUtanMomsAds = allActiveAds?.filter(ad => ad.saljare_typ === 'handlare' && ad.momsbil !== true) || []
+  // Privatpersoner
+  const privatAds = allActiveAds?.filter(ad => ad.saljare_typ === 'privat') || []
 
-  const momsbilTruePrices = allActiveAds?.filter(ad => ad.momsbil === true && ad.pris).map(ad => ad.pris!) || []
-  const momsbilFalsePrices = allActiveAds?.filter(ad => ad.momsbil === false && ad.pris).map(ad => ad.pris!) || []
-  const momsbilNullPrices = allActiveAds?.filter(ad => (ad.momsbil === null || ad.momsbil === undefined) && ad.pris).map(ad => ad.pris!) || []
-
-  const momsbilStats = {
-    momsbil: {
-      count: momsbilTrueCount,
-      avgPrice: momsbilTruePrices.length > 0 ? Math.round(momsbilTruePrices.reduce((a, b) => a + b, 0) / momsbilTruePrices.length) : 0
+  const sellerMomsStats = {
+    handlareMoms: {
+      count: handlareMomsAds.length,
+      avgPrice: handlareMomsAds.filter(ad => ad.pris).length > 0
+        ? Math.round(handlareMomsAds.filter(ad => ad.pris).reduce((sum, ad) => sum + ad.pris!, 0) / handlareMomsAds.filter(ad => ad.pris).length)
+        : 0
     },
-    privatbil: {
-      count: momsbilFalseCount,
-      avgPrice: momsbilFalsePrices.length > 0 ? Math.round(momsbilFalsePrices.reduce((a, b) => a + b, 0) / momsbilFalsePrices.length) : 0
+    handlareUtanMoms: {
+      count: handlareUtanMomsAds.length,
+      avgPrice: handlareUtanMomsAds.filter(ad => ad.pris).length > 0
+        ? Math.round(handlareUtanMomsAds.filter(ad => ad.pris).reduce((sum, ad) => sum + ad.pris!, 0) / handlareUtanMomsAds.filter(ad => ad.pris).length)
+        : 0
     },
-    okant: {
-      count: momsbilNullCount,
-      avgPrice: momsbilNullPrices.length > 0 ? Math.round(momsbilNullPrices.reduce((a, b) => a + b, 0) / momsbilNullPrices.length) : 0
+    privat: {
+      count: privatAds.length,
+      avgPrice: privatAds.filter(ad => ad.pris).length > 0
+        ? Math.round(privatAds.filter(ad => ad.pris).reduce((sum, ad) => sum + ad.pris!, 0) / privatAds.filter(ad => ad.pris).length)
+        : 0
     }
   }
 
@@ -533,7 +537,7 @@ export default async function BlocketMarknadPage() {
           colorStats={colorStats}
           gearboxStats={gearboxStats}
           saleSpeedStats={saleSpeedStats}
-          momsbilStats={momsbilStats}
+          sellerMomsStats={sellerMomsStats}
           marketHealth={{
             marketGrowth,
             avgDaysOnMarket: avgDaysOnMarketTotal,

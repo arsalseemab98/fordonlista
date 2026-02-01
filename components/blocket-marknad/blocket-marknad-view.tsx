@@ -146,10 +146,10 @@ interface SaleSpeedStats {
   percentage: number
 }
 
-interface MomsbilStats {
-  momsbil: { count: number; avgPrice: number }
-  privatbil: { count: number; avgPrice: number }
-  okant: { count: number; avgPrice: number }
+interface SellerMomsStats {
+  handlareMoms: { count: number; avgPrice: number }
+  handlareUtanMoms: { count: number; avgPrice: number }
+  privat: { count: number; avgPrice: number }
 }
 
 interface MarketHealth {
@@ -172,7 +172,7 @@ interface BlocketMarknadViewProps {
   colorStats: ColorStats[]
   gearboxStats: GearboxStats[]
   saleSpeedStats: SaleSpeedStats[]
-  momsbilStats: MomsbilStats
+  sellerMomsStats: SellerMomsStats
   marketHealth: MarketHealth
 }
 
@@ -191,7 +191,7 @@ export function BlocketMarknadView({
   colorStats,
   gearboxStats,
   saleSpeedStats,
-  momsbilStats,
+  sellerMomsStats,
   marketHealth
 }: BlocketMarknadViewProps) {
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null)
@@ -675,54 +675,53 @@ export function BlocketMarknadView({
             </CardContent>
           </Card>
 
-          {/* Momsbil info - Om data finns */}
-          {(momsbilStats.momsbil.count > 0 || momsbilStats.privatbil.count > 0 || momsbilStats.okant.count > 0) && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="w-5 h-5 text-green-500" />
-                  Momsuppgifter
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Momsbil = Företag kan dra av momsen (25%). Många annonser saknar denna uppgift.
+          {/* Säljare & Moms - uppdelat på handlare med/utan moms + privat */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="w-5 h-5 text-green-500" />
+                Säljare & Momsuppgifter
+              </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Uppdelat på bilhandlare (med/utan moms) och privatpersoner
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="p-4 bg-green-50 rounded-lg text-center">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <Building2 className="w-4 h-4 text-green-600" />
+                    <p className="text-sm text-green-700 font-medium">Handlare med moms</p>
+                  </div>
+                  <p className="text-2xl font-bold text-green-600">{sellerMomsStats.handlareMoms.count.toLocaleString()}</p>
+                  <p className="text-sm text-green-600">Snitt: {formatPrice(sellerMomsStats.handlareMoms.avgPrice)}</p>
+                </div>
+                <div className="p-4 bg-blue-50 rounded-lg text-center">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <Building2 className="w-4 h-4 text-blue-600" />
+                    <p className="text-sm text-blue-700 font-medium">Handlare utan moms</p>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-600">{sellerMomsStats.handlareUtanMoms.count.toLocaleString()}</p>
+                  <p className="text-sm text-blue-600">Snitt: {formatPrice(sellerMomsStats.handlareUtanMoms.avgPrice)}</p>
+                </div>
+                <div className="p-4 bg-teal-50 rounded-lg text-center">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <UserCircle className="w-4 h-4 text-teal-600" />
+                    <p className="text-sm text-teal-700 font-medium">Privatpersoner</p>
+                  </div>
+                  <p className="text-2xl font-bold text-teal-600">{sellerMomsStats.privat.count.toLocaleString()}</p>
+                  <p className="text-sm text-teal-600">Snitt: {formatPrice(sellerMomsStats.privat.avgPrice)}</p>
+                </div>
+              </div>
+              <div className="mt-4 p-3 bg-yellow-50 rounded-lg flex items-start gap-2">
+                <Lightbulb className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
+                <p className="text-sm text-yellow-800">
+                  <strong>Tips!</strong> Momsbilar (25% avdrag) är ofta nyare tjänstebilar med lägre mil.
+                  Handlare utan moms säljer ofta begagnade bilar från inbyten.
                 </p>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="p-4 bg-green-50 rounded-lg text-center">
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <Building2 className="w-4 h-4 text-green-600" />
-                      <p className="text-sm text-green-700 font-medium">Momsbil</p>
-                    </div>
-                    <p className="text-2xl font-bold text-green-600">{momsbilStats.momsbil.count.toLocaleString()}</p>
-                    <p className="text-sm text-green-600">Snitt: {formatPrice(momsbilStats.momsbil.avgPrice)}</p>
-                  </div>
-                  <div className="p-4 bg-blue-50 rounded-lg text-center">
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <UserCircle className="w-4 h-4 text-blue-600" />
-                      <p className="text-sm text-blue-700 font-medium">Ej momsbil</p>
-                    </div>
-                    <p className="text-2xl font-bold text-blue-600">{momsbilStats.privatbil.count.toLocaleString()}</p>
-                    <p className="text-sm text-blue-600">Snitt: {formatPrice(momsbilStats.privatbil.avgPrice)}</p>
-                  </div>
-                  <div className="p-4 bg-gray-50 rounded-lg text-center">
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <HelpCircle className="w-4 h-4 text-gray-500" />
-                      <p className="text-sm text-gray-600 font-medium">Ej angivet</p>
-                    </div>
-                    <p className="text-2xl font-bold text-gray-500">{momsbilStats.okant.count.toLocaleString()}</p>
-                    <p className="text-sm text-gray-500">Snitt: {formatPrice(momsbilStats.okant.avgPrice)}</p>
-                  </div>
-                </div>
-                <div className="mt-4 p-3 bg-yellow-50 rounded-lg flex items-start gap-2">
-                  <Lightbulb className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
-                  <p className="text-sm text-yellow-800">
-                    <strong>Tips!</strong> Momsbilar är ofta nyare tjänstebilar. Många handlare anger inte momsstatus.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Enkel sammanfattning */}
           <Card className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
