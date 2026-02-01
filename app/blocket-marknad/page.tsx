@@ -402,31 +402,71 @@ export default async function BlocketMarknadPage() {
     s.percentage = totalSold2 > 0 ? Math.round((s.count / totalSold2) * 100) : 0
   })
 
-  // Seller + Moms statistics - breakdown by seller type and VAT status
-  // Bilhandlare med moms
-  const handlareMomsAds = allActiveAds?.filter(ad => ad.saljare_typ === 'handlare' && ad.momsbil === true) || []
-  // Bilhandlare utan moms (momsbil = false OR null)
-  const handlareUtanMomsAds = allActiveAds?.filter(ad => ad.saljare_typ === 'handlare' && ad.momsbil !== true) || []
+  // Seller + Moms statistics - query database directly for each category
+
+  // Handlare med moms (momsbil = true)
+  const { count: handlareMomsCount } = await supabase
+    .from('blocket_annonser')
+    .select('*', { count: 'exact', head: true })
+    .eq('saljare_typ', 'handlare')
+    .eq('momsbil', true)
+    .is('borttagen', null)
+
+  const { data: handlareMomsPrices } = await supabase
+    .from('blocket_annonser')
+    .select('pris')
+    .eq('saljare_typ', 'handlare')
+    .eq('momsbil', true)
+    .is('borttagen', null)
+    .not('pris', 'is', null)
+
+  // Handlare utan moms (momsbil = false OR momsbil IS NULL)
+  const { count: handlareUtanMomsCount } = await supabase
+    .from('blocket_annonser')
+    .select('*', { count: 'exact', head: true })
+    .eq('saljare_typ', 'handlare')
+    .neq('momsbil', true)
+    .is('borttagen', null)
+
+  const { data: handlareUtanMomsPrices } = await supabase
+    .from('blocket_annonser')
+    .select('pris')
+    .eq('saljare_typ', 'handlare')
+    .neq('momsbil', true)
+    .is('borttagen', null)
+    .not('pris', 'is', null)
+
   // Privatpersoner
-  const privatAds = allActiveAds?.filter(ad => ad.saljare_typ === 'privat') || []
+  const { count: privatCount2 } = await supabase
+    .from('blocket_annonser')
+    .select('*', { count: 'exact', head: true })
+    .eq('saljare_typ', 'privat')
+    .is('borttagen', null)
+
+  const { data: privatPrices } = await supabase
+    .from('blocket_annonser')
+    .select('pris')
+    .eq('saljare_typ', 'privat')
+    .is('borttagen', null)
+    .not('pris', 'is', null)
 
   const sellerMomsStats = {
     handlareMoms: {
-      count: handlareMomsAds.length,
-      avgPrice: handlareMomsAds.filter(ad => ad.pris).length > 0
-        ? Math.round(handlareMomsAds.filter(ad => ad.pris).reduce((sum, ad) => sum + ad.pris!, 0) / handlareMomsAds.filter(ad => ad.pris).length)
+      count: handlareMomsCount || 0,
+      avgPrice: handlareMomsPrices && handlareMomsPrices.length > 0
+        ? Math.round(handlareMomsPrices.reduce((sum, ad) => sum + (ad.pris || 0), 0) / handlareMomsPrices.length)
         : 0
     },
     handlareUtanMoms: {
-      count: handlareUtanMomsAds.length,
-      avgPrice: handlareUtanMomsAds.filter(ad => ad.pris).length > 0
-        ? Math.round(handlareUtanMomsAds.filter(ad => ad.pris).reduce((sum, ad) => sum + ad.pris!, 0) / handlareUtanMomsAds.filter(ad => ad.pris).length)
+      count: handlareUtanMomsCount || 0,
+      avgPrice: handlareUtanMomsPrices && handlareUtanMomsPrices.length > 0
+        ? Math.round(handlareUtanMomsPrices.reduce((sum, ad) => sum + (ad.pris || 0), 0) / handlareUtanMomsPrices.length)
         : 0
     },
     privat: {
-      count: privatAds.length,
-      avgPrice: privatAds.filter(ad => ad.pris).length > 0
-        ? Math.round(privatAds.filter(ad => ad.pris).reduce((sum, ad) => sum + ad.pris!, 0) / privatAds.filter(ad => ad.pris).length)
+      count: privatCount2 || 0,
+      avgPrice: privatPrices && privatPrices.length > 0
+        ? Math.round(privatPrices.reduce((sum, ad) => sum + (ad.pris || 0), 0) / privatPrices.length)
         : 0
     }
   }
