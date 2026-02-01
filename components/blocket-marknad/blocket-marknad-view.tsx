@@ -33,7 +33,21 @@ import {
   Settings2,
   Timer,
   TrendingDown,
-  Sparkles
+  Sparkles,
+  CheckCircle2,
+  Database,
+  Rocket,
+  Gauge,
+  Turtle,
+  ThumbsUp,
+  Building2,
+  UserCircle,
+  Circle,
+  Lightbulb,
+  Trophy,
+  ArrowUp,
+  ArrowDown,
+  Package
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { useState } from 'react'
@@ -349,11 +363,14 @@ export function BlocketMarknadView({
             <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
               <CardContent className="pt-6">
                 <div className="text-center">
-                  <div className="text-4xl mb-2">🚗</div>
+                  <div className="w-12 h-12 mx-auto mb-2 bg-green-100 rounded-full flex items-center justify-center">
+                    <Car className="w-6 h-6 text-green-600" />
+                  </div>
                   <p className="text-sm text-green-700 font-medium">Bilar till salu just nu</p>
                   <p className="text-3xl font-bold text-green-600">{totals.activeAds.toLocaleString()}</p>
-                  <p className="text-xs text-green-600 mt-1">
-                    {marketHealth.marketGrowth >= 0 ? '📈' : '📉'} {marketHealth.marketGrowth >= 0 ? '+' : ''}{marketHealth.marketGrowth} från förra månaden
+                  <p className="text-xs text-green-600 mt-1 flex items-center justify-center gap-1">
+                    {marketHealth.marketGrowth >= 0 ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
+                    {marketHealth.marketGrowth >= 0 ? '+' : ''}{marketHealth.marketGrowth} från förra månaden
                   </p>
                 </div>
               </CardContent>
@@ -362,7 +379,9 @@ export function BlocketMarknadView({
             <Card className="bg-gradient-to-br from-blue-50 to-sky-50 border-blue-200">
               <CardContent className="pt-6">
                 <div className="text-center">
-                  <div className="text-4xl mb-2">✅</div>
+                  <div className="w-12 h-12 mx-auto mb-2 bg-blue-100 rounded-full flex items-center justify-center">
+                    <CheckCircle2 className="w-6 h-6 text-blue-600" />
+                  </div>
                   <p className="text-sm text-blue-700 font-medium">Bilar som sålts</p>
                   <p className="text-3xl font-bold text-blue-600">{totals.soldAds.toLocaleString()}</p>
                   <p className="text-xs text-blue-600 mt-1">Sedan februari 2026</p>
@@ -373,11 +392,13 @@ export function BlocketMarknadView({
             <Card className="bg-gradient-to-br from-amber-50 to-yellow-50 border-amber-200">
               <CardContent className="pt-6">
                 <div className="text-center">
-                  <div className="text-4xl mb-2">⏱️</div>
+                  <div className="w-12 h-12 mx-auto mb-2 bg-amber-100 rounded-full flex items-center justify-center">
+                    <Timer className="w-6 h-6 text-amber-600" />
+                  </div>
                   <p className="text-sm text-amber-700 font-medium">Dagar att sälja (snitt)</p>
                   <p className="text-3xl font-bold text-amber-600">{marketHealth.avgDaysOnMarket}</p>
-                  <p className="text-xs text-amber-600 mt-1">
-                    {marketHealth.avgDaysOnMarket < 30 ? '🚀 Snabb marknad!' : marketHealth.avgDaysOnMarket < 60 ? '👍 Normal hastighet' : '🐢 Långsam marknad'}
+                  <p className="text-xs text-amber-600 mt-1 flex items-center justify-center gap-1">
+                    {marketHealth.avgDaysOnMarket < 30 ? <><Rocket className="w-3 h-3" /> Snabb marknad!</> : marketHealth.avgDaysOnMarket < 60 ? <><ThumbsUp className="w-3 h-3" /> Normal hastighet</> : <><Turtle className="w-3 h-3" /> Långsam marknad</>}
                   </p>
                 </div>
               </CardContent>
@@ -386,7 +407,9 @@ export function BlocketMarknadView({
             <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200">
               <CardContent className="pt-6">
                 <div className="text-center">
-                  <div className="text-4xl mb-2">📊</div>
+                  <div className="w-12 h-12 mx-auto mb-2 bg-purple-100 rounded-full flex items-center justify-center">
+                    <Database className="w-6 h-6 text-purple-600" />
+                  </div>
                   <p className="text-sm text-purple-700 font-medium">Data vi följer</p>
                   <p className="text-3xl font-bold text-purple-600">{marketHealth.totalAdsTracked.toLocaleString()}</p>
                   <p className="text-xs text-purple-600 mt-1">Annonser totalt analyserade</p>
@@ -400,7 +423,7 @@ export function BlocketMarknadView({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Zap className="w-5 h-5 text-yellow-500" />
-                Hur snabbt säljs bilar? ⚡
+                Hur snabbt säljs bilar?
               </CardTitle>
               <p className="text-sm text-muted-foreground">
                 Visar hur lång tid det tar innan en bil blir såld
@@ -409,13 +432,15 @@ export function BlocketMarknadView({
             <CardContent>
               <div className="space-y-4">
                 {saleSpeedStats.map((stat, index) => {
-                  const emoji = index === 0 ? '🚀' : index === 1 ? '⚡' : index === 2 ? '👍' : index === 3 ? '🐢' : '🦥'
+                  const IconComponent = index === 0 ? Rocket : index === 1 ? Zap : index === 2 ? ThumbsUp : index === 3 ? Gauge : Turtle
+                  const iconColor = index === 0 ? 'text-green-600' : index === 1 ? 'text-emerald-500' : index === 2 ? 'text-yellow-600' : index === 3 ? 'text-orange-500' : 'text-red-500'
                   const bgColor = index === 0 ? 'bg-green-500' : index === 1 ? 'bg-emerald-400' : index === 2 ? 'bg-yellow-400' : index === 3 ? 'bg-orange-400' : 'bg-red-400'
                   return (
                     <div key={stat.category} className="space-y-1">
                       <div className="flex justify-between items-center">
                         <span className="text-sm font-medium flex items-center gap-2">
-                          {emoji} {stat.category}
+                          <IconComponent className={`w-4 h-4 ${iconColor}`} />
+                          {stat.category}
                         </span>
                         <span className="text-sm text-muted-foreground">
                           {stat.count} bilar ({stat.percentage}%)
@@ -435,9 +460,10 @@ export function BlocketMarknadView({
                   )
                 })}
               </div>
-              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+              <div className="mt-4 p-3 bg-blue-50 rounded-lg flex items-start gap-2">
+                <Lightbulb className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
                 <p className="text-sm text-blue-700">
-                  💡 <strong>Vad betyder detta?</strong> Om en bil säljs på 0-7 dagar är den supersnabb!
+                  <strong>Vad betyder detta?</strong> Om en bil säljs på 0-7 dagar är den supersnabb!
                   De flesta bilar säljs inom 30 dagar om priset är rätt.
                 </p>
               </div>
@@ -451,7 +477,7 @@ export function BlocketMarknadView({
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Calendar className="w-5 h-5 text-blue-500" />
-                  Hur gamla är bilarna? 📅
+                  Hur gamla är bilarna?
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">Årsmodell på bilar till salu</p>
               </CardHeader>
@@ -489,7 +515,7 @@ export function BlocketMarknadView({
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Car className="w-5 h-5 text-indigo-500" />
-                  Vilken typ av bil? 🚙
+                  Vilken typ av bil?
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">SUV, Sedan, Kombi och andra</p>
               </CardHeader>
@@ -509,9 +535,10 @@ export function BlocketMarknadView({
                     <Bar dataKey="count" fill="#6366f1" radius={[0, 4, 4, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
-                <div className="mt-4 p-3 bg-indigo-50 rounded-lg">
+                <div className="mt-4 p-3 bg-indigo-50 rounded-lg flex items-center gap-2">
+                  <Trophy className="w-4 h-4 text-indigo-600" />
                   <p className="text-sm text-indigo-700">
-                    🏆 <strong>{bodyTypeStats[0]?.bodyType || 'SUV'}</strong> är mest populär med {bodyTypeStats[0]?.count || 0} bilar!
+                    <strong>{bodyTypeStats[0]?.bodyType || 'SUV'}</strong> är mest populär med {bodyTypeStats[0]?.count || 0} bilar!
                   </p>
                 </div>
               </CardContent>
@@ -525,7 +552,7 @@ export function BlocketMarknadView({
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Palette className="w-5 h-5 text-pink-500" />
-                  Vilken färg är populärast? 🎨
+                  Vilken färg är populärast?
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -533,16 +560,19 @@ export function BlocketMarknadView({
                   {colorStats.slice(0, 8).map((color, index) => {
                     const totalColors = colorStats.reduce((sum, c) => sum + c.count, 0)
                     const percentage = totalColors > 0 ? Math.round((color.count / totalColors) * 100) : 0
-                    const colorEmoji = color.color.toLowerCase().includes('svart') ? '⚫' :
-                                       color.color.toLowerCase().includes('vit') ? '⚪' :
-                                       color.color.toLowerCase().includes('grå') || color.color.toLowerCase().includes('silver') ? '🔘' :
-                                       color.color.toLowerCase().includes('blå') ? '🔵' :
-                                       color.color.toLowerCase().includes('röd') ? '🔴' :
-                                       color.color.toLowerCase().includes('grön') ? '🟢' :
-                                       color.color.toLowerCase().includes('gul') ? '🟡' : '🟤'
+                    const colorHex = color.color.toLowerCase().includes('svart') ? '#1f2937' :
+                                     color.color.toLowerCase().includes('vit') ? '#f3f4f6' :
+                                     color.color.toLowerCase().includes('grå') || color.color.toLowerCase().includes('silver') ? '#9ca3af' :
+                                     color.color.toLowerCase().includes('blå') ? '#3b82f6' :
+                                     color.color.toLowerCase().includes('röd') ? '#ef4444' :
+                                     color.color.toLowerCase().includes('grön') ? '#22c55e' :
+                                     color.color.toLowerCase().includes('gul') ? '#eab308' : '#a16207'
                     return (
                       <div key={color.color} className="flex items-center gap-3">
-                        <span className="text-xl">{colorEmoji}</span>
+                        <div
+                          className="w-6 h-6 rounded-full border-2 border-gray-200 flex-shrink-0"
+                          style={{ backgroundColor: colorHex }}
+                        />
                         <div className="flex-1">
                           <div className="flex justify-between">
                             <span className="text-sm font-medium">{color.color}</span>
@@ -559,9 +589,10 @@ export function BlocketMarknadView({
                     )
                   })}
                 </div>
-                <div className="mt-4 p-3 bg-pink-50 rounded-lg">
+                <div className="mt-4 p-3 bg-pink-50 rounded-lg flex items-start gap-2">
+                  <Lightbulb className="w-4 h-4 text-pink-600 mt-0.5 flex-shrink-0" />
                   <p className="text-sm text-pink-700">
-                    💡 <strong>{colorStats[0]?.color || 'Svart'}</strong> säljs på {colorStats[0]?.avgDaysOnMarket || 0} dagar i snitt
+                    <strong>{colorStats[0]?.color || 'Svart'}</strong> säljs på {colorStats[0]?.avgDaysOnMarket || 0} dagar i snitt
                   </p>
                 </div>
               </CardContent>
@@ -572,7 +603,7 @@ export function BlocketMarknadView({
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Settings2 className="w-5 h-5 text-gray-600" />
-                  Automat eller Manuell? ⚙️
+                  Automat eller Manuell?
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -584,7 +615,9 @@ export function BlocketMarknadView({
                       <div key={g.gearbox} className="text-center">
                         <div className={`w-32 h-32 rounded-full flex items-center justify-center ${index === 0 ? 'bg-blue-100' : 'bg-gray-100'}`}>
                           <div>
-                            <p className="text-4xl">{g.gearbox === 'Automat' ? '🅰️' : 'Ⓜ️'}</p>
+                            <span className={`text-3xl font-bold ${index === 0 ? 'text-blue-600' : 'text-gray-600'}`}>
+                              {g.gearbox === 'Automat' ? 'A' : 'M'}
+                            </span>
                             <p className="text-2xl font-bold mt-2">{percentage}%</p>
                           </div>
                         </div>
@@ -595,9 +628,10 @@ export function BlocketMarknadView({
                     )
                   })}
                 </div>
-                <div className="p-3 bg-gray-50 rounded-lg">
+                <div className="p-3 bg-gray-50 rounded-lg flex items-start gap-2">
+                  <Lightbulb className="w-4 h-4 text-gray-600 mt-0.5 flex-shrink-0" />
                   <p className="text-sm text-gray-700">
-                    💡 <strong>Tips!</strong> {gearboxStats[0]?.gearbox === 'Automat' ? 'Automat är vanligast - folk gillar bekvämlighet!' : 'Manuell är vanligast - kanske för lägre pris?'}
+                    <strong>Tips!</strong> {gearboxStats[0]?.gearbox === 'Automat' ? 'Automat är vanligast - folk gillar bekvämlighet!' : 'Manuell är vanligast - kanske för lägre pris?'}
                   </p>
                 </div>
               </CardContent>
@@ -609,14 +643,16 @@ export function BlocketMarknadView({
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Store className="w-5 h-5 text-blue-500" />
-                Vem säljer bilarna? 🏪
+                Vem säljer bilarna?
               </CardTitle>
               <p className="text-sm text-muted-foreground">Bilhandlare vs Privatpersoner</p>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-6">
                 <div className="text-center p-6 bg-blue-50 rounded-xl">
-                  <div className="text-5xl mb-3">🏢</div>
+                  <div className="w-16 h-16 mx-auto mb-3 bg-blue-100 rounded-full flex items-center justify-center">
+                    <Building2 className="w-8 h-8 text-blue-600" />
+                  </div>
                   <p className="text-lg font-bold text-blue-700">Bilhandlare</p>
                   <p className="text-4xl font-bold text-blue-600 my-2">{totals.dealerAds.toLocaleString()}</p>
                   <p className="text-sm text-blue-600">
@@ -624,7 +660,9 @@ export function BlocketMarknadView({
                   </p>
                 </div>
                 <div className="text-center p-6 bg-teal-50 rounded-xl">
-                  <div className="text-5xl mb-3">👤</div>
+                  <div className="w-16 h-16 mx-auto mb-3 bg-teal-100 rounded-full flex items-center justify-center">
+                    <UserCircle className="w-8 h-8 text-teal-600" />
+                  </div>
                   <p className="text-lg font-bold text-teal-700">Privatpersoner</p>
                   <p className="text-4xl font-bold text-teal-600 my-2">{totals.privateAds.toLocaleString()}</p>
                   <p className="text-sm text-teal-600">
@@ -641,7 +679,7 @@ export function BlocketMarknadView({
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <DollarSign className="w-5 h-5 text-green-500" />
-                  Momsbil vs Privatköpt 💰
+                  Momsbil vs Privatköpt
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">
                   Momsbil = Företag kan dra av momsen (25%)
@@ -650,19 +688,26 @@ export function BlocketMarknadView({
               <CardContent>
                 <div className="grid grid-cols-2 gap-6">
                   <div className="p-4 bg-green-50 rounded-lg text-center">
-                    <p className="text-sm text-green-700 font-medium mb-2">Momsbil 🏢</p>
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <Building2 className="w-4 h-4 text-green-600" />
+                      <p className="text-sm text-green-700 font-medium">Momsbil</p>
+                    </div>
                     <p className="text-2xl font-bold text-green-600">{momsbilStats.momsbil.count.toLocaleString()}</p>
                     <p className="text-sm text-green-600">Snitt: {formatPrice(momsbilStats.momsbil.avgPrice)}</p>
                   </div>
                   <div className="p-4 bg-gray-50 rounded-lg text-center">
-                    <p className="text-sm text-gray-700 font-medium mb-2">Privatköpt 👤</p>
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <UserCircle className="w-4 h-4 text-gray-600" />
+                      <p className="text-sm text-gray-700 font-medium">Privatköpt</p>
+                    </div>
                     <p className="text-2xl font-bold text-gray-600">{momsbilStats.privatbil.count.toLocaleString()}</p>
                     <p className="text-sm text-gray-600">Snitt: {formatPrice(momsbilStats.privatbil.avgPrice)}</p>
                   </div>
                 </div>
-                <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
+                <div className="mt-4 p-3 bg-yellow-50 rounded-lg flex items-start gap-2">
+                  <Lightbulb className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
                   <p className="text-sm text-yellow-800">
-                    💡 <strong>Tips!</strong> Momsbilar är ofta dyrare men har ofta lägre mil och är nyare -
+                    <strong>Tips!</strong> Momsbilar är ofta dyrare men har ofta lägre mil och är nyare -
                     de har mest använts av företag som tjänstebilar.
                   </p>
                 </div>
