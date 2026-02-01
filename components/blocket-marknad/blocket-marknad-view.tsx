@@ -226,7 +226,102 @@ export function BlocketMarknadView({
         </Card>
       </div>
 
-      {/* Main Charts Row */}
+      {/* Main Overview Chart - Full Width */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="w-5 h-5" />
+            Marknadsöversikt - Upplagda, Sålda & Aktiva annonser
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={400}>
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis dataKey="monthLabel" tick={{ fontSize: 12 }} />
+              <YAxis
+                yAxisId="left"
+                tick={{ fontSize: 12 }}
+                label={{ value: 'Nya/Sålda', angle: -90, position: 'insideLeft', fontSize: 12 }}
+              />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                tick={{ fontSize: 12 }}
+                label={{ value: 'Totalt aktiva', angle: 90, position: 'insideRight', fontSize: 12 }}
+              />
+              <Tooltip
+                contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                formatter={(value, name) => {
+                  const labels: Record<string, string> = {
+                    newAds: 'Upplagda',
+                    soldAds: 'Sålda',
+                    activeAds: 'Aktiva totalt'
+                  }
+                  return [Number(value).toLocaleString(), labels[name as string] || name]
+                }}
+                labelFormatter={(label) => chartData.find(d => d.monthLabel === label)?.monthFull || String(label)}
+              />
+              <Legend
+                formatter={(value) => {
+                  const labels: Record<string, string> = {
+                    newAds: '📈 Upplagda (nya)',
+                    soldAds: '📉 Sålda/borttagna',
+                    activeAds: '📊 Aktiva totalt'
+                  }
+                  return labels[value] || value
+                }}
+              />
+              <Line
+                yAxisId="left"
+                type="monotone"
+                dataKey="newAds"
+                stroke="#10b981"
+                strokeWidth={3}
+                dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
+                activeDot={{ r: 8 }}
+              />
+              <Line
+                yAxisId="left"
+                type="monotone"
+                dataKey="soldAds"
+                stroke="#f97316"
+                strokeWidth={3}
+                dot={{ fill: '#f97316', strokeWidth: 2, r: 4 }}
+                activeDot={{ r: 8 }}
+              />
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="activeAds"
+                stroke="#3b82f6"
+                strokeWidth={3}
+                dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
+                activeDot={{ r: 8 }}
+                strokeDasharray="5 5"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+          <div className="mt-4 grid grid-cols-3 gap-4 text-center">
+            <div className="p-3 bg-green-50 rounded-lg">
+              <p className="text-sm text-green-700 font-medium">Senaste månadens upplagda</p>
+              <p className="text-2xl font-bold text-green-600">+{chartData[chartData.length - 1]?.newAds || 0}</p>
+            </div>
+            <div className="p-3 bg-orange-50 rounded-lg">
+              <p className="text-sm text-orange-700 font-medium">Senaste månadens sålda</p>
+              <p className="text-2xl font-bold text-orange-600">-{chartData[chartData.length - 1]?.soldAds || 0}</p>
+            </div>
+            <div className="p-3 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-700 font-medium">Netto (upplagda - sålda)</p>
+              <p className={`text-2xl font-bold ${(chartData[chartData.length - 1]?.net || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {(chartData[chartData.length - 1]?.net || 0) >= 0 ? '+' : ''}{chartData[chartData.length - 1]?.net || 0}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Secondary Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* New vs Sold Line Chart */}
         <Card>
