@@ -123,22 +123,10 @@ export default async function BlocketLogsPage() {
     .from('biluppgifter_data')
     .select('*', { count: 'exact', head: true })
 
-  // Senast hämtade (med detaljer)
+  // Senast hämtade (med alla detaljer)
   const { data: recentBiluppgifter } = await supabase
     .from('biluppgifter_data')
-    .select(`
-      id,
-      regnummer,
-      mileage_mil,
-      num_owners,
-      annual_tax,
-      inspection_until,
-      owner_name,
-      owner_city,
-      owner_phone,
-      fetched_at,
-      blocket_id
-    `)
+    .select('*')
     .order('fetched_at', { ascending: false })
     .limit(20)
 

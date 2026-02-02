@@ -109,15 +109,29 @@ interface Stats {
 interface RecentBiluppgifter {
   id: number
   regnummer: string
+  blocket_id: number | null
+  // Fordonsdata
+  mileage_km: number | null
   mileage_mil: number | null
   num_owners: number | null
   annual_tax: number | null
   inspection_until: string | null
+  // Ägardata
   owner_name: string | null
+  owner_age: number | null
   owner_city: string | null
+  owner_address: string | null
+  owner_postal_code: string | null
+  owner_postal_city: string | null
   owner_phone: string | null
+  // Relaterade fordon (JSONB arrays)
+  owner_vehicles: Array<{ regnr: string; description: string }> | null
+  address_vehicles: Array<{ regnr: string; description: string }> | null
+  // Historik (JSONB arrays)
+  mileage_history: Array<{ date: string; mileage_km: number; mileage_mil: number }> | null
+  owner_history: Array<{ date: string; type: string; name?: string }> | null
+  // Metadata
   fetched_at: string | null
-  blocket_id: number | null
 }
 
 interface BiluppgifterStats {
@@ -973,13 +987,13 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
             </CardContent>
           </Card>
 
-          {/* Recent Fetches Table */}
+          {/* Recent Fetches - Detailed Cards */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
                 <span className="flex items-center gap-2">
                   <FileSearch className="w-5 h-5 text-blue-600" />
-                  Senaste hämtningar
+                  Senaste hämtningar - All data
                 </span>
                 <Badge className="bg-blue-100 text-blue-800">{biluppgifterStats.recentFetches.length} st</Badge>
               </CardTitle>
@@ -988,104 +1002,171 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
               {biluppgifterStats.recentFetches.length === 0 ? (
                 <p className="text-muted-foreground text-center py-8">Inga biluppgifter hämtade ännu</p>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Regnummer</TableHead>
-                      <TableHead>Ägare</TableHead>
-                      <TableHead>Ort</TableHead>
-                      <TableHead>Telefon</TableHead>
-                      <TableHead className="text-right">Miltal</TableHead>
-                      <TableHead className="text-right">Ägare</TableHead>
-                      <TableHead className="text-right">Skatt</TableHead>
-                      <TableHead>Besiktning</TableHead>
-                      <TableHead>Hämtad</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {biluppgifterStats.recentFetches.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-mono font-semibold">{item.regnummer}</TableCell>
-                        <TableCell>
-                          {item.owner_name ? (
-                            <div className="flex items-center gap-1">
-                              <Users className="w-3 h-3 text-gray-400" />
-                              <span className="max-w-[150px] truncate">{item.owner_name}</span>
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {item.owner_city ? (
-                            <div className="flex items-center gap-1">
-                              <Home className="w-3 h-3 text-gray-400" />
-                              <span>{item.owner_city}</span>
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {item.owner_phone ? (
-                            <div className="flex items-center gap-1">
-                              <Phone className="w-3 h-3 text-gray-400" />
-                              <span className="font-mono text-sm">{item.owner_phone}</span>
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {item.mileage_mil ? (
-                            <span className="font-medium">{item.mileage_mil.toLocaleString()} mil</span>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {item.num_owners ? (
-                            <Badge variant="outline">{item.num_owners} st</Badge>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {item.annual_tax ? (
-                            <span>{item.annual_tax.toLocaleString()} kr</span>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {item.inspection_until ? (
-                            <Badge
-                              variant="outline"
-                              className={
-                                new Date(item.inspection_until) < new Date()
-                                  ? 'bg-red-50 text-red-700 border-red-200'
-                                  : 'bg-green-50 text-green-700 border-green-200'
-                              }
-                            >
-                              {new Date(item.inspection_until).toLocaleDateString('sv-SE')}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {item.fetched_at ? (
+                <div className="space-y-4">
+                  {biluppgifterStats.recentFetches.map((item) => (
+                    <div key={item.id} className="border rounded-lg p-4 bg-gray-50 hover:bg-gray-100 transition-colors">
+                      {/* Header row */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono font-bold text-lg bg-blue-100 text-blue-800 px-3 py-1 rounded">
+                            {item.regnummer}
+                          </span>
+                          {item.fetched_at && (
                             <span className="text-xs text-muted-foreground">
-                              {formatTimeAgo(item.fetched_at)}
+                              Hämtad {formatTimeAgo(item.fetched_at)}
                             </span>
-                          ) : (
-                            <span className="text-muted-foreground">-</span>
                           )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                        </div>
+                        {item.blocket_id && (
+                          <Badge variant="outline" className="text-xs">
+                            Blocket #{item.blocket_id}
+                          </Badge>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Fordonsdata */}
+                        <div className="space-y-2">
+                          <h4 className="font-semibold text-sm text-gray-700 flex items-center gap-1">
+                            <Car className="w-4 h-4" /> Fordonsdata
+                          </h4>
+                          <div className="text-sm space-y-1 bg-white p-2 rounded border">
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">Mätarställning:</span>
+                              <span className="font-medium">
+                                {item.mileage_mil ? `${item.mileage_mil.toLocaleString()} mil` : '-'}
+                                {item.mileage_km && <span className="text-gray-400 text-xs ml-1">({item.mileage_km.toLocaleString()} km)</span>}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">Antal ägare:</span>
+                              <span className="font-medium">{item.num_owners ?? '-'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">Årsskatt:</span>
+                              <span className="font-medium">{item.annual_tax ? `${item.annual_tax.toLocaleString()} kr` : '-'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">Besiktning:</span>
+                              {item.inspection_until ? (
+                                <Badge
+                                  variant="outline"
+                                  className={`text-xs ${
+                                    new Date(item.inspection_until) < new Date()
+                                      ? 'bg-red-50 text-red-700 border-red-200'
+                                      : 'bg-green-50 text-green-700 border-green-200'
+                                  }`}
+                                >
+                                  {new Date(item.inspection_until).toLocaleDateString('sv-SE')}
+                                </Badge>
+                              ) : (
+                                <span>-</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Ägardata */}
+                        <div className="space-y-2">
+                          <h4 className="font-semibold text-sm text-gray-700 flex items-center gap-1">
+                            <Users className="w-4 h-4" /> Ägare
+                          </h4>
+                          <div className="text-sm space-y-1 bg-white p-2 rounded border">
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">Namn:</span>
+                              <span className="font-medium max-w-[150px] truncate">{item.owner_name || '-'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">Ålder:</span>
+                              <span className="font-medium">{item.owner_age ? `${item.owner_age} år` : '-'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">Telefon:</span>
+                              <span className="font-mono text-sm">{item.owner_phone || '-'}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">Ort:</span>
+                              <span className="font-medium">{item.owner_city || '-'}</span>
+                            </div>
+                            {item.owner_address && (
+                              <div className="pt-1 border-t text-xs text-gray-600">
+                                {item.owner_address}
+                                {item.owner_postal_code && `, ${item.owner_postal_code}`}
+                                {item.owner_postal_city && ` ${item.owner_postal_city}`}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Relaterade fordon & Historik */}
+                        <div className="space-y-2">
+                          <h4 className="font-semibold text-sm text-gray-700 flex items-center gap-1">
+                            <Database className="w-4 h-4" /> Extra data
+                          </h4>
+                          <div className="text-sm space-y-1 bg-white p-2 rounded border">
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">Ägarens fordon:</span>
+                              <span className="font-medium">
+                                {item.owner_vehicles?.length ? (
+                                  <Badge variant="outline" className="text-xs">
+                                    {item.owner_vehicles.length} st
+                                  </Badge>
+                                ) : '-'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">Fordon på adress:</span>
+                              <span className="font-medium">
+                                {item.address_vehicles?.length ? (
+                                  <Badge variant="outline" className="text-xs">
+                                    {item.address_vehicles.length} st
+                                  </Badge>
+                                ) : '-'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">Mätarhistorik:</span>
+                              <span className="font-medium">
+                                {item.mileage_history?.length ? (
+                                  <Badge variant="outline" className="text-xs">
+                                    {item.mileage_history.length} avläsningar
+                                  </Badge>
+                                ) : '-'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">Ägarhistorik:</span>
+                              <span className="font-medium">
+                                {item.owner_history?.length ? (
+                                  <Badge variant="outline" className="text-xs">
+                                    {item.owner_history.length} byten
+                                  </Badge>
+                                ) : '-'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Visa ägarens andra fordon om de finns */}
+                          {item.owner_vehicles && item.owner_vehicles.length > 0 && (
+                            <div className="text-xs bg-blue-50 p-2 rounded border border-blue-100">
+                              <span className="font-medium text-blue-700">Ägarens fordon:</span>
+                              <div className="mt-1 space-y-0.5">
+                                {item.owner_vehicles.slice(0, 3).map((v, i) => (
+                                  <div key={i} className="text-blue-600">
+                                    {v.regnr}: {v.description}
+                                  </div>
+                                ))}
+                                {item.owner_vehicles.length > 3 && (
+                                  <div className="text-blue-400">+{item.owner_vehicles.length - 3} till</div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>
