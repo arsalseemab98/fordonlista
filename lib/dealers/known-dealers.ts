@@ -17,7 +17,7 @@ export interface KnownDealer {
  * Normalize dealer name for matching
  * "Norrlands Bil AB" -> "norrlands bil ab"
  */
-export function normalizeNameForMatching(name: string): string {
+function normalizeNameForMatching(name: string): string {
   return name
     .toLowerCase()
     .trim()
@@ -29,7 +29,7 @@ export function normalizeNameForMatching(name: string): string {
  * "Norrlands Bil AB" -> "norrlands bil"
  * "ABC Bilar Handelsbolag" -> "abc bilar"
  */
-export function extractCoreName(name: string): string {
+function extractCoreName(name: string): string {
   const normalized = normalizeNameForMatching(name)
 
   // Remove common suffixes
@@ -53,7 +53,7 @@ export function extractCoreName(name: string): string {
 /**
  * Check if two names likely refer to the same dealer
  */
-export function namesMatch(name1: string, name2: string): boolean {
+function namesMatch(name1: string, name2: string): boolean {
   const core1 = extractCoreName(name1)
   const core2 = extractCoreName(name2)
 
