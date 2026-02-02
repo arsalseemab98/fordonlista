@@ -149,6 +149,16 @@ interface RecentBiluppgifter {
     owner_class?: string  // "company", "person", "unknown"
     details?: string
   }> | null
+  // Blocket ad data (joined)
+  blocket_annonser: {
+    marke: string | null
+    modell: string | null
+    arsmodell: number | null
+    miltal: number | null
+    pris: number | null
+    url: string | null
+    bild_url: string | null
+  } | null
   // Dealer detection
   is_dealer: boolean | null
   // Previous owner (when current is dealer)
@@ -1119,21 +1129,57 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
                     <div key={item.id} className="border rounded-lg p-4 bg-gray-50 hover:bg-gray-100 transition-colors">
                       {/* Header row */}
                       <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 flex-wrap">
                           <span className="font-mono font-bold text-lg bg-blue-100 text-blue-800 px-3 py-1 rounded">
                             {item.regnummer}
                           </span>
+                          {/* Car info from Blocket */}
+                          {item.blocket_annonser && (
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-gray-800">
+                                {item.blocket_annonser.marke} {item.blocket_annonser.modell}
+                              </span>
+                              {item.blocket_annonser.arsmodell && (
+                                <Badge variant="secondary" className="text-xs">
+                                  {item.blocket_annonser.arsmodell}
+                                </Badge>
+                              )}
+                              {item.blocket_annonser.miltal && (
+                                <span className="text-sm text-gray-600">
+                                  {item.blocket_annonser.miltal.toLocaleString()} mil
+                                </span>
+                              )}
+                              {item.blocket_annonser.pris && (
+                                <span className="text-sm font-medium text-green-700">
+                                  {item.blocket_annonser.pris.toLocaleString()} kr
+                                </span>
+                              )}
+                            </div>
+                          )}
                           {item.fetched_at && (
                             <span className="text-xs text-muted-foreground">
                               Hämtad {formatTimeAgo(item.fetched_at)}
                             </span>
                           )}
                         </div>
-                        {item.blocket_id && (
-                          <Badge variant="outline" className="text-xs">
-                            Blocket #{item.blocket_id}
-                          </Badge>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {item.blocket_annonser?.url && (
+                            <a
+                              href={item.blocket_annonser.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              Blocket
+                            </a>
+                          )}
+                          {item.blocket_id && !item.blocket_annonser?.url && (
+                            <Badge variant="outline" className="text-xs">
+                              Blocket #{item.blocket_id}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
