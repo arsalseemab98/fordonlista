@@ -37,6 +37,33 @@ export interface OwnerHistoryEntry {
   type: string
   owner_class: string
   details?: string
+  profile_id?: string
+  profile_url?: string
+}
+
+export interface VehicleEntry {
+  regnr: string
+  model?: string
+  year?: number
+  color?: string
+  status?: string
+  ownership_time?: string
+  description?: string
+}
+
+export interface PreviousOwnerData {
+  name?: string
+  profile_id?: string
+  purchase_date?: string
+  sold_date?: string
+  ownership_duration?: string
+  age?: number
+  city?: string
+  address?: string
+  postal_code?: string
+  postal_city?: string
+  phone?: string
+  vehicles?: VehicleEntry[]
 }
 
 export interface BiluppgifterResult {
@@ -62,12 +89,15 @@ export interface BiluppgifterResult {
   owner_phone?: string
   owner_personnummer?: string
   owner_type?: string
+  is_dealer?: boolean  // True if owner is a car dealer
   // Other vehicles
-  owner_vehicles?: Array<{ regnr: string; description: string }>
-  address_vehicles?: Array<{ regnr: string; description: string; status?: string }>
+  owner_vehicles?: VehicleEntry[]
+  address_vehicles?: VehicleEntry[]
   // History data
   mileage_history?: MileageHistoryEntry[]
   owner_history?: OwnerHistoryEntry[]
+  // Previous owner (when current is dealer)
+  previous_owner?: PreviousOwnerData
   // Error
   error?: string
 }
@@ -166,7 +196,7 @@ function parseVehicleData(data: Record<string, unknown>, regnr: string): Biluppg
     result.owner_profile_id = currentOwner.profile_id
   }
 
-  // Parse owner history
+  // Parse owner history (inkl profile_id för att kunna hämta förra ägarens fordon)
   if (owner?.history && Array.isArray(owner.history)) {
     result.owner_history = (owner.history as Array<Record<string, string>>).map(h => ({
       date: h.date || '',
@@ -174,6 +204,8 @@ function parseVehicleData(data: Record<string, unknown>, regnr: string): Biluppg
       type: h.type || '',
       owner_class: h.owner_class || '',
       details: h.details,
+      profile_id: h.profile_id,
+      profile_url: h.profile_url,
     }))
   }
 
@@ -194,8 +226,60 @@ function parseVehicleData(data: Record<string, unknown>, regnr: string): Biluppg
 // Note: Owner profile and address vehicles are now fetched by the internal API route
 // when fetch_profile: true is passed to fetchBiluppgifterComplete
 
+// Helper: Detect if owner is a car dealer or rental company
+function isOwnerDealer(ownerName?: string, ownerHistory?: OwnerHistoryEntry[]): boolean {
+  if (!ownerName) return false
+
+  const dealerKeywords = [
+    'bil ab', 'bilar ab', 'auto ab', 'motor ab', 'car ab', 'cars ab',
+    'bilhandlare', 'bilgruppen', 'bilbolaget', 'bilcenter', 'bilhus',
+    'hyrbil', 'uthyrning', 'rental', 'leasing',
+    'hertz', 'avis', 'europcar', 'sixt', 'budget',
+    'bilia', 'hedin', 'holmgrens', 'din bil', 'bytbil'
+  ]
+
+  const nameLower = ownerName.toLowerCase()
+  if (dealerKeywords.some(kw => nameLower.includes(kw))) return true
+
+  // Check owner_history first entry type
+  if (ownerHistory?.[0]?.type === 'Bilhandlare') return true
+
+  return false
+}
+
+// Helper: Find previous private owner in history
+function findPreviousPrivateOwner(ownerHistory?: OwnerHistoryEntry[]): OwnerHistoryEntry | null {
+  if (!ownerHistory || ownerHistory.length < 2) return null
+
+  for (let i = 1; i < ownerHistory.length; i++) {
+    const owner = ownerHistory[i]
+    if (owner.type === 'Privatperson' || owner.owner_class === 'person') {
+      return owner
+    }
+  }
+  return null
+}
+
+// Helper: Calculate ownership duration
+function calculateDuration(startDate: string, endDate: string): string {
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  const diffMs = end.getTime() - start.getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+  if (diffDays < 30) return `${diffDays} dagar`
+
+  const years = Math.floor(diffDays / 365)
+  const months = Math.floor((diffDays % 365) / 30)
+
+  if (years === 0) return `${months} mån`
+  if (months === 0) return `${years} år`
+  return `${years} år, ${months} mån`
+}
+
 /**
  * Fetch complete data: vehicle + owner profile + address vehicles
+ * If owner is a dealer, also fetch previous private owner's profile
  */
 export async function fetchBiluppgifterComplete(regnr: string): Promise<BiluppgifterResult> {
   try {
@@ -244,6 +328,61 @@ export async function fetchBiluppgifterComplete(regnr: string): Promise<Biluppgi
       } catch (profileError) {
         console.error(`Error fetching owner profile:`, profileError)
       }
+    }
+
+    // Check if owner is a dealer
+    result.is_dealer = isOwnerDealer(result.owner_name, result.owner_history)
+
+    // If dealer, fetch previous private owner's profile
+    if (result.is_dealer) {
+      const prevOwner = findPreviousPrivateOwner(result.owner_history)
+
+      if (prevOwner?.profile_id) {
+        try {
+          const prevProfileResponse = await fetch(`${apiUrl}/api/profile/${prevOwner.profile_id}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            cache: 'no-store',
+          })
+
+          if (prevProfileResponse.ok) {
+            const prevProfileData = await prevProfileResponse.json()
+
+            // Calculate sold date (when dealer took over)
+            const soldDate = result.owner_history?.[0]?.date || ''
+
+            result.previous_owner = {
+              name: prevOwner.name || prevProfileData.name,
+              profile_id: prevOwner.profile_id,
+              purchase_date: prevOwner.date,
+              sold_date: soldDate,
+              ownership_duration: prevOwner.date && soldDate ? calculateDuration(prevOwner.date, soldDate) : undefined,
+              age: prevProfileData.age,
+              city: prevProfileData.city,
+              address: prevProfileData.address,
+              postal_code: prevProfileData.postal_code,
+              postal_city: prevProfileData.postal_city,
+              phone: prevProfileData.phone,
+              vehicles: prevProfileData.vehicles,
+            }
+          }
+        } catch (prevProfileError) {
+          console.error(`Error fetching previous owner profile:`, prevProfileError)
+          // Still set basic info from history
+          const soldDate = result.owner_history?.[0]?.date || ''
+          result.previous_owner = {
+            name: prevOwner.name,
+            profile_id: prevOwner.profile_id,
+            purchase_date: prevOwner.date,
+            sold_date: soldDate,
+            ownership_duration: prevOwner.date && soldDate ? calculateDuration(prevOwner.date, soldDate) : undefined,
+          }
+        }
+      }
+
+      // Clear dealer's vehicles (not relevant)
+      result.owner_vehicles = undefined
+      result.address_vehicles = undefined
     }
 
     return result

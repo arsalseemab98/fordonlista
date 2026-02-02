@@ -149,6 +149,30 @@ interface RecentBiluppgifter {
     owner_class?: string  // "company", "person", "unknown"
     details?: string
   }> | null
+  // Dealer detection
+  is_dealer: boolean | null
+  // Previous owner (when current is dealer)
+  previous_owner: {
+    name?: string
+    profile_id?: string
+    purchase_date?: string
+    sold_date?: string
+    ownership_duration?: string
+    age?: number
+    city?: string
+    address?: string
+    postal_code?: string
+    postal_city?: string
+    phone?: string
+    vehicles?: Array<{
+      regnr: string
+      model?: string
+      year?: number
+      color?: string
+      status?: string
+      ownership_time?: string
+    }>
+  } | null
   // Metadata
   fetched_at: string | null
 }
@@ -1156,8 +1180,10 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
 
                         {/* Ägardata - Villkorad visning för bilhandlare */}
                         {(() => {
-                          const isDealer = isDealerOrRental(item.owner_name, item.owner_history)
-                          const previousOwner = isDealer ? findPreviousPrivateOwner(item.owner_history) : null
+                          // Use stored is_dealer flag, fallback to computed
+                          const isDealer = item.is_dealer ?? isDealerOrRental(item.owner_name, item.owner_history)
+                          // Use stored previous_owner data if available, otherwise compute from history
+                          const previousOwner = item.previous_owner || (isDealer ? findPreviousPrivateOwner(item.owner_history) : null)
                           const dealerSinceDate = isDealer && item.owner_history?.[0]?.date
 
                           if (isDealer) {
@@ -1198,25 +1224,92 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
                                     <User className="w-4 h-4" /> Förra ägare (LEAD)
                                   </h4>
                                   {previousOwner ? (
-                                    <div className="text-sm space-y-1 bg-green-50 p-2 rounded border border-green-200">
-                                      <div className="flex justify-between">
-                                        <span className="text-green-600">Namn:</span>
-                                        <span className="font-semibold text-green-900">{previousOwner.name || '-'}</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-green-600">Köpte bilen:</span>
-                                        <span className="font-medium">{previousOwner.purchaseDate ? new Date(previousOwner.purchaseDate).toLocaleDateString('sv-SE') : '-'}</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-green-600">Sålde bilen:</span>
-                                        <span className="font-medium">{previousOwner.soldDate ? new Date(previousOwner.soldDate).toLocaleDateString('sv-SE') : '-'}</span>
-                                      </div>
-                                      {previousOwner.purchaseDate && previousOwner.soldDate && (
+                                    <div className="text-sm space-y-2 bg-green-50 p-2 rounded border border-green-200">
+                                      <div className="space-y-1">
+                                        <div className="flex justify-between">
+                                          <span className="text-green-600">Namn:</span>
+                                          <span className="font-semibold text-green-900">{previousOwner.name || '-'}</span>
+                                        </div>
+                                        {'age' in previousOwner && previousOwner.age && (
+                                          <div className="flex justify-between">
+                                            <span className="text-green-600">Ålder:</span>
+                                            <span className="font-medium">{previousOwner.age} år</span>
+                                          </div>
+                                        )}
+                                        {'phone' in previousOwner && previousOwner.phone && (
+                                          <div className="flex justify-between">
+                                            <span className="text-green-600">Telefon:</span>
+                                            <span className="font-mono text-sm">{previousOwner.phone}</span>
+                                          </div>
+                                        )}
+                                        {'city' in previousOwner && previousOwner.city && (
+                                          <div className="flex justify-between">
+                                            <span className="text-green-600">Ort:</span>
+                                            <span className="font-medium">{previousOwner.city}</span>
+                                          </div>
+                                        )}
+                                        {'address' in previousOwner && previousOwner.address && (
+                                          <div className="pt-1 text-xs text-green-700">
+                                            {previousOwner.address}
+                                            {'postal_code' in previousOwner && previousOwner.postal_code && `, ${previousOwner.postal_code}`}
+                                            {'postal_city' in previousOwner && previousOwner.postal_city && ` ${previousOwner.postal_city}`}
+                                          </div>
+                                        )}
                                         <div className="flex justify-between pt-1 border-t border-green-200">
-                                          <span className="text-green-600 font-medium">Ägde bilen i:</span>
-                                          <Badge className="bg-green-100 text-green-800 font-semibold">
-                                            {calculateOwnershipDuration(previousOwner.purchaseDate, previousOwner.soldDate)}
-                                          </Badge>
+                                          <span className="text-green-600">Köpte bilen:</span>
+                                          <span className="font-medium">
+                                            {'purchase_date' in previousOwner && previousOwner.purchase_date
+                                              ? new Date(previousOwner.purchase_date).toLocaleDateString('sv-SE')
+                                              : 'purchaseDate' in previousOwner && previousOwner.purchaseDate
+                                                ? new Date(previousOwner.purchaseDate).toLocaleDateString('sv-SE')
+                                                : '-'}
+                                          </span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span className="text-green-600">Sålde bilen:</span>
+                                          <span className="font-medium">
+                                            {'sold_date' in previousOwner && previousOwner.sold_date
+                                              ? new Date(previousOwner.sold_date).toLocaleDateString('sv-SE')
+                                              : 'soldDate' in previousOwner && previousOwner.soldDate
+                                                ? new Date(previousOwner.soldDate).toLocaleDateString('sv-SE')
+                                                : '-'}
+                                          </span>
+                                        </div>
+                                        {'ownership_duration' in previousOwner && previousOwner.ownership_duration && (
+                                          <div className="flex justify-between">
+                                            <span className="text-green-600 font-medium">Ägde bilen i:</span>
+                                            <Badge className="bg-green-100 text-green-800 font-semibold">
+                                              {previousOwner.ownership_duration}
+                                            </Badge>
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {/* Förra ägarens fordon */}
+                                      {'vehicles' in previousOwner && previousOwner.vehicles && previousOwner.vehicles.length > 0 && (
+                                        <div className="mt-2 pt-2 border-t border-green-200">
+                                          <span className="font-medium text-green-700 text-xs block mb-1">
+                                            Förra ägarens fordon ({previousOwner.vehicles.length} st):
+                                          </span>
+                                          <div className="space-y-1 max-h-32 overflow-y-auto">
+                                            {previousOwner.vehicles.slice(0, 6).map((v, i) => (
+                                              <div key={i} className="flex items-center justify-between bg-white p-1.5 rounded border border-green-100 text-xs">
+                                                <div className="flex items-center gap-2">
+                                                  <span className="font-mono font-semibold text-green-800">{v.regnr}</span>
+                                                  <span className="text-gray-700">{v.model}</span>
+                                                  <span className="text-gray-400">{v.year}</span>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                  {v.ownership_time && (
+                                                    <span className="text-gray-500 text-[10px]">{v.ownership_time}</span>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            ))}
+                                            {previousOwner.vehicles.length > 6 && (
+                                              <div className="text-green-500 text-center text-xs">+{previousOwner.vehicles.length - 6} fordon till</div>
+                                            )}
+                                          </div>
                                         </div>
                                       )}
                                     </div>

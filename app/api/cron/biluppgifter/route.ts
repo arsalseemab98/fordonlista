@@ -111,6 +111,8 @@ export async function GET() {
             address_vehicles: result.address_vehicles || [],
             mileage_history: result.mileage_history || [],
             owner_history: result.owner_history || [],
+            is_dealer: result.is_dealer || false,
+            previous_owner: result.previous_owner || null,
             fetched_at: new Date().toISOString(),
           }
 

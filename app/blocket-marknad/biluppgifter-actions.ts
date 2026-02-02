@@ -72,6 +72,8 @@ export async function fetchAndSaveBiluppgifter(
     address_vehicles: buResult.address_vehicles || [],
     mileage_history: buResult.mileage_history || [],
     owner_history: buResult.owner_history || [],
+    is_dealer: buResult.is_dealer || false,
+    previous_owner: buResult.previous_owner || null,
     fetched_at: new Date().toISOString(),
   }
 
