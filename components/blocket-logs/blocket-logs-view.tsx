@@ -38,6 +38,7 @@ import { useState, useTransition, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { deleteScraperLog, deleteAllLogs } from '@/app/blocket-logs/actions'
 import { fetchMissingBiluppgifter } from '@/app/blocket-marknad/biluppgifter-actions'
+import { populateKnownDealers, getAllKnownDealers, type KnownDealer } from '@/lib/dealers/known-dealers'
 import { useRouter } from 'next/navigation'
 import { Download, Loader2 } from 'lucide-react'
 
@@ -212,6 +213,45 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
   const [isFetchingBiluppgifter, setIsFetchingBiluppgifter] = useState(false)
   const [fetchResult, setFetchResult] = useState<{ success: number; failed: number; errors: string[] } | null>(null)
   const router = useRouter()
+
+  // Dealer state
+  const [dealers, setDealers] = useState<KnownDealer[]>([])
+  const [isLoadingDealers, setIsLoadingDealers] = useState(false)
+  const [isPopulatingDealers, setIsPopulatingDealers] = useState(false)
+  const [dealerResult, setDealerResult] = useState<{ added: number; total: number } | null>(null)
+
+  // Load dealers on mount
+  useEffect(() => {
+    async function loadDealers() {
+      setIsLoadingDealers(true)
+      try {
+        const data = await getAllKnownDealers()
+        setDealers(data)
+      } catch (error) {
+        console.error('Error loading dealers:', error)
+      }
+      setIsLoadingDealers(false)
+    }
+    loadDealers()
+  }, [])
+
+  // Populate dealers from Blocket data
+  const handlePopulateDealers = async () => {
+    setIsPopulatingDealers(true)
+    setDealerResult(null)
+    try {
+      const result = await populateKnownDealers()
+      if (result.success) {
+        setDealerResult({ added: result.added, total: result.total })
+        // Reload dealers list
+        const data = await getAllKnownDealers()
+        setDealers(data)
+      }
+    } catch (error) {
+      console.error('Error populating dealers:', error)
+    }
+    setIsPopulatingDealers(false)
+  }
 
   // Kolla om ägare är bilhandlare eller hyrbilsföretag
   const isDealerOrRental = (ownerName: string | null, ownerHistory: RecentBiluppgifter['owner_history']) => {
@@ -442,7 +482,7 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
   return (
     <div className="space-y-6">
       <Tabs defaultValue="scraper" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 max-w-md">
+        <TabsList className="grid w-full grid-cols-3 max-w-xl">
           <TabsTrigger value="scraper" className="flex items-center gap-2">
             <RefreshCw className="w-4 h-4" />
             Blocket Scraper
@@ -453,6 +493,15 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
             {biluppgifterStats.remaining > 0 && (
               <Badge variant="secondary" className="ml-1 text-xs">
                 {biluppgifterStats.remaining}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="dealers" className="flex items-center gap-2">
+            <Store className="w-4 h-4" />
+            Bilhandlare
+            {dealers.length > 0 && (
+              <Badge variant="secondary" className="ml-1 text-xs">
+                {dealers.length}
               </Badge>
             )}
           </TabsTrigger>
@@ -1529,6 +1578,205 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
                   <p className="text-sm text-gray-600 mt-1">
                     Biluppgifter hämtas från biluppgifter.se och inkluderar fordonsdata (miltal, besiktning, skatt)
                     samt ägarinfo (namn, adress, telefon). Data hämtas för Blocket-annonser som har regnummer.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Bilhandlare Tab */}
+        <TabsContent value="dealers" className="mt-6 space-y-6">
+          {/* Dealer Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200">
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <Store className="w-5 h-5 text-orange-600" />
+                  <span className="text-sm text-orange-600 font-medium">Kända handlare</span>
+                </div>
+                <p className="text-3xl font-bold text-orange-700 mt-2">{dealers.length}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-green-600" />
+                  <span className="text-sm text-green-600 font-medium">Totalt annonser</span>
+                </div>
+                <p className="text-3xl font-bold text-green-700 mt-2">
+                  {dealers.reduce((sum, d) => sum + d.ad_count, 0)}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-blue-50 to-cyan-50 border-blue-200">
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-blue-600" />
+                  <span className="text-sm text-blue-600 font-medium">Regioner</span>
+                </div>
+                <p className="text-3xl font-bold text-blue-700 mt-2">
+                  {new Set(dealers.flatMap(d => d.regions || [])).size}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200">
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <Database className="w-5 h-5 text-purple-600" />
+                  <span className="text-sm text-purple-600 font-medium">Matchade i Biluppgifter</span>
+                </div>
+                <p className="text-3xl font-bold text-purple-700 mt-2">
+                  {biluppgifterStats.recentFetches.filter(f => f.is_dealer).length}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Actions */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Store className="w-5 h-5" />
+                  Uppdatera handlarlista
+                </span>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handlePopulateDealers}
+                  disabled={isPopulatingDealers}
+                >
+                  {isPopulatingDealers ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Söker...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      Bygg från Blocket + Biluppgifter
+                    </>
+                  )}
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                Bygger en lista på kända bilhandlare genom att korsreferera Blocket-annonser
+                (där saljare_typ = &quot;handlare&quot;) med ägarnamn från Biluppgifter.
+                Denna lista används sedan för att automatiskt identifiera bilhandlare i nya biluppgifter-sökningar.
+              </p>
+
+              {dealerResult && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-green-800">
+                    ✅ Hittade <strong>{dealerResult.added}</strong> handlare.
+                    Totalt <strong>{dealerResult.total}</strong> i databasen.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Dealer List */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                Kända bilhandlare
+                <Badge className="bg-orange-100 text-orange-800">{dealers.length} st</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoadingDealers ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : dealers.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">
+                  Ingen handlarlista ännu. Klicka &quot;Bygg från Blocket + Biluppgifter&quot; för att skapa en.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Handlare</TableHead>
+                        <TableHead className="text-center">Annonser</TableHead>
+                        <TableHead>Regioner</TableHead>
+                        <TableHead>Källa</TableHead>
+                        <TableHead className="text-right">Senast sedd</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dealers.slice(0, 50).map((dealer) => (
+                        <TableRow key={dealer.id}>
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <Store className="w-4 h-4 text-orange-500" />
+                              {dealer.name}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="secondary">{dealer.ad_count}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {dealer.regions?.slice(0, 3).map((region) => (
+                                <Badge key={region} variant="outline" className="text-xs">
+                                  {region}
+                                </Badge>
+                              ))}
+                              {(dealer.regions?.length || 0) > 3 && (
+                                <Badge variant="outline" className="text-xs text-gray-400">
+                                  +{(dealer.regions?.length || 0) - 3}
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs capitalize">
+                              {dealer.source}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground">
+                            {dealer.last_seen_at ? new Date(dealer.last_seen_at).toLocaleDateString('sv-SE') : '-'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {dealers.length > 50 && (
+                    <p className="text-center text-sm text-muted-foreground py-2">
+                      Visar 50 av {dealers.length} handlare
+                    </p>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Info Card */}
+          <Card className="bg-gradient-to-r from-orange-50 to-amber-50 border-orange-200">
+            <CardContent className="py-4">
+              <div className="flex items-start gap-3">
+                <div className="bg-orange-100 p-2 rounded-lg">
+                  <Store className="w-5 h-5 text-orange-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-orange-900">Om Bilhandlare-identifiering</p>
+                  <p className="text-sm text-orange-700 mt-1">
+                    <strong>Problem:</strong> Biluppgifter visar bara &quot;företag&quot; som ägartyp - kan vara vad som helst.
+                    <br />
+                    <strong>Lösning:</strong> Via Blocket vet vi vilka företag som faktiskt är bilhandlare
+                    (de som listar med saljare_typ = &quot;handlare&quot;). Vi bygger en lista på dessa och matchar sedan
+                    mot ägarnamn i Biluppgifter.
+                    <br />
+                    <strong>Resultat:</strong> När en känd handlare äger bilen → hämta förra privata ägarens data som lead.
                   </p>
                 </div>
               </div>

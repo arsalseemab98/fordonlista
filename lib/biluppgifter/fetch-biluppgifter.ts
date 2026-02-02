@@ -226,8 +226,8 @@ function parseVehicleData(data: Record<string, unknown>, regnr: string): Biluppg
 // Note: Owner profile and address vehicles are now fetched by the internal API route
 // when fetch_profile: true is passed to fetchBiluppgifterComplete
 
-// Helper: Detect if owner is a car dealer or rental company
-function isOwnerDealer(ownerName?: string, ownerHistory?: OwnerHistoryEntry[]): boolean {
+// Helper: Detect if owner is a car dealer or rental company (sync version - keyword based)
+function isOwnerDealerByKeywords(ownerName?: string, ownerHistory?: OwnerHistoryEntry[]): boolean {
   if (!ownerName) return false
 
   const dealerKeywords = [
@@ -245,6 +245,53 @@ function isOwnerDealer(ownerName?: string, ownerHistory?: OwnerHistoryEntry[]): 
   if (ownerHistory?.[0]?.type === 'Bilhandlare') return true
 
   return false
+}
+
+// Helper: Check against known_dealers database
+async function isOwnerDealerFromDb(ownerName?: string): Promise<boolean> {
+  if (!ownerName) return false
+
+  try {
+    const supabase = await createClient()
+    const normalizedName = ownerName.toLowerCase().trim().replace(/\s+/g, ' ')
+
+    // Check exact match
+    const { data: exactMatch } = await supabase
+      .from('known_dealers')
+      .select('id')
+      .eq('normalized_name', normalizedName)
+      .maybeSingle()
+
+    if (exactMatch) return true
+
+    // Check partial match (owner name contains dealer name or vice versa)
+    const { data: allDealers } = await supabase
+      .from('known_dealers')
+      .select('normalized_name')
+
+    if (allDealers) {
+      for (const dealer of allDealers) {
+        const dealerName = dealer.normalized_name
+        // One contains the other (at least 5 chars to avoid false positives)
+        if (normalizedName.includes(dealerName) && dealerName.length >= 5) return true
+        if (dealerName.includes(normalizedName) && normalizedName.length >= 5) return true
+      }
+    }
+  } catch (error) {
+    // Table might not exist yet, ignore errors
+    console.debug('known_dealers check error (might not exist):', error)
+  }
+
+  return false
+}
+
+// Combined dealer check: DB first, then keywords
+async function isOwnerDealer(ownerName?: string, ownerHistory?: OwnerHistoryEntry[]): Promise<boolean> {
+  // Quick keyword check first
+  if (isOwnerDealerByKeywords(ownerName, ownerHistory)) return true
+
+  // Then check database
+  return await isOwnerDealerFromDb(ownerName)
 }
 
 // Helper: Find previous private owner in history
@@ -330,8 +377,8 @@ export async function fetchBiluppgifterComplete(regnr: string): Promise<Biluppgi
       }
     }
 
-    // Check if owner is a dealer
-    result.is_dealer = isOwnerDealer(result.owner_name, result.owner_history)
+    // Check if owner is a dealer (checks DB + keywords)
+    result.is_dealer = await isOwnerDealer(result.owner_name, result.owner_history)
 
     // If dealer, fetch previous private owner's profile
     if (result.is_dealer) {
