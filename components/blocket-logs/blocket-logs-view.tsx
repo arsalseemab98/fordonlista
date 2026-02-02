@@ -10,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   CheckCircle2,
   XCircle,
@@ -27,7 +28,11 @@ import {
   RefreshCw,
   ExternalLink,
   Tag,
-  Trash2
+  Trash2,
+  FileSearch,
+  Users,
+  Phone,
+  Home
 } from 'lucide-react'
 import { useState, useTransition, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
@@ -99,15 +104,38 @@ interface Stats {
   soldAdsToday: number
 }
 
+interface RecentBiluppgifter {
+  id: number
+  regnummer: string
+  mileage_mil: number | null
+  num_owners: number | null
+  annual_tax: number | null
+  inspection_until: string | null
+  owner_name: string | null
+  owner_city: string | null
+  owner_phone: string | null
+  fetched_at: string | null
+  blocket_id: number | null
+}
+
+interface BiluppgifterStats {
+  totalWithRegnummer: number
+  totalFetched: number
+  remaining: number
+  fetchedToday: number
+  recentFetches: RecentBiluppgifter[]
+}
+
 interface BlocketLogsViewProps {
   logs: ScraperLog[]
   stats: Stats
   recentNewCars: RecentCar[]
   recentSoldCars: SoldCar[]
   regionBreakdown: Record<string, number>
+  biluppgifterStats: BiluppgifterStats
 }
 
-export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, regionBreakdown }: BlocketLogsViewProps) {
+export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, regionBreakdown, biluppgifterStats }: BlocketLogsViewProps) {
   const [showAllNewCars, setShowAllNewCars] = useState(false)
   const [showAllSoldCars, setShowAllSoldCars] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -258,6 +286,24 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
 
   return (
     <div className="space-y-6">
+      <Tabs defaultValue="scraper" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 max-w-md">
+          <TabsTrigger value="scraper" className="flex items-center gap-2">
+            <RefreshCw className="w-4 h-4" />
+            Blocket Scraper
+          </TabsTrigger>
+          <TabsTrigger value="biluppgifter" className="flex items-center gap-2">
+            <FileSearch className="w-4 h-4" />
+            Biluppgifter
+            {biluppgifterStats.remaining > 0 && (
+              <Badge variant="secondary" className="ml-1 text-xs">
+                {biluppgifterStats.remaining}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="scraper" className="mt-6 space-y-6">
       {/* Live Status Banner */}
       <Card className={isRunning ? "bg-blue-50 border-blue-300" : "bg-green-50 border-green-200"}>
         <CardContent className="py-4">
@@ -756,6 +802,227 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
           </Table>
         </CardContent>
       </Card>
+        </TabsContent>
+
+        {/* Biluppgifter Tab */}
+        <TabsContent value="biluppgifter" className="mt-6 space-y-6">
+          {/* Biluppgifter Stats Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="bg-gradient-to-br from-blue-50 to-cyan-50 border-blue-200">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-blue-700 flex items-center gap-2">
+                  <Car className="w-4 h-4" />
+                  Med regnummer
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-blue-700">{biluppgifterStats.totalWithRegnummer.toLocaleString()}</div>
+                <p className="text-xs text-blue-600">aktiva annonser</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-green-700 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Hämtade
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-green-700">{biluppgifterStats.totalFetched.toLocaleString()}</div>
+                <p className="text-xs text-green-600">
+                  {biluppgifterStats.totalWithRegnummer > 0
+                    ? `${Math.round((biluppgifterStats.totalFetched / biluppgifterStats.totalWithRegnummer) * 100)}%`
+                    : '0%'} av totalt
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-amber-50 to-orange-50 border-amber-200">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-amber-700 flex items-center gap-2">
+                  <Clock className="w-4 h-4" />
+                  Återstår
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-amber-700">{biluppgifterStats.remaining.toLocaleString()}</div>
+                <p className="text-xs text-amber-600">att hämta</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-purple-700 flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4" />
+                  Idag
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-purple-700">+{biluppgifterStats.fetchedToday}</div>
+                <p className="text-xs text-purple-600">hämtade idag</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Progress Bar */}
+          <Card>
+            <CardContent className="py-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium">Hämtningsframsteg</span>
+                <span className="text-sm text-muted-foreground">
+                  {biluppgifterStats.totalFetched} / {biluppgifterStats.totalWithRegnummer}
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-3">
+                <div
+                  className="bg-gradient-to-r from-green-500 to-emerald-500 h-3 rounded-full transition-all duration-500"
+                  style={{
+                    width: `${biluppgifterStats.totalWithRegnummer > 0
+                      ? Math.min(100, (biluppgifterStats.totalFetched / biluppgifterStats.totalWithRegnummer) * 100)
+                      : 0}%`
+                  }}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Recent Fetches Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <FileSearch className="w-5 h-5 text-blue-600" />
+                  Senaste hämtningar
+                </span>
+                <Badge className="bg-blue-100 text-blue-800">{biluppgifterStats.recentFetches.length} st</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {biluppgifterStats.recentFetches.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">Inga biluppgifter hämtade ännu</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Regnummer</TableHead>
+                      <TableHead>Ägare</TableHead>
+                      <TableHead>Ort</TableHead>
+                      <TableHead>Telefon</TableHead>
+                      <TableHead className="text-right">Miltal</TableHead>
+                      <TableHead className="text-right">Ägare</TableHead>
+                      <TableHead className="text-right">Skatt</TableHead>
+                      <TableHead>Besiktning</TableHead>
+                      <TableHead>Hämtad</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {biluppgifterStats.recentFetches.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-mono font-semibold">{item.regnummer}</TableCell>
+                        <TableCell>
+                          {item.owner_name ? (
+                            <div className="flex items-center gap-1">
+                              <Users className="w-3 h-3 text-gray-400" />
+                              <span className="max-w-[150px] truncate">{item.owner_name}</span>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {item.owner_city ? (
+                            <div className="flex items-center gap-1">
+                              <Home className="w-3 h-3 text-gray-400" />
+                              <span>{item.owner_city}</span>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {item.owner_phone ? (
+                            <div className="flex items-center gap-1">
+                              <Phone className="w-3 h-3 text-gray-400" />
+                              <span className="font-mono text-sm">{item.owner_phone}</span>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {item.mileage_mil ? (
+                            <span className="font-medium">{item.mileage_mil.toLocaleString()} mil</span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {item.num_owners ? (
+                            <Badge variant="outline">{item.num_owners} st</Badge>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {item.annual_tax ? (
+                            <span>{item.annual_tax.toLocaleString()} kr</span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {item.inspection_until ? (
+                            <Badge
+                              variant="outline"
+                              className={
+                                new Date(item.inspection_until) < new Date()
+                                  ? 'bg-red-50 text-red-700 border-red-200'
+                                  : 'bg-green-50 text-green-700 border-green-200'
+                              }
+                            >
+                              {new Date(item.inspection_until).toLocaleDateString('sv-SE')}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {item.fetched_at ? (
+                            <span className="text-xs text-muted-foreground">
+                              {formatTimeAgo(item.fetched_at)}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Info Card */}
+          <Card className="bg-gradient-to-r from-gray-50 to-slate-50 border-gray-200">
+            <CardContent className="py-4">
+              <div className="flex items-start gap-3">
+                <div className="bg-gray-100 p-2 rounded-lg">
+                  <FileSearch className="w-5 h-5 text-gray-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900">Om Biluppgifter</p>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Biluppgifter hämtas från biluppgifter.se och inkluderar fordonsdata (miltal, besiktning, skatt)
+                    samt ägarinfo (namn, adress, telefon). Data hämtas för Blocket-annonser som har regnummer.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

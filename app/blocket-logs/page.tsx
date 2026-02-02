@@ -110,6 +110,58 @@ export default async function BlocketLogsPage() {
     }
   }
 
+  // ===== BILUPPGIFTER STATS =====
+  // Totalt antal aktiva annonser med regnummer (kan hämtas)
+  const { count: totalWithRegnummer } = await supabase
+    .from('blocket_annonser')
+    .select('*', { count: 'exact', head: true })
+    .is('borttagen', null)
+    .not('regnummer', 'is', null)
+
+  // Antal som redan har biluppgifter-data
+  const { count: totalFetched } = await supabase
+    .from('biluppgifter_data')
+    .select('*', { count: 'exact', head: true })
+
+  // Senast hämtade (med detaljer)
+  const { data: recentBiluppgifter } = await supabase
+    .from('biluppgifter_data')
+    .select(`
+      id,
+      regnummer,
+      mileage_mil,
+      num_owners,
+      annual_tax,
+      inspection_until,
+      owner_name,
+      owner_city,
+      owner_phone,
+      fetched_at,
+      blocket_id
+    `)
+    .order('fetched_at', { ascending: false })
+    .limit(20)
+
+  // Hämtade idag
+  const { count: fetchedToday } = await supabase
+    .from('biluppgifter_data')
+    .select('*', { count: 'exact', head: true })
+    .gte('fetched_at', today.toISOString())
+
+  // Uppdaterade (fetched_at != created_at)
+  const { count: updatedCount } = await supabase
+    .from('biluppgifter_data')
+    .select('*', { count: 'exact', head: true })
+    .not('updated_at', 'eq', supabase.rpc('created_at'))
+
+  const biluppgifterStats = {
+    totalWithRegnummer: totalWithRegnummer || 0,
+    totalFetched: totalFetched || 0,
+    remaining: (totalWithRegnummer || 0) - (totalFetched || 0),
+    fetchedToday: fetchedToday || 0,
+    recentFetches: recentBiluppgifter || [],
+  }
+
   return (
     <div className="flex flex-col">
       <Header
@@ -137,6 +189,7 @@ export default async function BlocketLogsPage() {
           recentNewCars={recentNewCars || []}
           recentSoldCars={recentSoldCars || []}
           regionBreakdown={regionBreakdown}
+          biluppgifterStats={biluppgifterStats}
         />
       </div>
     </div>
