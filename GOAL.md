@@ -2,27 +2,30 @@
 
 ## Syfte
 
-Fordonlista är en **fordonsdata-aggregator** som samlar in och korsrefererar data från tre huvudkällor för att skapa en komplett bild av den svenska begagnatbilmarknaden:
+Fordonlista är en **marknadsanalys-plattform** för den svenska begagnatbilmarknaden. Vi aggregerar data från tre källor för att ge insikter om marknadstrender, prissättning och säljbeteenden.
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │   BILPROSPEKT   │     │     BLOCKET     │     │  BILUPPGIFTER   │
 │                 │     │                 │     │                 │
-│ • Ägarbyte-data │     │ • Aktiva annon- │     │ • Fordonsdata   │
-│ • Regnummer     │     │   ser           │     │ • Ägarhistorik  │
-│ • Prospekttyp   │     │ • Priser        │     │ • Mätarställning│
-│ • Region        │     │ • Handlare/     │     │ • Besiktning    │
-│ • Innehavstid   │     │   Privat        │     │ • Telefonnummer │
+│ • Ägarbyte-data │     │ • Aktiva annon- │     │ • Ägarhistorik  │
+│ • Regnummer     │     │   ser           │     │ • Antal ägare   │
+│ • Prospekttyp   │     │ • Priser        │     │ • Innehavstid   │
+│ • Region        │     │ • Handlare/     │     │ • Ägartyp       │
+│ • Innehavstid   │     │   Privat        │     │   (företag/     │
+│                 │     │ • Liggtid       │     │    privatperson)│
 └────────┬────────┘     └────────┬────────┘     └────────┬────────┘
          │                       │                       │
          └───────────────────────┼───────────────────────┘
                                  │
                                  ▼
                     ┌─────────────────────────┐
-                    │      FORDONLISTA        │
+                    │   MARKNADSANALYS        │
                     │                         │
-                    │  Aggregerad fordonsdata │
-                    │  + Analys & Insights    │
+                    │  • Pristrender          │
+                    │  • Säljbeteende         │
+                    │  • Handlarstatistik     │
+                    │  • Regionala mönster    │
                     └─────────────────────────┘
 ```
 
@@ -31,253 +34,245 @@ Fordonlista är en **fordonsdata-aggregator** som samlar in och korsrefererar da
 ## Datakällor
 
 ### 1. Bilprospekt (MCP)
-- **Vad:** Registerdata om fordonsägare
-- **Data:** Regnummer, ägare (namn, adress), köpdatum, prospekttyp
-- **Uppdatering:** Veckovis
-- **Användning:** Identifiera potentiella säljare baserat på innehavstid, fordonstyp
+- **Vad:** Registerdata om nya fordonsägare
+- **Insikter:** Vem köper vilka bilar? När? Var?
 
 ### 2. Blocket Scraper
-- **Vad:** Aktiva bilannonser på Blocket
-- **Data:** Pris, märke, modell, miltal, bilder, säljare (handlare/privat), region
-- **Uppdatering:** Kontinuerligt (var 15 min light scrape, 2x/dag full scrape)
-- **Användning:** Marknadspriser, utbud, konkurrensanalys
+- **Vad:** Aktiva och sålda bilannonser
+- **Insikter:** Marknadspriser, utbud, liggtider, säljare
 
 ### 3. Biluppgifter.se
-- **Vad:** Detaljerad fordons- och ägarinfo
-- **Data:** Mätarställning (verifierad), antal ägare, besiktning, skatt, ägarhistorik, telefon
-- **Uppdatering:** On-demand (cron 09-19)
-- **Användning:** Verifiera annonsdata, hitta kontaktinfo, identifiera bilhandlare
+- **Vad:** Detaljerad ägar- och fordonsinfo
+- **Insikter:** Ägarhistorik, handlare-identifiering, innehavstider
 
 ---
 
-## Analyzer - Brainstorm
+## Analyzer - Fokusområden
 
-### A. Prisanalys
+### 1. MARKNADSANALYS
 
-#### A1. Marknadspris-kalkylator
-- **Input:** Märke, modell, årsmodell, miltal
-- **Output:** Uppskattat marknadsvärde baserat på Blocket-data
-- **Features:**
-  - Percentiler (billig/medel/dyr)
-  - Prisutveckling över tid
-  - Regional prisskillnad
+#### 1.1 Prisanalys
+| Analys | Beskrivning | Frågor den svarar på |
+|--------|-------------|---------------------|
+| **Prisindex per segment** | Genomsnittspris för märke/modell/årsmodell | Vad kostar en Volvo V60 2019 i snitt? |
+| **Prisutveckling över tid** | Hur priser förändras vecka/månad | Går priserna upp eller ner? |
+| **Regional prisskillnad** | Jämför priser mellan regioner | Är bilar billigare i Norrland? |
+| **Prisfördelning** | Percentiler (billig/medel/dyr) | Vad är ett "bra pris" vs "dyrt"? |
+| **Pris vs Ålder/Miltal** | Korrelation pris-ålder-miltal | Hur mycket påverkar miltal priset? |
 
-#### A2. Prissättnings-advisor
-- **För säljare:** "Din bil är prissatt 15% under marknad"
-- **För köpare:** "Denna annons är 20% dyrare än liknande bilar"
+#### 1.2 Utbudsanalys
+| Analys | Beskrivning | Frågor den svarar på |
+|--------|-------------|---------------------|
+| **Utbud per segment** | Antal bilar per märke/modell | Vilka bilar finns det mest av? |
+| **Utbudstrend** | Ökar/minskar antal annonser | Är marknaden het eller sval? |
+| **Säsongsvariation** | Utbud per månad/kvartal | När är det flest bilar till salu? |
+| **Regionalt utbud** | Fördelning per län | Var finns bilarna? |
+| **Handlare vs Privat** | Fördelning per säljarkategori | Vem säljer mest? |
 
-#### A3. Prishistorik per bil
-- Spåra prisändringar på samma annons
-- Visa "dagar på marknaden" vs pris
-
----
-
-### B. Fordonsanalys
-
-#### B1. Miltal-verifiering
-- **Jämför:** Blocket-miltal vs Biluppgifter (besiktning)
-- **Flagga:** Avvikelser > 2000 mil
-- **Risk-score:** Potentiell miltalsmanipulation
-
-#### B2. Miltals-prediktor
-- Baserat på mätarhistorik (besiktningar)
-- Beräkna mil/år
-- Flagga onormalt låga/höga värden
-
-#### B3. Besiktnings-analys
-- Bilar med utgången besiktning
-- Kommande besiktningar (inom 30/60/90 dagar)
-- Historik av godkända/underkända
+#### 1.3 Liggtidsanalys
+| Analys | Beskrivning | Frågor den svarar på |
+|--------|-------------|---------------------|
+| **Genomsnittlig liggtid** | Dagar från publicering till såld | Hur snabbt säljs bilar? |
+| **Liggtid per segment** | Per märke/modell/prisintervall | Vilka bilar säljs snabbast? |
+| **Liggtid vs Pris** | Korrelation | Säljer billigare bilar snabbare? |
+| **Osålda bilar** | Annonser > 30/60/90 dagar | Vilka bilar fastnar? |
 
 ---
 
-### C. Säljare-analys
+### 2. HANDLARE-ANALYS
 
-#### C1. Bilhandlare-profiler
-- Vilka handlare finns i varje region?
-- Genomsnittspris per handlare
-- Antal aktiva annonser
-- Säljtid (hur snabbt säljer de?)
+#### 2.1 Handlarprofiler
+| Analys | Beskrivning | Frågor den svarar på |
+|--------|-------------|---------------------|
+| **Handlare per region** | Antal och lista | Vilka handlare finns i Norrbotten? |
+| **Marknadsandel** | % av utbudet per handlare | Vem dominerar marknaden? |
+| **Sortiment** | Vilka märken/modeller per handlare | Vad säljer Bilia vs Din Bil? |
+| **Prissättning** | Genomsnittspris per handlare | Vem är dyrast/billigast? |
+| **Omsättning** | Nya annonser per vecka/månad | Hur aktiva är de? |
 
-#### C2. Privat vs Handlare
-- Prisskillnad för samma biltyp
-- Vilka bilar säljer handlare vs privatpersoner?
-- Omsättningshastighet
+#### 2.2 Handlare vs Privat
+| Analys | Beskrivning | Frågor den svarar på |
+|--------|-------------|---------------------|
+| **Prisskillnad** | Samma bil, olika säljare | Hur mycket dyrare är handlare? |
+| **Sortimentskillnad** | Vilka bilar säljs var | Säljer privatpersoner äldre bilar? |
+| **Liggtidskillnad** | Säljer handlare snabbare? | Vem säljer effektivast? |
+| **Trendskillnad** | Utveckling över tid | Tar handlare över marknaden? |
 
-#### C3. "Dold handlare"-detektion
-- Privatpersoner som säljer många bilar
-- Matcha mot known_dealers
-- Flagga misstänkta återförsäljare
-
----
-
-### D. Lead-analys
-
-#### D1. Lead Scoring
-- Poängsätt leads baserat på:
-  - Innehavstid (längre = mer sannolikt att sälja?)
-  - Fordonsålder
-  - Miltalsökning
-  - Region (närhet till ditt område)
-
-#### D2. Timing-prediktor
-- När är bästa tiden att kontakta?
-- Historisk data: när säljer folk sina bilar?
-- Säsongsmönster
-
-#### D3. Konverteringsanalys
-- Vilka leads blev kunder?
-- Vilka egenskaper hade framgångsrika leads?
-- ROI per prospekttyp
+#### 2.3 Handlarbeteende
+| Analys | Beskrivning | Frågor den svarar på |
+|--------|-------------|---------------------|
+| **Inköpsmönster** | När köper handlare in bilar? | Vilka bilar väljer de? |
+| **Prissättningsstrategi** | Hur sätter de priser? | Startar de högt och sänker? |
+| **Lageromsättning** | Hur snabbt säljer de? | Vilka bilar blir liggare? |
+| **Säsongsbeteende** | Variation över året | Köper de in mer inför våren? |
 
 ---
 
-### E. Marknadsanalys
+### 3. SÄLJBETEENDE-ANALYS
 
-#### E1. Utbuds-dashboard
-- Totalt antal bilar per region
-- Fördelning: märke, modell, årsmodell
-- Trend över tid (ökar/minskar utbudet?)
+#### 3.1 Privatpersoners säljbeteende
+| Analys | Beskrivning | Frågor den svarar på |
+|--------|-------------|---------------------|
+| **Innehavstid innan försäljning** | Hur länge äger folk bilar? | När säljer folk sina bilar? |
+| **Säljcykel** | Tid från "tänker sälja" till såld | Hur lång är processen? |
+| **Prissänkningar** | Hur ofta och hur mycket | Sänker säljare priserna? |
+| **Säsongsmönster** | När säljer privatpersoner? | Säljs fler bilar på våren? |
 
-#### E2. Konkurrens-analys
-- Vilka märken/modeller är översålda?
-- Vilka har lite konkurrens?
-- Gap-analys: efterfrågan vs utbud
+#### 3.2 Ägarbytesmönster
+| Analys | Beskrivning | Frågor den svarar på |
+|--------|-------------|---------------------|
+| **Ägarbyten per månad** | Volym och trend | Är marknaden aktiv? |
+| **Ägarkedja** | Privat→Handlare→Privat | Hur flödar bilar? |
+| **Snabba flips** | Korta innehavstider | Vilka bilar byter ägare ofta? |
+| **Regional rörlighet** | Bilar som byter region | Flödar bilar norr→söder? |
 
-#### E3. Säsongsmönster
-- Vilka bilar säljer bäst på vintern/sommaren?
-- Prisfluktuationer under året
-- Bästa tid att köpa/sälja
-
----
-
-### F. Ägar-analys
-
-#### F1. Ägarprofiler
-- Typisk ägare per biltyp
-- Ålder, region, antal bilar
-- Genomsnittlig innehavstid
-
-#### F2. Flerbilsägare
-- Personer med 2+ fordon
-- Potentiella storköpare/säljare
-- Adresser med många fordon
-
-#### F3. Ägarkedja
-- Spåra bilens ägarhistorik
-- Identifiera "snabba flips" (korta innehavstider)
-- Handelarmönster
+#### 3.3 Köparbeteende (via Bilprospekt)
+| Analys | Beskrivning | Frågor den svarar på |
+|--------|-------------|---------------------|
+| **Vem köper vad?** | Demografi per biltyp | Köper unga SUV eller småbilar? |
+| **Köpmönster** | Årstid, region, fordonstyp | När köps mest? |
+| **Uppgradering/Nedgradering** | Bilbyte-mönster | Byter folk upp sig eller ner? |
 
 ---
 
-### G. Anomali-detektion
+### 4. REGIONALA ANALYSER
 
-#### G1. Misstänkt data
-- Orimligt lågt miltal för ålder
-- Stora prishopp
-- Saknad ägarhistorik
+#### 4.1 Regional marknadsöversikt
+| Analys | Beskrivning | Frågor den svarar på |
+|--------|-------------|---------------------|
+| **Marknadsstorlek** | Antal bilar per region | Var är marknaden störst? |
+| **Prisindex per region** | Relativt pris | Var är bilar billigast? |
+| **Populära modeller** | Top 10 per region | Vad säljs i Norrland vs Stockholm? |
+| **Handlartäthet** | Handlare per capita | Var finns mest konkurrens? |
 
-#### G2. Bluffannonser
-- Samma bilder på flera annonser
-- Orealistiskt låga priser
-- Mönster från kända bluffare
+#### 4.2 Regionala trender
+| Analys | Beskrivning | Frågor den svarar på |
+|--------|-------------|---------------------|
+| **Tillväxt/Nedgång** | Förändring över tid | Vilka regioner växer? |
+| **Prisrörelser** | Prisförändringar per region | Var stiger/sjunker priserna? |
+| **Säsongspåverkan** | Regional säsongsvariation | Påverkas Norrland mer av vinter? |
 
-#### G3. Marknadsmani­pulation
-- Plötsliga prisökningar
-- Koordinerade prisändringar
-- Kartellbeteende?
+---
+
+### 5. TRENDANALYS & PROGNOSER
+
+#### 5.1 Marknadstrender
+| Analys | Beskrivning | Frågor den svarar på |
+|--------|-------------|---------------------|
+| **Elbilstrend** | Andel elbilar över tid | Hur snabbt växer elbilsmarknaden? |
+| **SUV-trend** | Popularitet SUV vs sedan | Tar SUV över? |
+| **Åldersfördelning** | Genomsnittlig ålder på sålda bilar | Säljs nyare eller äldre bilar? |
+| **Premiumandel** | BMW/Audi/Mercedes vs budget | Går marknaden uppåt eller nedåt? |
+
+#### 5.2 Prisprognoser
+| Analys | Beskrivning | Frågor den svarar på |
+|--------|-------------|---------------------|
+| **Värdeminskning** | % per år per modell | Vilka bilar håller värdet? |
+| **Säsongsprognos** | Förväntat pris per kvartal | När är bästa tid att köpa/sälja? |
+| **Segmentprognos** | Förväntad prisutveckling | Kommer SUV-priser sjunka? |
 
 ---
 
 ## Teknisk Plan
 
-### Fas 1: Data-aggregering (✅ Klar)
+### Fas 1: Data-aggregering ✅
 - [x] Bilprospekt MCP-integration
-- [x] Blocket scraper
+- [x] Blocket scraper (aktiva + sålda)
 - [x] Biluppgifter API
 - [x] Known dealers-system
 
-### Fas 2: Data-kvalitet
-- [ ] Miltal-verifiering (Blocket vs Biluppgifter)
-- [ ] Duplicate detection
-- [ ] Data cleaning/normalisering
+### Fas 2: Analyzer-infrastruktur
+- [ ] `/analyzer` route med dashboard
+- [ ] Databearbetning för aggregerad statistik
+- [ ] Cache för tunga beräkningar
+- [ ] Export-funktioner (CSV, PDF)
 
-### Fas 3: Basic Analyzers
-- [ ] Prisanalys-modul
-- [ ] Säljare-statistik
-- [ ] Lead scoring v1
+### Fas 3: Grundläggande Analyzers
+- [ ] **Prisanalys-modul** - Prisindex, percentiler, trender
+- [ ] **Handlare-dashboard** - Profiler, marknadsandel, sortiment
+- [ ] **Regional översikt** - Karta med statistik per län
 
-### Fas 4: Advanced Analyzers
-- [ ] ML-baserad prissättning
-- [ ] Timing-prediktor
-- [ ] Anomali-detektion
+### Fas 4: Avancerade Analyzers
+- [ ] **Säljbeteende-analys** - Innehavstid, prissänkningar
+- [ ] **Liggtidsanalys** - Vad säljer snabbt/långsamt?
+- [ ] **Trendanalys** - Elbil, SUV, premium
 
-### Fas 5: Dashboard & Visualisering
-- [ ] Interaktiva grafer
-- [ ] Kartor (regional analys)
-- [ ] Exportfunktioner
-
----
-
-## Prioriterade Analyzers (Nästa steg)
-
-### 1. **Pris-analyzer** (Hög prioritet)
-```
-Input: Blocket-annons
-Output:
-- Marknadspris-range (låg/medel/hög)
-- Jämförelse med liknande bilar
-- Rekommendation (bra deal? / överprissatt?)
-```
-
-### 2. **Miltal-verifierare** (Hög prioritet)
-```
-Input: Blocket-annons + Biluppgifter
-Output:
-- Match: ✅ Miltal stämmer
-- Varning: ⚠️ Avvikelse på X mil
-- Risk: 🚨 Möjlig manipulation
-```
-
-### 3. **Lead Scorer** (Medium prioritet)
-```
-Input: Bilprospekt-prospect
-Output:
-- Score 0-100
-- Faktorer som påverkar
-- Rekommenderad åtgärd (ring/brev/skip)
-```
-
-### 4. **Handlare-dashboard** (Medium prioritet)
-```
-Input: Region
-Output:
-- Lista på handlare
-- Annonser per handlare
-- Genomsnittspris
-- Marknadsandel
-```
+### Fas 5: Visualisering
+- [ ] Interaktiva grafer (Chart.js / Recharts)
+- [ ] Kartor (regional data)
+- [ ] Jämförelseverktyg
+- [ ] Automatiska rapporter
 
 ---
 
-## KPIs att tracka
+## Dashboard-mockup
 
-| Metric | Beskrivning | Mål |
-|--------|-------------|-----|
-| Data coverage | % av Blocket-annonser med Biluppgifter | 80% |
-| Dealer match rate | % ägare som matchar known_dealers | 90%+ |
-| Price accuracy | MAE på prisprediktioner | < 10% |
-| Lead conversion | Leads som blir kunder | 5%+ |
-| Data freshness | Tid sedan senaste uppdatering | < 24h |
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  FORDONLISTA ANALYZER                          [Region: Alla ▼] │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌─────────┐│
+│  │ Aktiva       │ │ Sålda/vecka  │ │ Snitt-pris   │ │ Liggtid ││
+│  │ annonser     │ │              │ │              │ │         ││
+│  │   12,450     │ │    1,230     │ │   189,500 kr │ │ 28 dagar││
+│  │   ↑ 5%       │ │    ↓ 3%     │ │   ↑ 2%      │ │ ↓ 2 dgr ││
+│  └──────────────┘ └──────────────┘ └──────────────┘ └─────────┘│
+│                                                                 │
+│  ┌─────────────────────────────┐ ┌─────────────────────────────┐│
+│  │ PRISINDEX PER MÄRKE         │ │ UTBUD ÖVER TID              ││
+│  │ ═══════════════════════════ │ │ ═══════════════════════════ ││
+│  │ Volvo    ████████░░ 185k    │ │      ___                    ││
+│  │ BMW      █████████░ 210k    │ │   __/   \__    __           ││
+│  │ Audi     █████████░ 205k    │ │  /        \__/  \           ││
+│  │ VW       ██████░░░░ 145k    │ │ /                \___       ││
+│  │ Toyota   ███████░░░ 165k    │ │ Jan  Mar  Maj  Jul  Sep     ││
+│  └─────────────────────────────┘ └─────────────────────────────┘│
+│                                                                 │
+│  ┌─────────────────────────────┐ ┌─────────────────────────────┐│
+│  │ TOP HANDLARE (Norrland)     │ │ HANDLARE VS PRIVAT          ││
+│  │ ═══════════════════════════ │ │ ═══════════════════════════ ││
+│  │ 1. Bilia Luleå     45 bilar │ │                             ││
+│  │ 2. Din Bil Umeå    38 bilar │ │ Handlare: 4,200 (34%)       ││
+│  │ 3. Holmgrens       32 bilar │ │ ██████████░░░░░░░░░░░░░░░░  ││
+│  │ 4. Motorbiten      28 bilar │ │                             ││
+│  │ 5. Norrlands Bil   25 bilar │ │ Privat: 8,250 (66%)         ││
+│  └─────────────────────────────┘ │ ████████████████████░░░░░░  ││
+│                                  └─────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## Nästa Actions
+## Prioriterade Nästa Steg
 
-1. **Skapa `/analyzer` route** - Ny sida för analyser
-2. **Implementera pris-analyzer** - Börja med enkel statistik
-3. **Lägg till miltal-verifiering** - Flagga avvikelser i UI
-4. **Dashboard för handlare** - Visa statistik per dealer
+### 1. **Pris-analyzer** (Första modul)
+- Prisindex per märke/modell
+- Percentiler (P25/P50/P75)
+- Regional jämförelse
+- Trend över tid
+
+### 2. **Handlare-dashboard**
+- Lista alla kända handlare
+- Antal annonser, genomsnittspris
+- Sortiment per handlare
+- Marknadsandel per region
+
+### 3. **Utbuds-översikt**
+- Totalt antal per region
+- Trend (ökar/minskar)
+- Fördelning märke/modell
+
+---
+
+## KPIs
+
+| Metric | Beskrivning |
+|--------|-------------|
+| Täckning | % av marknaden vi trackar |
+| Handlare | Antal identifierade handlare |
+| Historik | Månader av prisdata |
+| Precision | Kvalitet på aggregerad data |
 
 ---
 
