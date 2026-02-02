@@ -142,7 +142,13 @@ interface RecentBiluppgifter {
   }> | null
   // Historik (JSONB arrays)
   mileage_history: Array<{ date: string; mileage_km: number; mileage_mil: number }> | null
-  owner_history: Array<{ date: string; type: string; name?: string }> | null
+  owner_history: Array<{
+    date: string
+    type: string
+    name?: string
+    owner_class?: string  // "company", "person", "unknown"
+    details?: string
+  }> | null
   // Metadata
   fetched_at: string | null
 }
@@ -172,6 +178,75 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
   const [isFetchingBiluppgifter, setIsFetchingBiluppgifter] = useState(false)
   const [fetchResult, setFetchResult] = useState<{ success: number; failed: number; errors: string[] } | null>(null)
   const router = useRouter()
+
+  // Kolla om ägare är bilhandlare eller hyrbilsföretag
+  const isDealerOrRental = (ownerName: string | null, ownerHistory: RecentBiluppgifter['owner_history']) => {
+    if (!ownerName) return false
+
+    const dealerKeywords = [
+      'bil ab', 'bilar ab', 'auto ab', 'motor ab', 'car ab', 'cars ab',
+      'bilhandlare', 'bilgruppen', 'bilbolaget', 'bilcenter', 'bilhus',
+      'hyrbil', 'uthyrning', 'rental', 'leasing',
+      'hertz', 'avis', 'europcar', 'sixt', 'budget'
+    ]
+
+    const nameLower = ownerName.toLowerCase()
+    const isDealer = dealerKeywords.some(kw => nameLower.includes(kw))
+
+    // Kolla också owner_history första posten
+    if (!isDealer && ownerHistory && ownerHistory.length > 0) {
+      const firstOwner = ownerHistory[0]
+      if (firstOwner.type === 'Bilhandlare' ||
+          firstOwner.type?.includes('Finans') ||
+          firstOwner.type?.includes('Leasing') ||
+          firstOwner.owner_class === 'company') {
+        // Kolla om namnet innehåller bil-relaterade ord
+        return dealerKeywords.some(kw => nameLower.includes(kw))
+      }
+    }
+
+    return isDealer
+  }
+
+  // Hitta förra privatägaren från historiken
+  const findPreviousPrivateOwner = (ownerHistory: RecentBiluppgifter['owner_history']) => {
+    if (!ownerHistory || ownerHistory.length < 2) return null
+
+    // Hoppa över första (nuvarande ägare = handlaren)
+    for (let i = 1; i < ownerHistory.length; i++) {
+      const owner = ownerHistory[i]
+      if (owner.type === 'Privatperson' || owner.owner_class === 'person') {
+        // Hitta nästa ägare för att beräkna slutdatum
+        const soldDate = ownerHistory[i - 1]?.date || null
+        return {
+          name: owner.name,
+          purchaseDate: owner.date,
+          soldDate: soldDate,
+          details: owner.details
+        }
+      }
+    }
+    return null
+  }
+
+  // Beräkna ägartid mellan två datum
+  const calculateOwnershipDuration = (startDate: string, endDate: string | null) => {
+    if (!startDate || !endDate) return null
+
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    const diffMs = end.getTime() - start.getTime()
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+    if (diffDays < 30) return `${diffDays} dagar`
+
+    const years = Math.floor(diffDays / 365)
+    const months = Math.floor((diffDays % 365) / 30)
+
+    if (years === 0) return `${months} mån`
+    if (months === 0) return `${years} år`
+    return `${years} år, ${months} mån`
+  }
 
   // Hämta biluppgifter för annonser som saknar data
   const handleFetchBiluppgifter = async (batchSize: number = 10) => {
@@ -1079,141 +1154,222 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
                           </div>
                         </div>
 
-                        {/* Ägardata */}
-                        <div className="space-y-2">
-                          <h4 className="font-semibold text-sm text-gray-700 flex items-center gap-1">
-                            <Users className="w-4 h-4" /> Ägare
-                          </h4>
-                          <div className="text-sm space-y-1 bg-white p-2 rounded border">
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">Namn:</span>
-                              <span className="font-medium max-w-[150px] truncate">{item.owner_name || '-'}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">Ålder:</span>
-                              <span className="font-medium">{item.owner_age ? `${item.owner_age} år` : '-'}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">Telefon:</span>
-                              <span className="font-mono text-sm">{item.owner_phone || '-'}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">Ort:</span>
-                              <span className="font-medium">{item.owner_city || '-'}</span>
-                            </div>
-                            {item.owner_address && (
-                              <div className="pt-1 border-t text-xs text-gray-600">
-                                {item.owner_address}
-                                {item.owner_postal_code && `, ${item.owner_postal_code}`}
-                                {item.owner_postal_city && ` ${item.owner_postal_city}`}
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                        {/* Ägardata - Villkorad visning för bilhandlare */}
+                        {(() => {
+                          const isDealer = isDealerOrRental(item.owner_name, item.owner_history)
+                          const previousOwner = isDealer ? findPreviousPrivateOwner(item.owner_history) : null
+                          const dealerSinceDate = isDealer && item.owner_history?.[0]?.date
 
-                        {/* Relaterade fordon & Historik */}
-                        <div className="space-y-2">
-                          <h4 className="font-semibold text-sm text-gray-700 flex items-center gap-1">
-                            <Database className="w-4 h-4" /> Extra data
-                          </h4>
-                          <div className="text-sm space-y-1 bg-white p-2 rounded border">
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">Ägarens fordon:</span>
-                              <span className="font-medium">
-                                {item.owner_vehicles?.length ? (
-                                  <Badge variant="outline" className="text-xs">
-                                    {item.owner_vehicles.length} st
-                                  </Badge>
-                                ) : '-'}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">Fordon på adress:</span>
-                              <span className="font-medium">
-                                {item.address_vehicles?.length ? (
-                                  <Badge variant="outline" className="text-xs">
-                                    {item.address_vehicles.length} st
-                                  </Badge>
-                                ) : '-'}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">Mätarhistorik:</span>
-                              <span className="font-medium">
-                                {item.mileage_history?.length ? (
-                                  <Badge variant="outline" className="text-xs">
-                                    {item.mileage_history.length} avläsningar
-                                  </Badge>
-                                ) : '-'}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">Ägarhistorik:</span>
-                              <span className="font-medium">
-                                {item.owner_history?.length ? (
-                                  <Badge variant="outline" className="text-xs">
-                                    {item.owner_history.length} byten
-                                  </Badge>
-                                ) : '-'}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Visa ägarens andra fordon om de finns */}
-                          {item.owner_vehicles && item.owner_vehicles.length > 0 && (
-                            <div className="text-xs bg-blue-50 p-2 rounded border border-blue-100 max-h-48 overflow-y-auto">
-                              <span className="font-medium text-blue-700 block mb-2">
-                                Ägarens fordon ({item.owner_vehicles.length} st):
-                              </span>
-                              <div className="space-y-1.5">
-                                {item.owner_vehicles.slice(0, 8).map((v, i) => (
-                                  <div key={i} className="flex items-center justify-between bg-white p-1.5 rounded border border-blue-100">
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-mono font-semibold text-blue-800">{v.regnr}</span>
-                                      <span className="text-gray-700">{v.model}</span>
-                                      <span className="text-gray-400">{v.year}</span>
-                                      {v.color && <span className="text-gray-400">({v.color})</span>}
+                          if (isDealer) {
+                            return (
+                              <>
+                                {/* Nuvarande ägare = Bilhandlare */}
+                                <div className="space-y-2">
+                                  <h4 className="font-semibold text-sm text-orange-700 flex items-center gap-1">
+                                    <Store className="w-4 h-4" /> Bilhandlare
+                                  </h4>
+                                  <div className="text-sm space-y-1 bg-orange-50 p-2 rounded border border-orange-200">
+                                    <div className="flex justify-between">
+                                      <span className="text-orange-600">Namn:</span>
+                                      <span className="font-medium text-orange-900 max-w-[150px] truncate">{item.owner_name || '-'}</span>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                      {v.status && (
-                                        <Badge variant="outline" className={`text-[10px] ${v.status === 'I Trafik' ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-600'}`}>
-                                          {v.status}
+                                    <div className="flex justify-between">
+                                      <span className="text-orange-600">Ort:</span>
+                                      <span className="font-medium">{item.owner_city || '-'}</span>
+                                    </div>
+                                    {dealerSinceDate && (
+                                      <div className="flex justify-between">
+                                        <span className="text-orange-600">Ägare sedan:</span>
+                                        <span className="font-medium">{new Date(dealerSinceDate).toLocaleDateString('sv-SE')}</span>
+                                      </div>
+                                    )}
+                                    {dealerSinceDate && (
+                                      <div className="flex justify-between">
+                                        <span className="text-orange-600">Haft bilen:</span>
+                                        <span className="font-medium">{calculateOwnershipDuration(dealerSinceDate, new Date().toISOString().split('T')[0])}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Förra ägaren = LEAD */}
+                                <div className="space-y-2">
+                                  <h4 className="font-semibold text-sm text-green-700 flex items-center gap-1">
+                                    <User className="w-4 h-4" /> Förra ägare (LEAD)
+                                  </h4>
+                                  {previousOwner ? (
+                                    <div className="text-sm space-y-1 bg-green-50 p-2 rounded border border-green-200">
+                                      <div className="flex justify-between">
+                                        <span className="text-green-600">Namn:</span>
+                                        <span className="font-semibold text-green-900">{previousOwner.name || '-'}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-green-600">Köpte bilen:</span>
+                                        <span className="font-medium">{previousOwner.purchaseDate ? new Date(previousOwner.purchaseDate).toLocaleDateString('sv-SE') : '-'}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-green-600">Sålde bilen:</span>
+                                        <span className="font-medium">{previousOwner.soldDate ? new Date(previousOwner.soldDate).toLocaleDateString('sv-SE') : '-'}</span>
+                                      </div>
+                                      {previousOwner.purchaseDate && previousOwner.soldDate && (
+                                        <div className="flex justify-between pt-1 border-t border-green-200">
+                                          <span className="text-green-600 font-medium">Ägde bilen i:</span>
+                                          <Badge className="bg-green-100 text-green-800 font-semibold">
+                                            {calculateOwnershipDuration(previousOwner.purchaseDate, previousOwner.soldDate)}
+                                          </Badge>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="text-sm bg-gray-50 p-2 rounded border text-gray-500">
+                                      Ingen privatperson hittad i historiken
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            )
+                          }
+
+                          // Vanlig privatägare
+                          return (
+                            <>
+                              <div className="space-y-2">
+                                <h4 className="font-semibold text-sm text-gray-700 flex items-center gap-1">
+                                  <Users className="w-4 h-4" /> Ägare
+                                </h4>
+                                <div className="text-sm space-y-1 bg-white p-2 rounded border">
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-500">Namn:</span>
+                                    <span className="font-medium max-w-[150px] truncate">{item.owner_name || '-'}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-500">Ålder:</span>
+                                    <span className="font-medium">{item.owner_age ? `${item.owner_age} år` : '-'}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-500">Telefon:</span>
+                                    <span className="font-mono text-sm">{item.owner_phone || '-'}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-500">Ort:</span>
+                                    <span className="font-medium">{item.owner_city || '-'}</span>
+                                  </div>
+                                  {item.owner_address && (
+                                    <div className="pt-1 border-t text-xs text-gray-600">
+                                      {item.owner_address}
+                                      {item.owner_postal_code && `, ${item.owner_postal_code}`}
+                                      {item.owner_postal_city && ` ${item.owner_postal_city}`}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Extra data - endast för privatägare */}
+                              <div className="space-y-2">
+                                <h4 className="font-semibold text-sm text-gray-700 flex items-center gap-1">
+                                  <Database className="w-4 h-4" /> Extra data
+                                </h4>
+                                <div className="text-sm space-y-1 bg-white p-2 rounded border">
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-500">Ägarens fordon:</span>
+                                    <span className="font-medium">
+                                      {item.owner_vehicles?.length ? (
+                                        <Badge variant="outline" className="text-xs">
+                                          {item.owner_vehicles.length} st
                                         </Badge>
-                                      )}
-                                      {v.ownership_time && (
-                                        <span className="text-gray-500 text-[10px]">{v.ownership_time}</span>
+                                      ) : '-'}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-500">Fordon på adress:</span>
+                                    <span className="font-medium">
+                                      {item.address_vehicles?.length ? (
+                                        <Badge variant="outline" className="text-xs">
+                                          {item.address_vehicles.length} st
+                                        </Badge>
+                                      ) : '-'}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-500">Mätarhistorik:</span>
+                                    <span className="font-medium">
+                                      {item.mileage_history?.length ? (
+                                        <Badge variant="outline" className="text-xs">
+                                          {item.mileage_history.length} avläsningar
+                                        </Badge>
+                                      ) : '-'}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span className="text-gray-500">Ägarhistorik:</span>
+                                    <span className="font-medium">
+                                      {item.owner_history?.length ? (
+                                        <Badge variant="outline" className="text-xs">
+                                          {item.owner_history.length} byten
+                                        </Badge>
+                                      ) : '-'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Visa ägarens andra fordon om de finns - endast för privatägare */}
+                                {item.owner_vehicles && item.owner_vehicles.length > 0 && (
+                                  <div className="text-xs bg-blue-50 p-2 rounded border border-blue-100 max-h-48 overflow-y-auto">
+                                    <span className="font-medium text-blue-700 block mb-2">
+                                      Ägarens fordon ({item.owner_vehicles.length} st):
+                                    </span>
+                                    <div className="space-y-1.5">
+                                      {item.owner_vehicles.slice(0, 8).map((v, i) => (
+                                        <div key={i} className="flex items-center justify-between bg-white p-1.5 rounded border border-blue-100">
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-mono font-semibold text-blue-800">{v.regnr}</span>
+                                            <span className="text-gray-700">{v.model}</span>
+                                            <span className="text-gray-400">{v.year}</span>
+                                            {v.color && <span className="text-gray-400">({v.color})</span>}
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            {v.status && (
+                                              <Badge variant="outline" className={`text-[10px] ${v.status === 'I Trafik' ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-600'}`}>
+                                                {v.status}
+                                              </Badge>
+                                            )}
+                                            {v.ownership_time && (
+                                              <span className="text-gray-500 text-[10px]">{v.ownership_time}</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                      {item.owner_vehicles.length > 8 && (
+                                        <div className="text-blue-400 text-center pt-1">+{item.owner_vehicles.length - 8} fordon till</div>
                                       )}
                                     </div>
                                   </div>
-                                ))}
-                                {item.owner_vehicles.length > 8 && (
-                                  <div className="text-blue-400 text-center pt-1">+{item.owner_vehicles.length - 8} fordon till</div>
                                 )}
-                              </div>
-                            </div>
-                          )}
 
-                          {/* Visa fordon på adressen om de finns */}
-                          {item.address_vehicles && item.address_vehicles.length > 0 && (
-                            <div className="text-xs bg-purple-50 p-2 rounded border border-purple-100 max-h-32 overflow-y-auto">
-                              <span className="font-medium text-purple-700 block mb-2">
-                                Fordon på adressen ({item.address_vehicles.length} st):
-                              </span>
-                              <div className="space-y-1">
-                                {item.address_vehicles.slice(0, 5).map((v, i) => (
-                                  <div key={i} className="flex items-center gap-2 bg-white p-1 rounded border border-purple-100">
-                                    <span className="font-mono font-semibold text-purple-800">{v.regnr}</span>
-                                    <span className="text-gray-700">{v.model}</span>
-                                    <span className="text-gray-400">{v.year}</span>
+                                {/* Visa fordon på adressen om de finns */}
+                                {item.address_vehicles && item.address_vehicles.length > 0 && (
+                                  <div className="text-xs bg-purple-50 p-2 rounded border border-purple-100 max-h-32 overflow-y-auto">
+                                    <span className="font-medium text-purple-700 block mb-2">
+                                      Fordon på adressen ({item.address_vehicles.length} st):
+                                    </span>
+                                    <div className="space-y-1">
+                                      {item.address_vehicles.slice(0, 5).map((v, i) => (
+                                        <div key={i} className="flex items-center gap-2 bg-white p-1 rounded border border-purple-100">
+                                          <span className="font-mono font-semibold text-purple-800">{v.regnr}</span>
+                                          <span className="text-gray-700">{v.model}</span>
+                                          <span className="text-gray-400">{v.year}</span>
+                                        </div>
+                                      ))}
+                                      {item.address_vehicles.length > 5 && (
+                                        <div className="text-purple-400 text-center">+{item.address_vehicles.length - 5} till</div>
+                                      )}
+                                    </div>
                                   </div>
-                                ))}
-                                {item.address_vehicles.length > 5 && (
-                                  <div className="text-purple-400 text-center">+{item.address_vehicles.length - 5} till</div>
                                 )}
                               </div>
-                            </div>
-                          )}
-                        </div>
+                            </>
+                          )
+                        })()}
                       </div>
                     </div>
                   ))}
