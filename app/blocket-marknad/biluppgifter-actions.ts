@@ -154,6 +154,99 @@ export async function fetchBiluppgifterForBlocketAds(
 }
 
 /**
+ * Hämta biluppgifter för annonser som saknar data (batch)
+ * Returnerar progress och kan avbrytas
+ */
+export async function fetchMissingBiluppgifter(
+  limit: number = 10
+): Promise<{
+  success: number
+  failed: number
+  errors: string[]
+  remaining: number
+}> {
+  const supabase = await createClient()
+
+  // Hitta aktiva annonser med regnummer som INTE har biluppgifter ännu
+  const { data: ads } = await supabase
+    .from('blocket_annonser')
+    .select('id, regnummer')
+    .is('borttagen', null)
+    .not('regnummer', 'is', null)
+    .limit(limit)
+
+  if (!ads || ads.length === 0) {
+    return { success: 0, failed: 0, errors: [], remaining: 0 }
+  }
+
+  // Filtrera bort de som redan har biluppgifter
+  const regnummers = ads.map(a => a.regnummer.toUpperCase())
+  const { data: existing } = await supabase
+    .from('biluppgifter_data')
+    .select('regnummer')
+    .in('regnummer', regnummers)
+
+  const existingSet = new Set(existing?.map(e => e.regnummer) || [])
+  const adsToFetch = ads.filter(a => !existingSet.has(a.regnummer.toUpperCase()))
+
+  if (adsToFetch.length === 0) {
+    // Räkna återstående
+    const { count: remainingCount } = await supabase
+      .from('blocket_annonser')
+      .select('*', { count: 'exact', head: true })
+      .is('borttagen', null)
+      .not('regnummer', 'is', null)
+
+    const { count: fetchedCount } = await supabase
+      .from('biluppgifter_data')
+      .select('*', { count: 'exact', head: true })
+
+    return {
+      success: 0,
+      failed: 0,
+      errors: ['Alla i denna batch har redan biluppgifter'],
+      remaining: (remainingCount || 0) - (fetchedCount || 0)
+    }
+  }
+
+  let success = 0
+  let failed = 0
+  const errors: string[] = []
+
+  for (const ad of adsToFetch) {
+    const result = await fetchAndSaveBiluppgifter(ad.regnummer, ad.id)
+
+    if (result.success) {
+      success++
+    } else {
+      failed++
+      errors.push(`${ad.regnummer}: ${result.error}`)
+    }
+
+    // Rate limiting - 1 sekund mellan requests
+    await new Promise(resolve => setTimeout(resolve, 1000))
+  }
+
+  // Räkna återstående
+  const { count: totalWithRegnummer } = await supabase
+    .from('blocket_annonser')
+    .select('*', { count: 'exact', head: true })
+    .is('borttagen', null)
+    .not('regnummer', 'is', null)
+
+  const { count: totalFetched } = await supabase
+    .from('biluppgifter_data')
+    .select('*', { count: 'exact', head: true })
+
+  return {
+    success,
+    failed,
+    errors,
+    remaining: (totalWithRegnummer || 0) - (totalFetched || 0)
+  }
+}
+
+/**
  * Hämta Blocket-annons med biluppgifter-data (JOIN)
  */
 export async function getBlocketAdWithBiluppgifter(blocketId: number) {

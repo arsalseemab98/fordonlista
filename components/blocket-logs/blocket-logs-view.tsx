@@ -37,7 +37,9 @@ import {
 import { useState, useTransition, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { deleteScraperLog, deleteAllLogs } from '@/app/blocket-logs/actions'
+import { fetchMissingBiluppgifter } from '@/app/blocket-marknad/biluppgifter-actions'
 import { useRouter } from 'next/navigation'
+import { Download, Loader2 } from 'lucide-react'
 
 interface ScraperLog {
   id: number
@@ -140,7 +142,24 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
   const [showAllSoldCars, setShowAllSoldCars] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [isFetchingBiluppgifter, setIsFetchingBiluppgifter] = useState(false)
+  const [fetchResult, setFetchResult] = useState<{ success: number; failed: number; errors: string[] } | null>(null)
   const router = useRouter()
+
+  // Hämta biluppgifter för annonser som saknar data
+  const handleFetchBiluppgifter = async (batchSize: number = 10) => {
+    setIsFetchingBiluppgifter(true)
+    setFetchResult(null)
+    try {
+      const result = await fetchMissingBiluppgifter(batchSize)
+      setFetchResult({ success: result.success, failed: result.failed, errors: result.errors })
+      router.refresh() // Uppdatera stats
+    } catch (error) {
+      setFetchResult({ success: 0, failed: 1, errors: ['Kunde inte hämta biluppgifter: ' + String(error)] })
+    } finally {
+      setIsFetchingBiluppgifter(false)
+    }
+  }
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
@@ -865,7 +884,7 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
             </Card>
           </div>
 
-          {/* Progress Bar */}
+          {/* Progress Bar + Fetch Button */}
           <Card>
             <CardContent className="py-4">
               <div className="flex items-center justify-between mb-2">
@@ -874,7 +893,7 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
                   {biluppgifterStats.totalFetched} / {biluppgifterStats.totalWithRegnummer}
                 </span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-3">
+              <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
                 <div
                   className="bg-gradient-to-r from-green-500 to-emerald-500 h-3 rounded-full transition-all duration-500"
                   style={{
@@ -884,6 +903,73 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
                   }}
                 />
               </div>
+
+              {/* Fetch Actions */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <Button
+                  onClick={() => handleFetchBiluppgifter(5)}
+                  disabled={isFetchingBiluppgifter || biluppgifterStats.remaining === 0}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {isFetchingBiluppgifter ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Hämtar...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4 mr-2" />
+                      Hämta 5 st
+                    </>
+                  )}
+                </Button>
+                <Button
+                  onClick={() => handleFetchBiluppgifter(20)}
+                  disabled={isFetchingBiluppgifter || biluppgifterStats.remaining === 0}
+                  variant="outline"
+                >
+                  {isFetchingBiluppgifter ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4 mr-2" />
+                  )}
+                  Hämta 20 st
+                </Button>
+                <Button
+                  onClick={() => handleFetchBiluppgifter(50)}
+                  disabled={isFetchingBiluppgifter || biluppgifterStats.remaining === 0}
+                  variant="outline"
+                >
+                  {isFetchingBiluppgifter ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4 mr-2" />
+                  )}
+                  Hämta 50 st
+                </Button>
+
+                {/* Status message */}
+                {fetchResult && (
+                  <div className={`text-sm px-3 py-1 rounded-full ${
+                    fetchResult.failed > 0 ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'
+                  }`}>
+                    {fetchResult.success > 0 && <span>{fetchResult.success} hämtade</span>}
+                    {fetchResult.failed > 0 && <span className="ml-2">{fetchResult.failed} misslyckades</span>}
+                  </div>
+                )}
+              </div>
+
+              {/* Error messages */}
+              {fetchResult?.errors && fetchResult.errors.length > 0 && (
+                <div className="mt-3 text-xs text-red-600 bg-red-50 p-2 rounded">
+                  {fetchResult.errors.slice(0, 3).map((err, i) => (
+                    <div key={i}>{err}</div>
+                  ))}
+                  {fetchResult.errors.length > 3 && (
+                    <div className="text-gray-500">...och {fetchResult.errors.length - 3} till</div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 
