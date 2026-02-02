@@ -125,8 +125,21 @@ interface RecentBiluppgifter {
   owner_postal_city: string | null
   owner_phone: string | null
   // Relaterade fordon (JSONB arrays)
-  owner_vehicles: Array<{ regnr: string; description: string }> | null
-  address_vehicles: Array<{ regnr: string; description: string }> | null
+  owner_vehicles: Array<{
+    regnr: string
+    model: string
+    year: number
+    color: string
+    status?: string
+    ownership_time?: string
+  }> | null
+  address_vehicles: Array<{
+    regnr: string
+    model: string
+    year: number
+    color: string
+    status?: string
+  }> | null
   // Historik (JSONB arrays)
   mileage_history: Array<{ date: string; mileage_km: number; mileage_mil: number }> | null
   owner_history: Array<{ date: string; type: string; name?: string }> | null
@@ -1148,16 +1161,54 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
 
                           {/* Visa ägarens andra fordon om de finns */}
                           {item.owner_vehicles && item.owner_vehicles.length > 0 && (
-                            <div className="text-xs bg-blue-50 p-2 rounded border border-blue-100">
-                              <span className="font-medium text-blue-700">Ägarens fordon:</span>
-                              <div className="mt-1 space-y-0.5">
-                                {item.owner_vehicles.slice(0, 3).map((v, i) => (
-                                  <div key={i} className="text-blue-600">
-                                    {v.regnr}: {v.description}
+                            <div className="text-xs bg-blue-50 p-2 rounded border border-blue-100 max-h-48 overflow-y-auto">
+                              <span className="font-medium text-blue-700 block mb-2">
+                                Ägarens fordon ({item.owner_vehicles.length} st):
+                              </span>
+                              <div className="space-y-1.5">
+                                {item.owner_vehicles.slice(0, 8).map((v, i) => (
+                                  <div key={i} className="flex items-center justify-between bg-white p-1.5 rounded border border-blue-100">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-mono font-semibold text-blue-800">{v.regnr}</span>
+                                      <span className="text-gray-700">{v.model}</span>
+                                      <span className="text-gray-400">{v.year}</span>
+                                      {v.color && <span className="text-gray-400">({v.color})</span>}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      {v.status && (
+                                        <Badge variant="outline" className={`text-[10px] ${v.status === 'I Trafik' ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-600'}`}>
+                                          {v.status}
+                                        </Badge>
+                                      )}
+                                      {v.ownership_time && (
+                                        <span className="text-gray-500 text-[10px]">{v.ownership_time}</span>
+                                      )}
+                                    </div>
                                   </div>
                                 ))}
-                                {item.owner_vehicles.length > 3 && (
-                                  <div className="text-blue-400">+{item.owner_vehicles.length - 3} till</div>
+                                {item.owner_vehicles.length > 8 && (
+                                  <div className="text-blue-400 text-center pt-1">+{item.owner_vehicles.length - 8} fordon till</div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Visa fordon på adressen om de finns */}
+                          {item.address_vehicles && item.address_vehicles.length > 0 && (
+                            <div className="text-xs bg-purple-50 p-2 rounded border border-purple-100 max-h-32 overflow-y-auto">
+                              <span className="font-medium text-purple-700 block mb-2">
+                                Fordon på adressen ({item.address_vehicles.length} st):
+                              </span>
+                              <div className="space-y-1">
+                                {item.address_vehicles.slice(0, 5).map((v, i) => (
+                                  <div key={i} className="flex items-center gap-2 bg-white p-1 rounded border border-purple-100">
+                                    <span className="font-mono font-semibold text-purple-800">{v.regnr}</span>
+                                    <span className="text-gray-700">{v.model}</span>
+                                    <span className="text-gray-400">{v.year}</span>
+                                  </div>
+                                ))}
+                                {item.address_vehicles.length > 5 && (
+                                  <div className="text-purple-400 text-center">+{item.address_vehicles.length - 5} till</div>
                                 )}
                               </div>
                             </div>
