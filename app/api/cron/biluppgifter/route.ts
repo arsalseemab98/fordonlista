@@ -23,14 +23,9 @@ function isWithinOperatingHours(): boolean {
   return hour >= 9 && hour < 19
 }
 
-export async function GET(request: Request) {
-  // Verify cron secret (optional but recommended)
-  const authHeader = request.headers.get('authorization')
-  const cronSecret = process.env.CRON_SECRET
-
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+export async function GET() {
+  // Vercel Cron jobs are automatically authenticated
+  // No need for manual secret verification
 
   // Check operating hours
   if (!isWithinOperatingHours()) {
