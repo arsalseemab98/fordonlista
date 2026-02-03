@@ -90,11 +90,41 @@ async function fetchBiluppgifter(regnr) {
   }
 }
 
+// Fetch profile by ID (for previous owner)
+async function fetchProfile(profileId) {
+  try {
+    const response = await fetch(`${BILUPPGIFTER_API}/api/profile/${profileId}`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.log(`  ⚠️ Kunde inte hämta profil ${profileId}: ${error.message}`);
+    return null;
+  }
+}
+
+// Find previous private owner from owner_history
+function findPreviousPrivateOwner(ownerHistory) {
+  if (!ownerHistory || !Array.isArray(ownerHistory)) return null;
+
+  // Skip first entry (current owner), find first "person" (privatperson)
+  for (let i = 1; i < ownerHistory.length; i++) {
+    const owner = ownerHistory[i];
+    if (owner.owner_class === 'person' && owner.profile_id) {
+      return owner;
+    }
+  }
+  return null;
+}
+
 // Save biluppgifter to database
 async function saveBiluppgifter(blocketId, regnr, data) {
   if (!data?.owner_profile) return false;
 
   const profile = data.owner_profile;
+  const isDealer = profile.vehicles?.length >= 10 || false;
+
   const dbData = {
     regnummer: regnr,
     blocket_id: blocketId,
@@ -104,20 +134,47 @@ async function saveBiluppgifter(blocketId, regnr, data) {
     owner_address: profile.address || null,
     owner_postal_code: profile.postal_code || null,
     owner_postal_city: profile.postal_city || null,
+    owner_phone: profile.phone || null,
     owner_vehicles: profile.vehicles || [],
     address_vehicles: profile.address_vehicles || [],
     mileage_history: data.mileage_history || [],
     owner_history: data.owner_history || [],
-    is_dealer: profile.vehicles?.length >= 10 || false,
-    fetched_at: new Date().toISOString()
+    is_dealer: isDealer,
+    fetched_at: new Date().toISOString(),
+    previous_owner: null
   };
+
+  // Om handlare: hämta förra privata ägaren
+  if (isDealer && data.owner_history) {
+    const prevOwnerInfo = findPreviousPrivateOwner(data.owner_history);
+    if (prevOwnerInfo) {
+      console.log(`  🔍 Handlare! Hämtar förra ägaren: ${prevOwnerInfo.name}...`);
+      const prevProfile = await fetchProfile(prevOwnerInfo.profile_id);
+
+      if (prevProfile) {
+        dbData.previous_owner = {
+          name: prevProfile.name || prevOwnerInfo.name,
+          profile_id: prevOwnerInfo.profile_id,
+          purchase_date: prevOwnerInfo.date,
+          age: prevProfile.age || null,
+          city: prevProfile.city || null,
+          address: prevProfile.address || null,
+          postal_code: prevProfile.postal_code || null,
+          postal_city: prevProfile.postal_city || null,
+          phone: prevProfile.phone || null,
+          vehicles: prevProfile.vehicles || []
+        };
+        console.log(`  ✅ Förra ägare: ${prevProfile.name}, ${prevProfile.age} år, ${prevProfile.city}, tel: ${prevProfile.phone || 'saknas'}`);
+      }
+    }
+  }
 
   const { error } = await supabase
     .from('biluppgifter_data')
     .upsert(dbData, { onConflict: 'regnummer' });
 
   if (error) throw new Error(`DB error: ${error.message}`);
-  return true;
+  return { saved: true, isDealer, hasPreviousOwner: !!dbData.previous_owner };
 }
 
 // Main function
@@ -158,6 +215,9 @@ async function main() {
   await log('info', `Found ${ads.length} ads without biluppgifter`);
 
   // 3. Fetch biluppgifter for each ad
+  let dealers = 0;
+  let withPrevOwner = 0;
+
   for (const ad of ads) {
     const regnr = ad.regnummer.toUpperCase();
 
@@ -165,9 +225,16 @@ async function main() {
       const data = await fetchBiluppgifter(regnr);
 
       if (data?.owner_profile) {
-        await saveBiluppgifter(ad.id, regnr, data);
+        const result = await saveBiluppgifter(ad.id, regnr, data);
         success++;
-        console.log(`✅ ${regnr}: ${data.owner_profile.name || 'Handlare'}`);
+
+        if (result.isDealer) {
+          dealers++;
+          if (result.hasPreviousOwner) withPrevOwner++;
+        }
+
+        const ownerInfo = result.isDealer ? '🏪 HANDLARE' : `👤 ${data.owner_profile.name}`;
+        console.log(`✅ ${regnr}: ${ownerInfo}`);
       } else {
         skipped++;
         console.log(`⚠️ ${regnr}: Ingen ägardata`);
@@ -188,11 +255,13 @@ async function main() {
     success,
     failed,
     skipped,
+    dealers,
+    with_previous_owner: withPrevOwner,
     duration_seconds: duration,
     errors: errors.length > 0 ? errors : undefined
   });
 
-  console.log(`\n✅ Klart! ${success} sparade, ${skipped} utan data, ${failed} fel (${duration}s)`);
+  console.log(`\n✅ Klart! ${success} sparade (${dealers} handlare, ${withPrevOwner} med förra ägare), ${skipped} utan data, ${failed} fel (${duration}s)`);
 }
 
 // Run
