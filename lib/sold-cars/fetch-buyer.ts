@@ -192,7 +192,16 @@ export async function processSoldCarsForBuyers(limit: number = 10): Promise<{
     try {
       const regnr = ad.regnummer.toUpperCase().replace(/\s/g, '')
 
-      // Hämta köpardata från biluppgifter
+      // STEG 1: Hämta ORIGINAL ägare från biluppgifter_data (sparad när annonsen var aktiv)
+      const { data: originalBuData } = await supabase
+        .from('biluppgifter_data')
+        .select('owner_name')
+        .eq('blocket_id', ad.id)
+        .single()
+
+      const originalOwnerName = originalBuData?.owner_name || null
+
+      // STEG 2: Hämta NUVARANDE ägare från biluppgifter (efter försäljning)
       const buResult = await fetchBiluppgifterComplete(regnr)
 
       if (!buResult.success) {
@@ -200,33 +209,39 @@ export async function processSoldCarsForBuyers(limit: number = 10): Promise<{
         continue
       }
 
+      const currentOwnerName = buResult.owner_name || null
+
       // Beräkna liggtid
       const liggtidDagar = ad.forst_sedd && ad.borttagen
         ? Math.floor((new Date(ad.borttagen).getTime() - new Date(ad.forst_sedd).getTime()) / (1000 * 60 * 60 * 24))
         : null
-
-      // Kolla om ägarbyte har skett
-      // Jämför säljare (från Blocket) med nuvarande ägare (från Biluppgifter)
-      const sellerName = ad.saljare_namn || null
-      const buyerName = buResult.owner_name || null
 
       // Beräkna dagar sedan såld
       const daysSinceSold = ad.borttagen
         ? Math.floor((Date.now() - new Date(ad.borttagen).getTime()) / (1000 * 60 * 60 * 24))
         : 0
 
+      // STEG 3: Jämför ORIGINAL ägare med NUVARANDE ägare
+      // Om vi inte har original-data, använd Blocket saljare_namn som fallback
+      const sellerName = originalOwnerName || ad.saljare_namn || null
+
       // Avgör ägarbyte-status:
       // - Om samma ägare efter 90+ dagar = inte såld (agarbyte_gjort = false)
       // - Om samma ägare men < 90 dagar = vänta (skippa för nu, kolla igen senare)
       // - Om olika ägare = ägarbyte bekräftat (agarbyte_gjort = true)
-      const sameOwner = isSameOwner(sellerName, buyerName)
+      const sameOwner = isSameOwner(sellerName, currentOwnerName)
 
-      if (sameOwner && daysSinceSold < 90) {
+      // Om vi inte har original-data OCH inte Blocket-namn, anta ägarbyte (kan inte verifiera)
+      const canVerify = sellerName !== null
+
+      if (canVerify && sameOwner && daysSinceSold < 90) {
         // Fortfarande för tidigt, skippa och kolla igen senare
         continue
       }
 
-      const agarbyteGjort = !sameOwner
+      // Om vi kan verifiera: kolla om samma ägare
+      // Om vi INTE kan verifiera: anta att ägarbyte skett (optimistiskt)
+      const agarbyteGjort = canVerify ? !sameOwner : true
 
       if (!agarbyteGjort) {
         noOwnerChange++
@@ -238,19 +253,19 @@ export async function processSoldCarsForBuyers(limit: number = 10): Promise<{
         .insert({
           blocket_id: ad.id,
           regnummer: regnr,
-          // Säljdata
+          // Säljdata (original ägare = säljaren)
           slutpris: ad.pris,
           liggtid_dagar: liggtidDagar,
           saljare_typ: ad.saljare_typ,
-          saljare_namn: sellerName,
+          saljare_namn: sellerName,  // Från biluppgifter_data eller Blocket
           sold_at: ad.borttagen,
           // Bildata
           marke: ad.marke,
           modell: ad.modell,
           arsmodell: ad.arsmodell,
           miltal: ad.miltal,
-          // Köpardata (om ägarbyte gjorts, annars samma som säljare)
-          kopare_namn: buyerName,
+          // Köpardata (nuvarande ägare = köparen)
+          kopare_namn: currentOwnerName,
           kopare_typ: buResult.is_dealer ? 'handlare' : 'privatperson',
           kopare_is_dealer: buResult.is_dealer || false,
           kopare_alder: buResult.owner_age,
