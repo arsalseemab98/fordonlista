@@ -34,7 +34,8 @@ import {
   Phone,
   Home,
   ShoppingBag,
-  ArrowRight
+  ArrowRight,
+  ClipboardList
 } from 'lucide-react'
 import { useState, useTransition, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
@@ -1285,6 +1286,76 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
             </CardContent>
           </Card>
 
+          {/* Biluppgifter Cron Logs */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <ClipboardList className="w-5 h-5 text-purple-600" />
+                  Cron-körningsloggar
+                </span>
+                <Badge className="bg-purple-100 text-purple-800">{biluppgifterStats.logs.length} st</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {biluppgifterStats.logs.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">Inga loggar ännu</p>
+              ) : (
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {biluppgifterStats.logs.slice(0, 20).map((log) => (
+                    <div
+                      key={log.id}
+                      className={`flex items-start gap-3 p-2 rounded text-sm ${
+                        log.type === 'error'
+                          ? 'bg-red-50 border border-red-200'
+                          : log.type === 'warning'
+                          ? 'bg-amber-50 border border-amber-200'
+                          : 'bg-gray-50 border border-gray-200'
+                      }`}
+                    >
+                      <span className={`font-mono text-xs px-1.5 py-0.5 rounded ${
+                        log.type === 'error'
+                          ? 'bg-red-200 text-red-800'
+                          : log.type === 'warning'
+                          ? 'bg-amber-200 text-amber-800'
+                          : 'bg-blue-200 text-blue-800'
+                      }`}>
+                        {log.type.toUpperCase()}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-900">{log.message}</div>
+                        {log.details && Object.keys(log.details).length > 0 && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            {(log.details as { success?: number; failed?: number; skipped?: number }).success !== undefined && (
+                              <span className="mr-2">✅ {(log.details as { success?: number }).success} sparade</span>
+                            )}
+                            {(log.details as { failed?: number }).failed !== undefined && (log.details as { failed?: number }).failed! > 0 && (
+                              <span className="mr-2">❌ {(log.details as { failed?: number }).failed} fel</span>
+                            )}
+                            {(log.details as { skipped?: number }).skipped !== undefined && (log.details as { skipped?: number }).skipped! > 0 && (
+                              <span className="mr-2">⏭️ {(log.details as { skipped?: number }).skipped} hoppade</span>
+                            )}
+                            {(log.details as { duration_seconds?: number }).duration_seconds && (
+                              <span>⏱️ {(log.details as { duration_seconds?: number }).duration_seconds}s</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-xs text-gray-400 whitespace-nowrap">
+                        {new Date(log.created_at).toLocaleString('sv-SE', {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Recent Fetches - Detailed Cards */}
           <Card>
             <CardHeader>
@@ -1333,8 +1404,8 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
                             </div>
                           )}
                           {item.fetched_at && (
-                            <span className="text-xs text-muted-foreground">
-                              Hämtad {formatTimeAgo(item.fetched_at)}
+                            <span className="text-xs text-muted-foreground" title={new Date(item.fetched_at).toLocaleString('sv-SE')}>
+                              Hämtad {new Date(item.fetched_at).toLocaleString('sv-SE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             </span>
                           )}
                         </div>
