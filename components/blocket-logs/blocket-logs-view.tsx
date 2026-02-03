@@ -1797,49 +1797,38 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
                           </div>
                         </div>
 
-                        {/* Köparens fordon - Visa INTE för bilhandlare */}
-                        {!item.kopare_is_dealer ? (
-                          <div className="space-y-2">
-                            <h4 className="font-semibold text-sm text-gray-700 flex items-center gap-1">
-                              <Car className="w-4 h-4" /> Köparens fordon
-                              {item.kopare_fordon && item.kopare_fordon.length > 0 && (
-                                <Badge variant="outline" className="ml-1 text-xs">{item.kopare_fordon.length} st</Badge>
-                              )}
-                            </h4>
-                            <div className="text-sm bg-white p-2 rounded border max-h-32 overflow-y-auto">
-                              {item.kopare_fordon && item.kopare_fordon.length > 0 ? (
-                                <div className="space-y-1">
-                                  {item.kopare_fordon.slice(0, 5).map((v, i) => (
-                                    <div key={i} className="flex justify-between items-center text-xs">
-                                      <span className="font-mono bg-gray-100 px-1 rounded">{v.regnr}</span>
-                                      <span className="text-gray-600 truncate ml-2">
-                                        {v.model || ''} {v.year || ''}
-                                      </span>
-                                    </div>
-                                  ))}
-                                  {item.kopare_fordon.length > 5 && (
-                                    <div className="text-gray-400 text-center">+{item.kopare_fordon.length - 5} till</div>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-gray-400">Inga fordon</span>
-                              )}
-                            </div>
+                        {/* Köparens fordon */}
+                        <div className="space-y-2">
+                          <h4 className="font-semibold text-sm text-gray-700 flex items-center gap-1">
+                            <Car className="w-4 h-4" /> Köparens fordon
+                            {item.kopare_fordon && item.kopare_fordon.length > 0 && (
+                              <Badge variant="outline" className="ml-1 text-xs">{item.kopare_fordon.length} st</Badge>
+                            )}
+                          </h4>
+                          <div className="text-sm bg-white p-2 rounded border max-h-32 overflow-y-auto">
+                            {item.kopare_fordon && item.kopare_fordon.length > 0 ? (
+                              <div className="space-y-1">
+                                {item.kopare_fordon.slice(0, 5).map((v, i) => (
+                                  <div key={i} className="flex justify-between items-center text-xs">
+                                    <span className="font-mono bg-gray-100 px-1 rounded">{v.regnr}</span>
+                                    <span className="text-gray-600 truncate ml-2">
+                                      {v.model || ''} {v.year || ''}
+                                    </span>
+                                  </div>
+                                ))}
+                                {item.kopare_fordon.length > 5 && (
+                                  <div className="text-gray-400 text-center">+{item.kopare_fordon.length - 5} till</div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">Inga fordon</span>
+                            )}
                           </div>
-                        ) : (
-                          <div className="space-y-2">
-                            <h4 className="font-semibold text-sm text-gray-700 flex items-center gap-1">
-                              <Store className="w-4 h-4" /> Bilhandlare
-                            </h4>
-                            <div className="text-sm bg-orange-50 p-2 rounded border border-orange-200">
-                              <span className="text-orange-700">Köparen är en bilhandlare - fordonslista ej relevant</span>
-                            </div>
-                          </div>
-                        )}
+                        </div>
                       </div>
 
-                      {/* Fordon på adressen - Visa INTE för bilhandlare */}
-                      {!item.kopare_is_dealer && item.adress_fordon && item.adress_fordon.length > 0 && (
+                      {/* Fordon på adressen */}
+                      {item.adress_fordon && item.adress_fordon.length > 0 && (
                         <div className="mt-3 pt-3 border-t">
                           <h4 className="font-semibold text-sm text-gray-700 flex items-center gap-1 mb-2">
                             <MapPin className="w-4 h-4" /> Fordon på köparens adress
