@@ -1186,8 +1186,8 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
                         <span className="font-mono">{new Date(err.created_at).toLocaleString('sv-SE')}</span>
                         <span className="mx-2">-</span>
                         <span>{err.message}</span>
-                        {err.details?.error && (
-                          <span className="text-red-600 ml-1">({String(err.details.error)})</span>
+                        {(err.details as { error?: string })?.error && (
+                          <span className="text-red-600 ml-1">({String((err.details as { error?: string }).error)})</span>
                         )}
                       </div>
                     ))}
