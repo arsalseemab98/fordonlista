@@ -32,7 +32,9 @@ import {
   FileSearch,
   Users,
   Phone,
-  Home
+  Home,
+  ShoppingBag,
+  ArrowRight
 } from 'lucide-react'
 import { useState, useTransition, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
@@ -196,6 +198,51 @@ interface BiluppgifterStats {
   recentFetches: RecentBiluppgifter[]
 }
 
+interface SoldCarWithBuyer {
+  id: number
+  blocket_id: number | null
+  regnummer: string
+  // Säljdata
+  slutpris: number | null
+  liggtid_dagar: number | null
+  saljare_typ: string | null
+  sold_at: string | null
+  // Bildata
+  marke: string | null
+  modell: string | null
+  arsmodell: number | null
+  miltal: number | null
+  // Köpardata
+  kopare_namn: string | null
+  kopare_typ: string | null
+  kopare_is_dealer: boolean
+  kopare_alder: number | null
+  kopare_adress: string | null
+  kopare_postnummer: string | null
+  kopare_postort: string | null
+  kopare_telefon: string | null
+  kopare_fordon: Array<{
+    regnr: string
+    model?: string
+    year?: number
+    ownership_time?: string
+  }> | null
+  adress_fordon: Array<{
+    regnr: string
+    model?: string
+    year?: number
+    status?: string
+  }> | null
+  buyer_fetched_at: string | null
+}
+
+interface SoldCarsStats {
+  total: number
+  dealerBuyers: number
+  privateBuyers: number
+  recentSoldWithBuyers: SoldCarWithBuyer[]
+}
+
 interface BlocketLogsViewProps {
   logs: ScraperLog[]
   stats: Stats
@@ -203,9 +250,10 @@ interface BlocketLogsViewProps {
   recentSoldCars: SoldCar[]
   regionBreakdown: Record<string, number>
   biluppgifterStats: BiluppgifterStats
+  soldCarsStats: SoldCarsStats
 }
 
-export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, regionBreakdown, biluppgifterStats }: BlocketLogsViewProps) {
+export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, regionBreakdown, biluppgifterStats, soldCarsStats }: BlocketLogsViewProps) {
   const [showAllNewCars, setShowAllNewCars] = useState(false)
   const [showAllSoldCars, setShowAllSoldCars] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -482,10 +530,10 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
   return (
     <div className="space-y-6">
       <Tabs defaultValue="scraper" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-xl">
+        <TabsList className="grid w-full grid-cols-4 max-w-2xl">
           <TabsTrigger value="scraper" className="flex items-center gap-2">
             <RefreshCw className="w-4 h-4" />
-            Blocket Scraper
+            Scraper
           </TabsTrigger>
           <TabsTrigger value="biluppgifter" className="flex items-center gap-2">
             <FileSearch className="w-4 h-4" />
@@ -496,9 +544,18 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
               </Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="sold" className="flex items-center gap-2">
+            <ShoppingBag className="w-4 h-4" />
+            Sålda
+            {soldCarsStats.total > 0 && (
+              <Badge variant="secondary" className="ml-1 text-xs">
+                {soldCarsStats.total}
+              </Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="dealers" className="flex items-center gap-2">
             <Store className="w-4 h-4" />
-            Bilhandlare
+            Handlare
             {dealers.length > 0 && (
               <Badge variant="secondary" className="ml-1 text-xs">
                 {dealers.length}
@@ -1578,6 +1635,250 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
                   <p className="text-sm text-gray-600 mt-1">
                     Biluppgifter hämtas från biluppgifter.se och inkluderar fordonsdata (miltal, besiktning, skatt)
                     samt ägarinfo (namn, adress, telefon). Data hämtas för Blocket-annonser som har regnummer.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Sålda bilar Tab */}
+        <TabsContent value="sold" className="mt-6 space-y-6">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <ShoppingBag className="w-5 h-5 text-green-600" />
+                  <span className="text-sm text-green-600 font-medium">Totalt med köpardata</span>
+                </div>
+                <p className="text-3xl font-bold text-green-700 mt-2">{soldCarsStats.total}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-blue-50 to-cyan-50 border-blue-200">
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <User className="w-5 h-5 text-blue-600" />
+                  <span className="text-sm text-blue-600 font-medium">Köpt av privatperson</span>
+                </div>
+                <p className="text-3xl font-bold text-blue-700 mt-2">{soldCarsStats.privateBuyers}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200">
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <Store className="w-5 h-5 text-orange-600" />
+                  <span className="text-sm text-orange-600 font-medium">Köpt av handlare</span>
+                </div>
+                <p className="text-3xl font-bold text-orange-700 mt-2">{soldCarsStats.dealerBuyers}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-purple-200">
+              <CardContent className="pt-4">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-purple-600" />
+                  <span className="text-sm text-purple-600 font-medium">Flöde</span>
+                </div>
+                <p className="text-sm font-medium text-purple-700 mt-2">
+                  {soldCarsStats.total > 0
+                    ? `${Math.round((soldCarsStats.dealerBuyers / soldCarsStats.total) * 100)}% till handlare`
+                    : '-'
+                  }
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Sold Cars List */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ShoppingBag className="w-5 h-5" />
+                Sålda bilar med köpardata
+                <Badge className="bg-green-100 text-green-800">{soldCarsStats.recentSoldWithBuyers.length} st</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {soldCarsStats.recentSoldWithBuyers.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">
+                  Ingen köpardata hämtad ännu. Data hämtas automatiskt för bilar sålda 7-30 dagar sedan.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {soldCarsStats.recentSoldWithBuyers.map((item) => (
+                    <div key={item.id} className="border rounded-lg p-4 bg-gray-50 hover:bg-gray-100 transition-colors">
+                      {/* Header */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <span className="font-mono font-bold text-lg bg-green-100 text-green-800 px-3 py-1 rounded">
+                            {item.regnummer}
+                          </span>
+                          {item.marke && item.modell && (
+                            <span className="font-semibold text-gray-800">
+                              {item.marke} {item.modell} {item.arsmodell || ''}
+                            </span>
+                          )}
+                          {item.slutpris && (
+                            <Badge variant="secondary">
+                              {item.slutpris.toLocaleString()} kr
+                            </Badge>
+                          )}
+                          {item.liggtid_dagar != null && (
+                            <span className="text-sm text-gray-500">
+                              {item.liggtid_dagar} dagar på marknaden
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {item.saljare_typ && (
+                            <Badge variant="outline" className={item.saljare_typ === 'handlare' ? 'bg-orange-50' : 'bg-blue-50'}>
+                              Säljare: {item.saljare_typ}
+                            </Badge>
+                          )}
+                          <ArrowRight className="w-4 h-4 text-gray-400" />
+                          <Badge className={item.kopare_is_dealer ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'}>
+                            Köpare: {item.kopare_is_dealer ? 'Handlare' : 'Privat'}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {/* Content Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Köparinfo */}
+                        <div className="space-y-2">
+                          <h4 className="font-semibold text-sm text-gray-700 flex items-center gap-1">
+                            <User className="w-4 h-4" /> Köpare
+                          </h4>
+                          <div className="text-sm space-y-1 bg-white p-2 rounded border">
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">Namn:</span>
+                              <span className="font-medium truncate max-w-[150px]">{item.kopare_namn || '-'}</span>
+                            </div>
+                            {item.kopare_alder && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-500">Ålder:</span>
+                                <span className="font-medium">{item.kopare_alder} år</span>
+                              </div>
+                            )}
+                            {item.kopare_telefon && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-500">Telefon:</span>
+                                <span className="font-mono text-sm">{item.kopare_telefon}</span>
+                              </div>
+                            )}
+                            {item.kopare_postort && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-500">Ort:</span>
+                                <span className="font-medium">{item.kopare_postort}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Köparens adress */}
+                        <div className="space-y-2">
+                          <h4 className="font-semibold text-sm text-gray-700 flex items-center gap-1">
+                            <Home className="w-4 h-4" /> Adress
+                          </h4>
+                          <div className="text-sm space-y-1 bg-white p-2 rounded border">
+                            {item.kopare_adress ? (
+                              <>
+                                <div className="text-gray-800">{item.kopare_adress}</div>
+                                <div className="text-gray-600">
+                                  {item.kopare_postnummer} {item.kopare_postort}
+                                </div>
+                              </>
+                            ) : (
+                              <span className="text-gray-400">Ingen adress</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Köparens fordon */}
+                        <div className="space-y-2">
+                          <h4 className="font-semibold text-sm text-gray-700 flex items-center gap-1">
+                            <Car className="w-4 h-4" /> Köparens fordon
+                            {item.kopare_fordon && item.kopare_fordon.length > 0 && (
+                              <Badge variant="outline" className="ml-1 text-xs">{item.kopare_fordon.length} st</Badge>
+                            )}
+                          </h4>
+                          <div className="text-sm bg-white p-2 rounded border max-h-32 overflow-y-auto">
+                            {item.kopare_fordon && item.kopare_fordon.length > 0 ? (
+                              <div className="space-y-1">
+                                {item.kopare_fordon.slice(0, 5).map((v, i) => (
+                                  <div key={i} className="flex justify-between items-center text-xs">
+                                    <span className="font-mono bg-gray-100 px-1 rounded">{v.regnr}</span>
+                                    <span className="text-gray-600 truncate ml-2">
+                                      {v.model || ''} {v.year || ''}
+                                    </span>
+                                  </div>
+                                ))}
+                                {item.kopare_fordon.length > 5 && (
+                                  <div className="text-gray-400 text-center">+{item.kopare_fordon.length - 5} till</div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">Inga fordon</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Fordon på adressen */}
+                      {item.adress_fordon && item.adress_fordon.length > 0 && (
+                        <div className="mt-3 pt-3 border-t">
+                          <h4 className="font-semibold text-sm text-gray-700 flex items-center gap-1 mb-2">
+                            <MapPin className="w-4 h-4" /> Fordon på köparens adress
+                            <Badge variant="outline" className="ml-1 text-xs">{item.adress_fordon.length} st</Badge>
+                          </h4>
+                          <div className="flex flex-wrap gap-2">
+                            {item.adress_fordon.slice(0, 8).map((v, i) => (
+                              <div key={i} className="text-xs bg-purple-50 border border-purple-200 rounded px-2 py-1">
+                                <span className="font-mono">{v.regnr}</span>
+                                {v.model && <span className="text-purple-600 ml-1">{v.model}</span>}
+                              </div>
+                            ))}
+                            {item.adress_fordon.length > 8 && (
+                              <span className="text-xs text-gray-400 self-center">+{item.adress_fordon.length - 8} till</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Timestamp */}
+                      {item.sold_at && (
+                        <div className="mt-2 text-xs text-gray-400 text-right">
+                          Såld {new Date(item.sold_at).toLocaleDateString('sv-SE')}
+                          {item.buyer_fetched_at && (
+                            <span> • Köpardata hämtad {new Date(item.buyer_fetched_at).toLocaleDateString('sv-SE')}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Info Card */}
+          <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200">
+            <CardContent className="py-4">
+              <div className="flex items-start gap-3">
+                <div className="bg-green-100 p-2 rounded-lg">
+                  <ShoppingBag className="w-5 h-5 text-green-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-green-900">Om Sålda bilar</p>
+                  <p className="text-sm text-green-700 mt-1">
+                    När en bil säljs på Blocket hämtar vi köparens information från Biluppgifter 7-14 dagar senare
+                    (efter omregistrering). Vi ser vem som köpte, deras adress, och vilka andra fordon de äger.
+                    <br /><br />
+                    <strong>Flödesanalys:</strong> Vi kan se om bilar går Privat→Handlare (handlare köper in)
+                    eller Handlare→Privat (slutkund köper).
                   </p>
                 </div>
               </div>

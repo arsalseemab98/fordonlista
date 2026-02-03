@@ -161,6 +161,29 @@ export default async function BlocketLogsPage() {
     recentFetches: recentBiluppgifter || [],
   }
 
+  // ===== SÅLDA BILAR MED KÖPARDATA =====
+  const { data: soldCarsWithBuyers } = await supabase
+    .from('blocket_salda')
+    .select('*')
+    .order('sold_at', { ascending: false })
+    .limit(50)
+
+  const { count: totalSoldWithBuyers } = await supabase
+    .from('blocket_salda')
+    .select('*', { count: 'exact', head: true })
+
+  const { count: dealerBuyers } = await supabase
+    .from('blocket_salda')
+    .select('*', { count: 'exact', head: true })
+    .eq('kopare_is_dealer', true)
+
+  const soldCarsStats = {
+    total: totalSoldWithBuyers || 0,
+    dealerBuyers: dealerBuyers || 0,
+    privateBuyers: (totalSoldWithBuyers || 0) - (dealerBuyers || 0),
+    recentSoldWithBuyers: soldCarsWithBuyers || [],
+  }
+
   return (
     <div className="flex flex-col">
       <Header
@@ -189,6 +212,7 @@ export default async function BlocketLogsPage() {
           recentSoldCars={recentSoldCars || []}
           regionBreakdown={regionBreakdown}
           biluppgifterStats={biluppgifterStats}
+          soldCarsStats={soldCarsStats}
         />
       </div>
     </div>
