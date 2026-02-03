@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Header } from '@/components/layout/header'
 import { BlocketMarknadView } from '@/components/blocket-marknad/blocket-marknad-view'
+import { RecentBiluppgifter, RecentBiluppgifterItem } from '@/components/blocket-marknad/recent-biluppgifter'
 
 // Force dynamic rendering - always fetch fresh data
 export const dynamic = 'force-dynamic'
@@ -111,6 +112,56 @@ export default async function BlocketMarknadPage() {
     .not('borttagen', 'is', null)
     .order('borttagen', { ascending: false })
     .limit(10000)
+
+  // Fetch recent biluppgifter data (10 senaste hämtade)
+  const { data: recentBiluppgifter } = await supabase
+    .from('biluppgifter_data')
+    .select(`
+      regnummer,
+      blocket_id,
+      mileage_km,
+      mileage_mil,
+      num_owners,
+      annual_tax,
+      inspection_until,
+      owner_name,
+      owner_age,
+      owner_city,
+      owner_address,
+      owner_postal_code,
+      owner_postal_city,
+      owner_phone,
+      owner_vehicles,
+      address_vehicles,
+      mileage_history,
+      owner_history,
+      is_dealer,
+      fetched_at
+    `)
+    .order('fetched_at', { ascending: false })
+    .limit(10)
+
+  // Hämta tillhörande blocket_annonser för biluppgifterna
+  const biluppgifterWithAds: RecentBiluppgifterItem[] = []
+  if (recentBiluppgifter && recentBiluppgifter.length > 0) {
+    const blocketIds = recentBiluppgifter
+      .filter(b => b.blocket_id)
+      .map(b => b.blocket_id)
+
+    const { data: blocketAds } = await supabase
+      .from('blocket_annonser')
+      .select('id, marke, modell, arsmodell, pris, miltal, stad, region, saljare_typ, url')
+      .in('id', blocketIds)
+
+    const adsMap = new Map(blocketAds?.map(a => [a.id, a]) || [])
+
+    for (const bu of recentBiluppgifter) {
+      biluppgifterWithAds.push({
+        ...bu,
+        blocket_annons: bu.blocket_id ? adsMap.get(bu.blocket_id) || null : null
+      } as RecentBiluppgifterItem)
+    }
+  }
 
   // Calculate monthly statistics using PUBLICERAD (actual Blocket publish date)
   const monthlyStatsMap = new Map<string, {
@@ -661,7 +712,10 @@ export default async function BlocketMarknadPage() {
         description="Marknadsanalys för bilar i Norrland - baserat på Blockets publiceringsdatum"
       />
 
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-6 space-y-6">
+        {/* Senaste hämtade biluppgifter */}
+        <RecentBiluppgifter items={biluppgifterWithAds} />
+
         <BlocketMarknadView
           monthlyStats={monthlyStats}
           brandStats={brandStats}
