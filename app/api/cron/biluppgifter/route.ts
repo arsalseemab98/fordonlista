@@ -42,30 +42,44 @@ export async function GET() {
     // Randomize batch size (5-10 at a time)
     const batchSize = Math.floor(Math.random() * 6) + 5
 
-    // Find ads with regnummer that DON'T have biluppgifter yet
-    // Uses LEFT JOIN to properly find missing ones
-    const { data: adsWithoutBu } = await supabase
+    // Step 1: Get all regnummers that already have biluppgifter
+    const { data: existingBu } = await supabase
+      .from('biluppgifter_data')
+      .select('blocket_id')
+
+    const existingBlocketIds = new Set(existingBu?.map(e => e.blocket_id) || [])
+
+    // Step 2: Get active ads with regnummer
+    const { data: allAds } = await supabase
       .from('blocket_annonser')
-      .select(`
-        id,
-        regnummer,
-        biluppgifter_data!left(id)
-      `)
+      .select('id, regnummer')
       .is('borttagen', null)
       .not('regnummer', 'is', null)
-      .is('biluppgifter_data.id', null)  // Only those WITHOUT biluppgifter
-      .order('id', { ascending: false }) // Newest first
-      .limit(batchSize)
+      .order('id', { ascending: false })
+      .limit(200) // Get more to filter
 
-    if (!adsWithoutBu || adsWithoutBu.length === 0) {
+    if (!allAds || allAds.length === 0) {
       return NextResponse.json({
         success: true,
-        message: 'Alla aktiva annonser har biluppgifter',
+        message: 'Inga aktiva annonser med regnummer',
         fetched: 0
       })
     }
 
-    const adsToFetch = adsWithoutBu
+    // Step 3: Filter out those that already have biluppgifter
+    const adsToFetch = allAds
+      .filter(a => !existingBlocketIds.has(a.id))
+      .slice(0, batchSize)
+
+    if (adsToFetch.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: 'Alla aktiva annonser har redan biluppgifter',
+        fetched: 0,
+        checked: allAds.length,
+        existingCount: existingBlocketIds.size
+      })
+    }
 
     let success = 0
     let failed = 0
