@@ -130,172 +130,306 @@ export async function fetchBuyerForSoldCar(regnummer: string): Promise<{
   }
 }
 
+// Konstanter
+const CHECK_INTERVAL_DAYS = 14  // Kolla samma bil var 14:e dag
+const MAX_DAYS_WINDOW = 90      // Efter 90 dagar utan ägarbyte = inte såld
+const MIN_DAYS_BEFORE_CHECK = 7 // Vänta minst 7 dagar innan första koll
+
 /**
  * Processa sålda bilar och hämta köpardata
- * Körs som cron-jobb, hämtar för bilar sålda för 7-90 dagar sedan
- * Om inget ägarbyte efter 90 dagar = bilen anses inte vara såld
+ * Använder pending-tabell för att undvika onödiga API-anrop
+ *
+ * Flöde:
+ * 1. Kolla pending-bilar som är redo för omkontroll (14+ dagar sedan senast)
+ * 2. Kolla nya sålda bilar som inte finns i pending eller salda
+ * 3. Vid ägarbyte → spara i blocket_salda
+ * 4. Vid samma ägare < 90 dagar → lägg i pending
+ * 5. Vid samma ägare >= 90 dagar → spara i blocket_salda (ej såld)
  */
-export async function processSoldCarsForBuyers(limit: number = 10): Promise<{
+export async function processSoldCarsForBuyers(limit: number = 50): Promise<{
   success: boolean
   processed: number
   noOwnerChange: number
+  addedToPending: number
   errors: string[]
 }> {
   const supabase = await createClient()
 
-  // Hitta sålda bilar som:
-  // 1. Har regnummer
-  // 2. Sålda för 7-90 dagar sedan (tid för omregistrering)
-  // 3. Inte redan har köpardata i blocket_salda
-  const sevenDaysAgo = new Date()
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-
-  const ninetyDaysAgo = new Date()
-  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90)
-
-  // Hämta sålda bilar från blocket_annonser
-  const { data: soldAds, error: queryError } = await supabase
-    .from('blocket_annonser')
-    .select('id, regnummer, marke, modell, arsmodell, miltal, pris, saljare_typ, saljare_namn, forst_sedd, borttagen')
-    .eq('borttagen_anledning', 'SÅLD')
-    .not('regnummer', 'is', null)
-    .gte('borttagen', ninetyDaysAgo.toISOString())
-    .lte('borttagen', sevenDaysAgo.toISOString())
-    .order('borttagen', { ascending: false })
-    .limit(limit * 2) // Hämta fler för att filtrera
-
-  if (queryError || !soldAds) {
-    return { success: false, processed: 0, noOwnerChange: 0, errors: [queryError?.message || 'Query failed'] }
-  }
-
-  // Filtrera bort de som redan har köpardata
-  const regnummers = soldAds.map(a => a.regnummer.toUpperCase())
-  const { data: existing } = await supabase
-    .from('blocket_salda')
-    .select('regnummer')
-    .in('regnummer', regnummers)
-
-  const existingSet = new Set(existing?.map(e => e.regnummer) || [])
-  const adsToProcess = soldAds
-    .filter(a => !existingSet.has(a.regnummer.toUpperCase()))
-    .slice(0, limit)
-
-  if (adsToProcess.length === 0) {
-    return { success: true, processed: 0, noOwnerChange: 0, errors: [] }
-  }
-
   let processed = 0
   let noOwnerChange = 0
+  let addedToPending = 0
   const errors: string[] = []
 
-  for (const ad of adsToProcess) {
-    try {
-      const regnr = ad.regnummer.toUpperCase().replace(/\s/g, '')
+  // ============================================
+  // STEG 1: Processa bilar från PENDING som behöver kollas igen
+  // ============================================
+  const fourteenDaysAgo = new Date()
+  fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - CHECK_INTERVAL_DAYS)
 
-      // STEG 1: Hämta ORIGINAL ägare från biluppgifter_data (sparad när annonsen var aktiv)
-      const { data: originalBuData } = await supabase
-        .from('biluppgifter_data')
-        .select('owner_name')
-        .eq('blocket_id', ad.id)
-        .single()
+  const { data: pendingCars } = await supabase
+    .from('blocket_salda_pending')
+    .select('*')
+    .lte('last_checked_at', fourteenDaysAgo.toISOString())
+    .order('last_checked_at', { ascending: true })
+    .limit(Math.floor(limit / 2))  // Hälften av limit för pending
 
-      const originalOwnerName = originalBuData?.owner_name || null
-
-      // STEG 2: Hämta NUVARANDE ägare från biluppgifter (efter försäljning)
-      const buResult = await fetchBiluppgifterComplete(regnr)
-
-      if (!buResult.success) {
-        errors.push(`${regnr}: ${buResult.error}`)
-        continue
-      }
-
-      const currentOwnerName = buResult.owner_name || null
-
-      // Beräkna liggtid
-      const liggtidDagar = ad.forst_sedd && ad.borttagen
-        ? Math.floor((new Date(ad.borttagen).getTime() - new Date(ad.forst_sedd).getTime()) / (1000 * 60 * 60 * 24))
-        : null
-
-      // Beräkna dagar sedan såld
-      const daysSinceSold = ad.borttagen
-        ? Math.floor((Date.now() - new Date(ad.borttagen).getTime()) / (1000 * 60 * 60 * 24))
-        : 0
-
-      // STEG 3: Jämför ORIGINAL ägare med NUVARANDE ägare
-      // Om vi inte har original-data, använd Blocket saljare_namn som fallback
-      const sellerName = originalOwnerName || ad.saljare_namn || null
-
-      // Avgör ägarbyte-status:
-      // - Om samma ägare efter 90+ dagar = inte såld (agarbyte_gjort = false)
-      // - Om samma ägare men < 90 dagar = vänta (skippa för nu, kolla igen senare)
-      // - Om olika ägare = ägarbyte bekräftat (agarbyte_gjort = true)
-      const sameOwner = isSameOwner(sellerName, currentOwnerName)
-
-      // Om vi inte har original-data OCH inte Blocket-namn, anta ägarbyte (kan inte verifiera)
-      const canVerify = sellerName !== null
-
-      if (canVerify && sameOwner && daysSinceSold < 90) {
-        // Fortfarande för tidigt, skippa och kolla igen senare
-        continue
-      }
-
-      // Om vi kan verifiera: kolla om samma ägare
-      // Om vi INTE kan verifiera: anta att ägarbyte skett (optimistiskt)
-      const agarbyteGjort = canVerify ? !sameOwner : true
-
-      if (!agarbyteGjort) {
-        noOwnerChange++
-      }
-
-      // Spara i blocket_salda
-      const { error: insertError } = await supabase
-        .from('blocket_salda')
-        .insert({
-          blocket_id: ad.id,
-          regnummer: regnr,
-          // Säljdata (original ägare = säljaren)
-          slutpris: ad.pris,
-          liggtid_dagar: liggtidDagar,
-          saljare_typ: ad.saljare_typ,
-          saljare_namn: sellerName,  // Från biluppgifter_data eller Blocket
-          sold_at: ad.borttagen,
-          // Bildata
-          marke: ad.marke,
-          modell: ad.modell,
-          arsmodell: ad.arsmodell,
-          miltal: ad.miltal,
-          // Köpardata (nuvarande ägare = köparen)
-          kopare_namn: currentOwnerName,
-          kopare_typ: buResult.is_dealer ? 'handlare' : 'privatperson',
-          kopare_is_dealer: buResult.is_dealer || false,
-          kopare_alder: buResult.owner_age,
-          kopare_adress: buResult.owner_address,
-          kopare_postnummer: buResult.owner_postal_code,
-          kopare_postort: buResult.owner_postal_city,
-          kopare_telefon: buResult.owner_phone,
-          kopare_fordon: buResult.owner_vehicles || [],
-          adress_fordon: buResult.address_vehicles || [],
-          buyer_fetched_at: new Date().toISOString(),
-          // Ägarbyte status
-          agarbyte_gjort: agarbyteGjort,
+  if (pendingCars && pendingCars.length > 0) {
+    for (const pending of pendingCars) {
+      try {
+        const result = await checkAndProcessCar(supabase, {
+          regnr: pending.regnummer,
+          blocket_id: pending.blocket_id,
+          originalOwner: pending.original_owner,
+          marke: pending.marke,
+          modell: pending.modell,
+          arsmodell: pending.arsmodell,
+          pris: pending.pris,
+          sold_at: pending.sold_at,
+          saljare_typ: null,
+          forst_sedd: null,
         })
 
-      if (insertError) {
-        errors.push(`${regnr}: ${insertError.message}`)
-        continue
+        if (result.status === 'completed') {
+          // Ta bort från pending
+          await supabase.from('blocket_salda_pending').delete().eq('id', pending.id)
+          processed++
+          if (!result.agarbyteGjort) noOwnerChange++
+        } else if (result.status === 'pending') {
+          // Uppdatera last_checked_at
+          await supabase
+            .from('blocket_salda_pending')
+            .update({
+              last_checked_at: new Date().toISOString(),
+              check_count: (pending.check_count || 1) + 1,
+            })
+            .eq('id', pending.id)
+        } else if (result.error) {
+          errors.push(`${pending.regnummer}: ${result.error}`)
+        }
+
+        // Rate limiting
+        await new Promise(resolve => setTimeout(resolve, 1500))
+
+      } catch (error) {
+        errors.push(`${pending.regnummer}: ${String(error)}`)
       }
-
-      processed++
-
-      // Rate limiting
-      await new Promise(resolve => setTimeout(resolve, 1500))
-
-    } catch (error) {
-      errors.push(`${ad.regnummer}: ${String(error)}`)
     }
   }
 
-  return { success: true, processed, noOwnerChange, errors }
+  // ============================================
+  // STEG 2: Hitta NYA sålda bilar att processa
+  // ============================================
+  const sevenDaysAgo = new Date()
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - MIN_DAYS_BEFORE_CHECK)
+
+  const ninetyDaysAgo = new Date()
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - MAX_DAYS_WINDOW)
+
+  const remainingLimit = limit - (pendingCars?.length || 0)
+
+  if (remainingLimit > 0) {
+    const { data: soldAds, error: queryError } = await supabase
+      .from('blocket_annonser')
+      .select('id, regnummer, marke, modell, arsmodell, miltal, pris, saljare_typ, saljare_namn, forst_sedd, borttagen')
+      .eq('borttagen_anledning', 'SÅLD')
+      .not('regnummer', 'is', null)
+      .gte('borttagen', ninetyDaysAgo.toISOString())
+      .lte('borttagen', sevenDaysAgo.toISOString())
+      .order('borttagen', { ascending: false })
+      .limit(remainingLimit * 3)
+
+    if (queryError) {
+      errors.push(queryError.message)
+    } else if (soldAds && soldAds.length > 0) {
+      // Filtrera bort de som redan finns i salda eller pending
+      const regnummers = soldAds.map(a => a.regnummer.toUpperCase())
+
+      const [{ data: existingSalda }, { data: existingPending }] = await Promise.all([
+        supabase.from('blocket_salda').select('regnummer').in('regnummer', regnummers),
+        supabase.from('blocket_salda_pending').select('regnummer').in('regnummer', regnummers),
+      ])
+
+      const existingSet = new Set([
+        ...(existingSalda?.map(e => e.regnummer) || []),
+        ...(existingPending?.map(e => e.regnummer) || []),
+      ])
+
+      const newAdsToProcess = soldAds
+        .filter(a => !existingSet.has(a.regnummer.toUpperCase()))
+        .slice(0, remainingLimit)
+
+      for (const ad of newAdsToProcess) {
+        try {
+          const regnr = ad.regnummer.toUpperCase().replace(/\s/g, '')
+
+          // Hämta original ägare från biluppgifter_data
+          const { data: originalBuData } = await supabase
+            .from('biluppgifter_data')
+            .select('owner_name')
+            .eq('blocket_id', ad.id)
+            .single()
+
+          const originalOwner = originalBuData?.owner_name || ad.saljare_namn || null
+
+          const result = await checkAndProcessCar(supabase, {
+            regnr,
+            blocket_id: ad.id,
+            originalOwner,
+            marke: ad.marke,
+            modell: ad.modell,
+            arsmodell: ad.arsmodell,
+            pris: ad.pris,
+            sold_at: ad.borttagen,
+            saljare_typ: ad.saljare_typ,
+            forst_sedd: ad.forst_sedd,
+          })
+
+          if (result.status === 'completed') {
+            processed++
+            if (!result.agarbyteGjort) noOwnerChange++
+          } else if (result.status === 'pending') {
+            // Lägg till i pending-tabellen
+            await supabase.from('blocket_salda_pending').insert({
+              blocket_id: ad.id,
+              regnummer: regnr,
+              original_owner: originalOwner,
+              marke: ad.marke,
+              modell: ad.modell,
+              arsmodell: ad.arsmodell,
+              pris: ad.pris,
+              sold_at: ad.borttagen,
+            })
+            addedToPending++
+          } else if (result.error) {
+            errors.push(`${regnr}: ${result.error}`)
+          }
+
+          // Rate limiting
+          await new Promise(resolve => setTimeout(resolve, 1500))
+
+        } catch (error) {
+          errors.push(`${ad.regnummer}: ${String(error)}`)
+        }
+      }
+    }
+  }
+
+  return { success: true, processed, noOwnerChange, addedToPending, errors }
+}
+
+/**
+ * Kolla en specifik bil och avgör status
+ */
+async function checkAndProcessCar(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  car: {
+    regnr: string
+    blocket_id: number | null
+    originalOwner: string | null
+    marke: string | null
+    modell: string | null
+    arsmodell: number | null
+    pris: number | null
+    sold_at: string | null
+    saljare_typ: string | null
+    forst_sedd: string | null
+  }
+): Promise<{
+  status: 'completed' | 'pending' | 'error'
+  agarbyteGjort?: boolean
+  error?: string
+}> {
+  // Hämta nuvarande ägare från biluppgifter
+  const buResult = await fetchBiluppgifterComplete(car.regnr)
+
+  if (!buResult.success) {
+    return { status: 'error', error: buResult.error || 'Kunde inte hämta biluppgifter' }
+  }
+
+  const currentOwnerName = buResult.owner_name || null
+
+  // Beräkna dagar sedan såld
+  const daysSinceSold = car.sold_at
+    ? Math.floor((Date.now() - new Date(car.sold_at).getTime()) / (1000 * 60 * 60 * 24))
+    : 0
+
+  // Jämför original ägare med nuvarande
+  const sameOwner = isSameOwner(car.originalOwner, currentOwnerName)
+  const canVerify = car.originalOwner !== null
+
+  // Avgör status
+  if (!canVerify) {
+    // Kan inte verifiera - anta ägarbyte
+    await saveToSalda(supabase, car, buResult, true)
+    return { status: 'completed', agarbyteGjort: true }
+  }
+
+  if (!sameOwner) {
+    // Ägarbyte bekräftat!
+    await saveToSalda(supabase, car, buResult, true)
+    return { status: 'completed', agarbyteGjort: true }
+  }
+
+  if (daysSinceSold >= MAX_DAYS_WINDOW) {
+    // Samma ägare efter 90 dagar = inte såld
+    await saveToSalda(supabase, car, buResult, false)
+    return { status: 'completed', agarbyteGjort: false }
+  }
+
+  // Samma ägare men < 90 dagar - vänta och kolla igen
+  return { status: 'pending' }
+}
+
+/**
+ * Spara bil i blocket_salda
+ */
+async function saveToSalda(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  car: {
+    regnr: string
+    blocket_id: number | null
+    originalOwner: string | null
+    marke: string | null
+    modell: string | null
+    arsmodell: number | null
+    pris: number | null
+    sold_at: string | null
+    saljare_typ: string | null
+    forst_sedd: string | null
+  },
+  buResult: Awaited<ReturnType<typeof fetchBiluppgifterComplete>>,
+  agarbyteGjort: boolean
+) {
+  // Beräkna liggtid
+  const liggtidDagar = car.forst_sedd && car.sold_at
+    ? Math.floor((new Date(car.sold_at).getTime() - new Date(car.forst_sedd).getTime()) / (1000 * 60 * 60 * 24))
+    : null
+
+  await supabase.from('blocket_salda').insert({
+    blocket_id: car.blocket_id,
+    regnummer: car.regnr,
+    slutpris: car.pris,
+    liggtid_dagar: liggtidDagar,
+    saljare_typ: car.saljare_typ,
+    saljare_namn: car.originalOwner,
+    sold_at: car.sold_at,
+    marke: car.marke,
+    modell: car.modell,
+    arsmodell: car.arsmodell,
+    miltal: null,
+    kopare_namn: buResult.owner_name,
+    kopare_typ: buResult.is_dealer ? 'handlare' : 'privatperson',
+    kopare_is_dealer: buResult.is_dealer || false,
+    kopare_alder: buResult.owner_age,
+    kopare_adress: buResult.owner_address,
+    kopare_postnummer: buResult.owner_postal_code,
+    kopare_postort: buResult.owner_postal_city,
+    kopare_telefon: buResult.owner_phone,
+    kopare_fordon: buResult.owner_vehicles || [],
+    adress_fordon: buResult.address_vehicles || [],
+    buyer_fetched_at: new Date().toISOString(),
+    agarbyte_gjort: agarbyteGjort,
+  })
 }
 
 /**

@@ -9,15 +9,16 @@ export const maxDuration = 300 // 5 minutes max
 
 export async function GET() {
   try {
-    // Process 10 sold cars at a time
-    const result = await processSoldCarsForBuyers(10)
+    // Process up to 50 cars per run (with pending system, we avoid redundant checks)
+    const result = await processSoldCarsForBuyers(50)
 
     return NextResponse.json({
       success: true,
       processed: result.processed,
       noOwnerChange: result.noOwnerChange,
+      addedToPending: result.addedToPending,
       errors: result.errors.slice(0, 5),
-      message: `Hämtade köpardata för ${result.processed} sålda bilar (${result.noOwnerChange} utan ägarbyte)`
+      message: `Klart: ${result.processed} bekräftade, ${result.addedToPending} väntar på ägarbyte, ${result.noOwnerChange} ej sålda`
     })
 
   } catch (error) {
