@@ -15,8 +15,9 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       processed: result.processed,
+      noOwnerChange: result.noOwnerChange,
       errors: result.errors.slice(0, 5),
-      message: `Hämtade köpardata för ${result.processed} sålda bilar`
+      message: `Hämtade köpardata för ${result.processed} sålda bilar (${result.noOwnerChange} utan ägarbyte)`
     })
 
   } catch (error) {
