@@ -39,44 +39,33 @@ export async function GET() {
   const supabase = await createClient()
 
   try {
-    // Randomize batch size (3-8 at a time)
-    const batchSize = Math.floor(Math.random() * 6) + 3
+    // Randomize batch size (5-10 at a time)
+    const batchSize = Math.floor(Math.random() * 6) + 5
 
-    // Find ads with regnummer that don't have biluppgifter yet
-    const { data: ads } = await supabase
+    // Find ads with regnummer that DON'T have biluppgifter yet
+    // Uses LEFT JOIN to properly find missing ones
+    const { data: adsWithoutBu } = await supabase
       .from('blocket_annonser')
-      .select('id, regnummer')
+      .select(`
+        id,
+        regnummer,
+        biluppgifter_data!left(id)
+      `)
       .is('borttagen', null)
       .not('regnummer', 'is', null)
-      .limit(batchSize * 2) // Fetch more to filter
+      .is('biluppgifter_data.id', null)  // Only those WITHOUT biluppgifter
+      .order('id', { ascending: false }) // Newest first
+      .limit(batchSize)
 
-    if (!ads || ads.length === 0) {
+    if (!adsWithoutBu || adsWithoutBu.length === 0) {
       return NextResponse.json({
         success: true,
-        message: 'Inga annonser med regnummer',
+        message: 'Alla aktiva annonser har biluppgifter',
         fetched: 0
       })
     }
 
-    // Filter out those that already have biluppgifter
-    const regnummers = ads.map(a => a.regnummer.toUpperCase())
-    const { data: existing } = await supabase
-      .from('biluppgifter_data')
-      .select('regnummer')
-      .in('regnummer', regnummers)
-
-    const existingSet = new Set(existing?.map(e => e.regnummer) || [])
-    const adsToFetch = ads
-      .filter(a => !existingSet.has(a.regnummer.toUpperCase()))
-      .slice(0, batchSize)
-
-    if (adsToFetch.length === 0) {
-      return NextResponse.json({
-        success: true,
-        message: 'Alla i batch har redan biluppgifter',
-        fetched: 0
-      })
-    }
+    const adsToFetch = adsWithoutBu
 
     let success = 0
     let failed = 0
