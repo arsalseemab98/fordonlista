@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { processSoldCarsForBuyers } from '@/lib/sold-cars/fetch-buyer'
 
-// Vercel Cron: runs daily at 10:00 Swedish time
-// Processes sold cars from 7-30 days ago to fetch buyer data
+// Vercel Cron: runs 3 times daily (10:17, 13:37, 17:53 Swedish time)
+// Processes sold cars from 7-90 days ago to fetch buyer data and detect ownership changes
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300 // 5 minutes max

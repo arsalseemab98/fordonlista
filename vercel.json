@@ -3,6 +3,18 @@
     {
       "path": "/api/cron/biluppgifter",
       "schedule": "*/30 7-18 * * *"
+    },
+    {
+      "path": "/api/cron/sold-cars",
+      "schedule": "17 9 * * *"
+    },
+    {
+      "path": "/api/cron/sold-cars",
+      "schedule": "37 12 * * *"
+    },
+    {
+      "path": "/api/cron/sold-cars",
+      "schedule": "53 16 * * *"
     }
   ]
 }
