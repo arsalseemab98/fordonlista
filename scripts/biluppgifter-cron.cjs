@@ -52,27 +52,29 @@ async function checkApiHealth() {
 
 // Get active ads without biluppgifter
 async function getAdsWithoutBiluppgifter(limit) {
-  // Hämta aktiva annonser med regnummer
+  // Hämta ALLA regnummer som redan har biluppgifter
+  const { data: existing } = await supabase
+    .from('biluppgifter_data')
+    .select('regnummer');
+
+  const existingSet = new Set(existing?.map(e => e.regnummer.toUpperCase()) || []);
+
+  // Hämta aktiva annonser med regnummer (fler för att hitta de som saknas)
   const { data: ads, error: adsError } = await supabase
     .from('blocket_annonser')
     .select('id, regnummer, marke, modell, arsmodell')
     .is('borttagen', null)
     .not('regnummer', 'is', null)
     .order('publicerad', { ascending: false })
-    .limit(limit * 2);
+    .limit(500);  // Hämta fler för att hitta de som saknas
 
   if (adsError) throw new Error(`Supabase error: ${adsError.message}`);
   if (!ads || ads.length === 0) return [];
 
   // Filtrera bort de som redan har biluppgifter
-  const regnummers = ads.map(a => a.regnummer.toUpperCase());
-  const { data: existing } = await supabase
-    .from('biluppgifter_data')
-    .select('regnummer')
-    .in('regnummer', regnummers);
-
-  const existingSet = new Set(existing?.map(e => e.regnummer) || []);
-  return ads.filter(a => !existingSet.has(a.regnummer.toUpperCase())).slice(0, limit);
+  return ads
+    .filter(a => !existingSet.has(a.regnummer.toUpperCase()))
+    .slice(0, limit);
 }
 
 // Fetch biluppgifter for one car

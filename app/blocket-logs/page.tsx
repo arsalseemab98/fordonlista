@@ -110,6 +110,18 @@ export default async function BlocketLogsPage() {
     }
   }
 
+  // ===== BILUPPGIFTER LOGS (errors & status) - must be fetched first =====
+  const { data: biluppgifterLogs } = await supabase
+    .from('biluppgifter_log')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  const recentErrors = biluppgifterLogs?.filter(l => l.type === 'error') || []
+  const lastSuccessfulRun = biluppgifterLogs?.find(l =>
+    l.type === 'info' && l.message === 'Biluppgifter cron completed'
+  )
+
   // ===== BILUPPGIFTER STATS =====
   // Totalt antal aktiva annonser med regnummer (kan hämtas)
   const { count: totalWithRegnummer } = await supabase
@@ -147,12 +159,6 @@ export default async function BlocketLogsPage() {
     .select('*', { count: 'exact', head: true })
     .gte('fetched_at', today.toISOString())
 
-  // Uppdaterade (fetched_at != created_at)
-  const { count: updatedCount } = await supabase
-    .from('biluppgifter_data')
-    .select('*', { count: 'exact', head: true })
-    .not('updated_at', 'eq', supabase.rpc('created_at'))
-
   const biluppgifterStats = {
     totalWithRegnummer: totalWithRegnummer || 0,
     totalFetched: totalFetched || 0,
@@ -164,18 +170,6 @@ export default async function BlocketLogsPage() {
     lastSuccessfulRun,
     apiHealthy: recentErrors.length === 0 || (lastSuccessfulRun && new Date(lastSuccessfulRun.created_at) > new Date(Date.now() - 3600000)),
   }
-
-  // ===== BILUPPGIFTER LOGS (errors & status) =====
-  const { data: biluppgifterLogs } = await supabase
-    .from('biluppgifter_log')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(50)
-
-  const recentErrors = biluppgifterLogs?.filter(l => l.type === 'error') || []
-  const lastSuccessfulRun = biluppgifterLogs?.find(l =>
-    l.type === 'info' && l.message === 'Biluppgifter cron completed'
-  )
 
   // ===== SÅLDA BILAR MED KÖPARDATA =====
   const { data: soldCarsWithBuyers } = await supabase
