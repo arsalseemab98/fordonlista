@@ -187,6 +187,7 @@ export async function processSoldCarsForBuyers(limit: number = 50): Promise<{
           sold_at: pending.sold_at,
           saljare_typ: null,
           forst_sedd: null,
+          checkCount: pending.check_count || 1,
         })
 
         if (result.status === 'completed') {
@@ -241,17 +242,19 @@ export async function processSoldCarsForBuyers(limit: number = 50): Promise<{
     if (queryError) {
       errors.push(queryError.message)
     } else if (soldAds && soldAds.length > 0) {
-      // Filtrera bort de som redan finns i salda eller pending
+      // Filtrera bort de som redan finns i salda, pending, eller ej_salda
       const regnummers = soldAds.map(a => a.regnummer.toUpperCase())
 
-      const [{ data: existingSalda }, { data: existingPending }] = await Promise.all([
+      const [{ data: existingSalda }, { data: existingPending }, { data: existingEjSalda }] = await Promise.all([
         supabase.from('blocket_salda').select('regnummer').in('regnummer', regnummers),
         supabase.from('blocket_salda_pending').select('regnummer').in('regnummer', regnummers),
+        supabase.from('blocket_ej_salda').select('regnummer').in('regnummer', regnummers),
       ])
 
       const existingSet = new Set([
         ...(existingSalda?.map(e => e.regnummer) || []),
         ...(existingPending?.map(e => e.regnummer) || []),
+        ...(existingEjSalda?.map(e => e.regnummer) || []),
       ])
 
       const newAdsToProcess = soldAds
@@ -333,6 +336,7 @@ async function checkAndProcessCar(
     sold_at: string | null
     saljare_typ: string | null
     forst_sedd: string | null
+    checkCount?: number  // Antal gånger vi kollat (från pending)
   }
 ): Promise<{
   status: 'completed' | 'pending' | 'error'
@@ -360,19 +364,19 @@ async function checkAndProcessCar(
   // Avgör status
   if (!canVerify) {
     // Kan inte verifiera - anta ägarbyte
-    await saveToSalda(supabase, car, buResult, true)
+    await saveToSalda(supabase, car, buResult)
     return { status: 'completed', agarbyteGjort: true }
   }
 
   if (!sameOwner) {
     // Ägarbyte bekräftat!
-    await saveToSalda(supabase, car, buResult, true)
+    await saveToSalda(supabase, car, buResult)
     return { status: 'completed', agarbyteGjort: true }
   }
 
   if (daysSinceSold >= MAX_DAYS_WINDOW) {
-    // Samma ägare efter 90 dagar = inte såld
-    await saveToSalda(supabase, car, buResult, false)
+    // Samma ägare efter 90 dagar = INTE SÅLD → spara i ej_salda
+    await saveToEjSalda(supabase, car, car.checkCount || 1)
     return { status: 'completed', agarbyteGjort: false }
   }
 
@@ -381,7 +385,7 @@ async function checkAndProcessCar(
 }
 
 /**
- * Spara bil i blocket_salda
+ * Spara SÅLD bil i blocket_salda (bekräftat ägarbyte)
  */
 async function saveToSalda(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -397,8 +401,7 @@ async function saveToSalda(
     saljare_typ: string | null
     forst_sedd: string | null
   },
-  buResult: Awaited<ReturnType<typeof fetchBiluppgifterComplete>>,
-  agarbyteGjort: boolean
+  buResult: Awaited<ReturnType<typeof fetchBiluppgifterComplete>>
 ) {
   // Beräkna liggtid
   const liggtidDagar = car.forst_sedd && car.sold_at
@@ -428,7 +431,47 @@ async function saveToSalda(
     kopare_fordon: buResult.owner_vehicles || [],
     adress_fordon: buResult.address_vehicles || [],
     buyer_fetched_at: new Date().toISOString(),
-    agarbyte_gjort: agarbyteGjort,
+    agarbyte_gjort: true,  // Alltid true - bara faktiska försäljningar här
+  })
+}
+
+/**
+ * Spara EJ SÅLD bil i blocket_ej_salda (ingen ägarbyte efter 90 dagar)
+ * Dessa är irrelevanta för marknadsanalys
+ */
+async function saveToEjSalda(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  car: {
+    regnr: string
+    blocket_id: number | null
+    originalOwner: string | null
+    marke: string | null
+    modell: string | null
+    arsmodell: number | null
+    pris: number | null
+    sold_at: string | null
+    forst_sedd: string | null
+  },
+  checkCount: number
+) {
+  // Beräkna liggtid
+  const liggtidDagar = car.forst_sedd && car.sold_at
+    ? Math.floor((new Date(car.sold_at).getTime() - new Date(car.forst_sedd).getTime()) / (1000 * 60 * 60 * 24))
+    : null
+
+  await supabase.from('blocket_ej_salda').insert({
+    blocket_id: car.blocket_id,
+    regnummer: car.regnr,
+    agare_namn: car.originalOwner,
+    marke: car.marke,
+    modell: car.modell,
+    arsmodell: car.arsmodell,
+    pris: car.pris,
+    annons_skapad: car.forst_sedd,
+    annons_borttagen: car.sold_at,
+    liggtid_dagar: liggtidDagar,
+    check_count: checkCount,
+    verified_at: new Date().toISOString(),
   })
 }
 
@@ -473,57 +516,57 @@ export async function getSoldCarsWithBuyers(options?: {
  * Statistik för sålda bilar
  */
 export async function getSoldCarsStats(): Promise<{
-  total: number
-  agarbyteGjort: number
-  ejAgarbyte: number
+  totalSalda: number        // Bekräftade försäljningar (blocket_salda)
+  totalEjSalda: number      // Ej sålda / irrelevanta (blocket_ej_salda)
+  totalPending: number      // Väntar på verifiering (blocket_salda_pending)
   privatTillPrivat: number
   privatTillHandlare: number
   handlareTillPrivat: number
   avgLiggtid: number
-  avgPrissankning: number
 }> {
   const supabase = await createClient()
 
-  const { data: soldCars } = await supabase
-    .from('blocket_salda')
-    .select('saljare_typ, kopare_typ, kopare_is_dealer, liggtid_dagar, agarbyte_gjort')
+  // Hämta alla tre tabellerna parallellt
+  const [
+    { data: soldCars },
+    { count: ejSaldaCount },
+    { count: pendingCount }
+  ] = await Promise.all([
+    supabase.from('blocket_salda').select('saljare_typ, kopare_is_dealer, liggtid_dagar'),
+    supabase.from('blocket_ej_salda').select('*', { count: 'exact', head: true }),
+    supabase.from('blocket_salda_pending').select('*', { count: 'exact', head: true }),
+  ])
 
   if (!soldCars || soldCars.length === 0) {
     return {
-      total: 0,
-      agarbyteGjort: 0,
-      ejAgarbyte: 0,
+      totalSalda: 0,
+      totalEjSalda: ejSaldaCount || 0,
+      totalPending: pendingCount || 0,
       privatTillPrivat: 0,
       privatTillHandlare: 0,
       handlareTillPrivat: 0,
       avgLiggtid: 0,
-      avgPrissankning: 0,
     }
   }
 
-  const total = soldCars.length
-  const agarbyteGjort = soldCars.filter(c => c.agarbyte_gjort === true).length
-  const ejAgarbyte = soldCars.filter(c => c.agarbyte_gjort === false).length
+  // Alla i blocket_salda är bekräftade försäljningar
+  const totalSalda = soldCars.length
+  const privatTillPrivat = soldCars.filter(c => c.saljare_typ === 'privat' && !c.kopare_is_dealer).length
+  const privatTillHandlare = soldCars.filter(c => c.saljare_typ === 'privat' && c.kopare_is_dealer).length
+  const handlareTillPrivat = soldCars.filter(c => c.saljare_typ === 'handlare' && !c.kopare_is_dealer).length
 
-  // Endast räkna de med bekräftat ägarbyte för köpar-statistik
-  const confirmedSales = soldCars.filter(c => c.agarbyte_gjort === true)
-  const privatTillPrivat = confirmedSales.filter(c => c.saljare_typ === 'privat' && !c.kopare_is_dealer).length
-  const privatTillHandlare = confirmedSales.filter(c => c.saljare_typ === 'privat' && c.kopare_is_dealer).length
-  const handlareTillPrivat = confirmedSales.filter(c => c.saljare_typ === 'handlare' && !c.kopare_is_dealer).length
-
-  const liggtider = confirmedSales.filter(c => c.liggtid_dagar != null).map(c => c.liggtid_dagar!)
+  const liggtider = soldCars.filter(c => c.liggtid_dagar != null).map(c => c.liggtid_dagar!)
   const avgLiggtid = liggtider.length > 0
     ? Math.round(liggtider.reduce((a, b) => a + b, 0) / liggtider.length)
     : 0
 
   return {
-    total,
-    agarbyteGjort,
-    ejAgarbyte,
+    totalSalda,
+    totalEjSalda: ejSaldaCount || 0,
+    totalPending: pendingCount || 0,
     privatTillPrivat,
     privatTillHandlare,
     handlareTillPrivat,
     avgLiggtid,
-    avgPrissankning: 0, // TODO: Implement when we track price history
   }
 }
