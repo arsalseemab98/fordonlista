@@ -190,12 +190,24 @@ interface RecentBiluppgifter {
   fetched_at: string | null
 }
 
+interface BiluppgifterLog {
+  id: number
+  type: 'info' | 'error' | 'warning'
+  message: string
+  details: Record<string, unknown>
+  created_at: string
+}
+
 interface BiluppgifterStats {
   totalWithRegnummer: number
   totalFetched: number
   remaining: number
   fetchedToday: number
   recentFetches: RecentBiluppgifter[]
+  logs: BiluppgifterLog[]
+  recentErrors: BiluppgifterLog[]
+  lastSuccessfulRun: BiluppgifterLog | null | undefined
+  apiHealthy: boolean
 }
 
 interface SoldCarWithBuyer {
@@ -1125,6 +1137,64 @@ export function BlocketLogsView({ logs, stats, recentNewCars, recentSoldCars, re
               </CardContent>
             </Card>
           </div>
+
+          {/* API Health Status */}
+          <Card className={biluppgifterStats.apiHealthy
+            ? "bg-gradient-to-br from-green-50 to-emerald-50 border-green-300"
+            : "bg-gradient-to-br from-red-50 to-rose-50 border-red-300"
+          }>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                {biluppgifterStats.apiHealthy ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                    <span className="text-green-700">Biluppgifter API: OK</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-4 h-4 text-red-600" />
+                    <span className="text-red-700">Biluppgifter API: FEL</span>
+                  </>
+                )}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {biluppgifterStats.lastSuccessfulRun ? (
+                <p className="text-sm text-muted-foreground">
+                  Senaste lyckade körning: {new Date(biluppgifterStats.lastSuccessfulRun.created_at).toLocaleString('sv-SE')}
+                  {biluppgifterStats.lastSuccessfulRun.details && (
+                    <span className="ml-2">
+                      ({(biluppgifterStats.lastSuccessfulRun.details as { success?: number })?.success || 0} sparade)
+                    </span>
+                  )}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">Ingen körning registrerad ännu</p>
+              )}
+
+              {/* Recent errors */}
+              {biluppgifterStats.recentErrors.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-sm font-medium text-red-700">
+                    <AlertTriangle className="w-4 h-4 inline mr-1" />
+                    {biluppgifterStats.recentErrors.length} senaste fel:
+                  </p>
+                  <div className="max-h-32 overflow-y-auto space-y-1">
+                    {biluppgifterStats.recentErrors.slice(0, 5).map((err) => (
+                      <div key={err.id} className="text-xs bg-red-100 text-red-800 p-2 rounded">
+                        <span className="font-mono">{new Date(err.created_at).toLocaleString('sv-SE')}</span>
+                        <span className="mx-2">-</span>
+                        <span>{err.message}</span>
+                        {err.details?.error && (
+                          <span className="text-red-600 ml-1">({String(err.details.error)})</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Progress Bar + Fetch Button */}
           <Card>

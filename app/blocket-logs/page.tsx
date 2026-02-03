@@ -159,7 +159,23 @@ export default async function BlocketLogsPage() {
     remaining: (totalWithRegnummer || 0) - (totalFetched || 0),
     fetchedToday: fetchedToday || 0,
     recentFetches: recentBiluppgifter || [],
+    logs: biluppgifterLogs || [],
+    recentErrors,
+    lastSuccessfulRun,
+    apiHealthy: recentErrors.length === 0 || (lastSuccessfulRun && new Date(lastSuccessfulRun.created_at) > new Date(Date.now() - 3600000)),
   }
+
+  // ===== BILUPPGIFTER LOGS (errors & status) =====
+  const { data: biluppgifterLogs } = await supabase
+    .from('biluppgifter_log')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  const recentErrors = biluppgifterLogs?.filter(l => l.type === 'error') || []
+  const lastSuccessfulRun = biluppgifterLogs?.find(l =>
+    l.type === 'info' && l.message === 'Biluppgifter cron completed'
+  )
 
   // ===== SÅLDA BILAR MED KÖPARDATA =====
   const { data: soldCarsWithBuyers } = await supabase
