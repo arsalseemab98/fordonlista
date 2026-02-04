@@ -46,9 +46,79 @@
 
 ## Pending Tasks
 
-### High Priority
+### High Priority - Biluppgifter & Handlare Integration
 
-- [ ]
+#### Steg 1: Extrahera alla bilhandlare
+
+- [x] 1.1 Hämta unika handlarnamn från Blocket (`saljare_namn` där `saljare_typ = 'handlare'`) → 219 handlare
+- [x] 1.2 Skapa `known_dealers` tabell i Supabase (blocket_name, biluppgifter_name, address, phone, vehicle_count, region)
+- [~] 1.3 Berika handlare med biluppgifter-data (auto-enrichment i cron v2, hämtar vid varje bil)
+- [~] 1.4 Koppla Blocket-namn till biluppgifter-namn (namesMatch() fuzzy matching implementerad)
+
+#### Steg 2: Kedjad ägarhistorik-sökning
+
+- [x] 2.1 Ladda known_dealers i cron-scriptet vid start (loadKnownDealers())
+- [x] 2.2 Implementera kedjad sökning: hoppa alla kända handlare i owner_history (findLeadInChain())
+- [x] 2.3 Detektera förmedling: Blocket säger handlare men biluppgifter ägare ≠ handlarnamn (determineOwnerType())
+
+#### Steg 3: Datamodell
+
+- [x] 3.1 Lägg till `owner_type` kolumn (privat, handlare, foretag, formedling) ✅
+- [x] 3.2 Lägg till `dealer_since` kolumn (datum handlaren fick bilen) ✅
+- [x] 3.3 Sluta spara owner_vehicles för handlare (onödig data) ✅
+- [ ] 3.4 Visa owner_type i fordonlista UI
+
+---
+
+### Flöde
+
+```
+Bil hämtas från biluppgifter
+        │
+        ▼
+Kolla Blocket saljare_typ
+        │
+   ┌────┴────────┐
+   │             │
+ privat        handlare
+   │             │
+   ▼             ▼
+ PRIVAT     Jämför Blocket saljare_namn
+ lead=ägare  med biluppgifter owner_name
+                 │
+            ┌────┴────┐
+            │         │
+         MATCHAR    MATCHAR EJ
+            │         │
+            ▼         ▼
+        HANDLARE   FÖRMEDLING
+        Ägarbyte    Inget ägarbyte
+        har skett   lead=nuvarande ägare
+            │
+            ▼
+    Gå igenom owner_history
+    Hoppa alla kända handlare
+            │
+            ▼
+    Första icke-handlare:
+    - Privatperson → lead
+    - Företag → företag-lead
+```
+
+### Data som sparas per typ
+
+**Privat:** namn, ålder, adress, telefon, fordon
+
+**Förmedling:** nuvarande ägare (lead), blocket-säljare (förmedlaren), `owner_type: 'formedling'`
+
+**Handlare:**
+- Handlarnamn (Blocket + biluppgifter)
+- Handlaradress, telefon
+- `dealer_since` (datum handlaren fick bilen)
+- INTE owner_vehicles
+- `previous_owner` = första icke-handlare i kedjan
+
+---
 
 ### Medium Priority
 
@@ -62,7 +132,9 @@
 
 ## Backlog / Ideas
 
-- [ ]
+- [ ] Retroaktivt uppdatera befintliga 184 biluppgifter med ny logik (owner_type, dealer_since)
+- [ ] Öka BATCH_SIZE för snabbare hämtning (nu 10, resterande ~6500)
+- [x] Randomiserade delays (3-8s) för att undvika biluppgifter.se rate limiting
 
 ---
 
