@@ -123,12 +123,19 @@ async function saveBiluppgifter(blocketId, regnr, data) {
   if (!data?.owner_profile) return false;
 
   const profile = data.owner_profile;
-  const isDealer = profile.vehicles?.length >= 10 || false;
+
+  // Detect company: many vehicles OR owner_history says "company"
+  const currentOwnerHistory = data.owner_history?.[0];
+  const isCompany = currentOwnerHistory?.owner_class === 'company';
+  const isDealer = profile.vehicles?.length >= 10 || isCompany;
+
+  // Fallback: get name from owner_history if profile.name is missing
+  const ownerName = profile.name || currentOwnerHistory?.name || null;
 
   const dbData = {
     regnummer: regnr,
     blocket_id: blocketId,
-    owner_name: profile.name || null,
+    owner_name: ownerName,
     owner_age: profile.age || null,
     owner_city: profile.city || null,
     owner_address: profile.address || null,
