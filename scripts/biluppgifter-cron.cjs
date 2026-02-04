@@ -374,13 +374,22 @@ async function saveBiluppgifter(ad, regnr, data) {
   const ownerName = profile.name || profileOwner?.name || currentOwnerHistory?.name || null;
 
   // Bestäm owner_type
-  const ownerType = determineOwnerType(
+  let ownerType = determineOwnerType(
     ad.saljare_typ,
     ad.saljare_namn,
     ownerName,
     isCompany,
     isDealer
   );
+
+  // Sold-detektion: ägarbyte efter Blocket-publicering + ny ägare är privatperson = SÅLD
+  if (ad.publicerad && currentOwnerHistory?.date && currentOwnerHistory?.owner_class === 'person') {
+    const pubDate = new Date(ad.publicerad);
+    const ownerDate = new Date(currentOwnerHistory.date);
+    if (ownerDate > pubDate) {
+      ownerType = 'sold';
+    }
+  }
 
   // Beräkna dealer_since (när handlaren fick bilen)
   let dealerSince = null;

@@ -363,6 +363,18 @@ async function processAd(ad) {
     dealerSince = oh0?.date || null;
   }
 
+  // ── SOLD-DETEKTION ──
+  // Om ägarbyte skedde EFTER Blocket-publicering och nya ägaren är privatperson → SÅLD
+  if (ad.publicerad && oh0?.date && oh0?.owner_class === 'person') {
+    const pubDate = new Date(ad.publicerad);
+    const ownerDate = new Date(oh0.date);
+    if (ownerDate > pubDate) {
+      ownerType = 'sold';
+      console.log(`\n  🔴 SÅLD! Ägarbyte ${oh0.date} efter publicering ${ad.publicerad.substring(0, 10)}`);
+      console.log(`     Köpare: ${oh0.name}`);
+    }
+  }
+
   // ── HANDLARE INFO ──
   console.log(`\n  BILUPPGIFTER-ÄGARE:`);
   console.log(`     Namn:     ${ownerName}`);
@@ -532,7 +544,7 @@ async function main() {
   await log('info', `Handlare-cron: ${ads.length} annonser`, { batch_size: BATCH_SIZE });
 
   let success = 0, failed = 0, skipped = 0;
-  const stats = { handlare: 0, formedling: 0 };
+  const stats = { handlare: 0, formedling: 0, sold: 0 };
   let withLead = 0;
 
   for (const ad of ads) {
@@ -557,7 +569,7 @@ async function main() {
   const duration = Math.round((Date.now() - startTime) / 1000);
   console.log('━'.repeat(60));
   console.log(`\nRESULTAT: ${success} sparade, ${skipped} utan data, ${failed} fel`);
-  console.log(`  🏪 ${stats.handlare || 0} handlare | 🔄 ${stats.formedling || 0} förmedling`);
+  console.log(`  🏪 ${stats.handlare || 0} handlare | 🔄 ${stats.formedling || 0} förmedling | 🔴 ${stats.sold || 0} sålda`);
   console.log(`  ${withLead} med lead från ägarkedja`);
   console.log(`  ${duration}s totalt (snitt ${Math.round(duration / (ads.length || 1))}s/bil)`);
 
