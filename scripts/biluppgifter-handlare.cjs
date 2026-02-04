@@ -33,9 +33,26 @@ function randomDelay(min = MIN_DELAY_MS, max = MAX_DELAY_MS) {
   return new Promise(r => setTimeout(r, ms));
 }
 
+function stripAccents(str) {
+  return str
+    .replace(/[éèêë]/g, 'e')
+    .replace(/[åä]/g, 'a')
+    .replace(/[ö]/g, 'o')
+    .replace(/[üú]/g, 'u')
+    .replace(/[ïí]/g, 'i')
+    .replace(/[ñ]/g, 'n');
+}
+
 function normalizeName(name) {
   if (!name) return '';
-  return name.toLowerCase().trim().replace(/\s+/g, ' ').replace(/[.,\-]/g, '');
+  return stripAccents(name.toLowerCase().trim().replace(/\s+/g, ' ').replace(/[.,\-&]/g, ' ').replace(/\s+/g, ' ').trim());
+}
+
+// Filtrera bort vanliga ord som inte hjälper matchning
+const STOP_WORDS = new Set(['ab', 'hb', 'kb', 'i', 'och', 'the', 'bil', 'bilar', 'motor', 'service']);
+
+function getSignificantWords(normalized) {
+  return normalized.split(' ').filter(w => w.length > 1 && !STOP_WORDS.has(w));
 }
 
 function namesMatch(name1, name2) {
@@ -44,9 +61,28 @@ function namesMatch(name1, name2) {
   const n2 = normalizeName(name2);
   if (n1 === n2) return true;
   if (n1.includes(n2) || n2.includes(n1)) return true;
+
+  // Första-ord match (t.ex. "riddermark" = "riddermark")
   const w1 = n1.split(' ')[0];
   const w2 = n2.split(' ')[0];
   if (w1.length > 3 && w1 === w2) return true;
+
+  // Första-ord startsWith (t.ex. "arnes" starts with "arne") - max 2 tecken skillnad
+  if (w1.length > 3 && w2.length > 3) {
+    const lenDiff = Math.abs(w1.length - w2.length);
+    if (lenDiff <= 2 && (w1.startsWith(w2) || w2.startsWith(w1))) return true;
+  }
+
+  // Ordöverlapp: om ≥50% av signifikanta ord matchar
+  const sig1 = getSignificantWords(n1);
+  const sig2 = getSignificantWords(n2);
+  if (sig1.length >= 2 && sig2.length >= 2) {
+    const set2 = new Set(sig2);
+    const overlap = sig1.filter(w => set2.has(w)).length;
+    const minLen = Math.min(sig1.length, sig2.length);
+    if (overlap >= Math.ceil(minLen * 0.5) && overlap >= 2) return true;
+  }
+
   return false;
 }
 
@@ -237,27 +273,50 @@ function determineOwnerType(blocketSellerName, biluppgifterOwnerName, isCompany,
 // ═══════════════════════════════════════
 
 async function getDealerAdsWithoutBiluppgifter(limit) {
-  const { data: existing } = await supabase
-    .from('biluppgifter_data')
-    .select('regnummer');
-  const existingSet = new Set(existing?.map(e => e.regnummer.toUpperCase()) || []);
+  // Hämta alla redan hämtade regnummer
+  const existingSet = new Set();
+  let offset = 0;
+  while (true) {
+    const { data: chunk } = await supabase
+      .from('biluppgifter_data')
+      .select('regnummer')
+      .range(offset, offset + 999);
+    if (!chunk || chunk.length === 0) break;
+    for (const e of chunk) existingSet.add(e.regnummer.toUpperCase());
+    offset += chunk.length;
+    if (chunk.length < 1000) break;
+  }
 
-  // BARA handlare
-  const { data: ads, error } = await supabase
-    .from('blocket_annonser')
-    .select('id, regnummer, marke, modell, arsmodell, pris, saljare_namn, saljare_typ, publicerad, region, stad')
-    .eq('saljare_typ', 'handlare')
-    .is('borttagen', null)
-    .not('regnummer', 'is', null)
-    .order('publicerad', { ascending: false })
-    .limit(500);
+  // Paginera genom alla handlar-annonser tills vi har tillräckligt
+  const result = [];
+  let page = 0;
+  const PAGE_SIZE = 1000;
 
-  if (error) throw new Error(`Supabase: ${error.message}`);
-  if (!ads) return [];
+  while (result.length < limit) {
+    const { data: ads, error } = await supabase
+      .from('blocket_annonser')
+      .select('id, regnummer, marke, modell, arsmodell, pris, saljare_namn, saljare_typ, publicerad, region, stad')
+      .eq('saljare_typ', 'handlare')
+      .is('borttagen', null)
+      .not('regnummer', 'is', null)
+      .order('publicerad', { ascending: false })
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
-  return ads
-    .filter(a => !existingSet.has(a.regnummer.toUpperCase()))
-    .slice(0, limit);
+    if (error) throw new Error(`Supabase: ${error.message}`);
+    if (!ads || ads.length === 0) break;
+
+    for (const a of ads) {
+      if (!existingSet.has(a.regnummer.toUpperCase())) {
+        result.push(a);
+        if (result.length >= limit) break;
+      }
+    }
+
+    page++;
+    if (ads.length < PAGE_SIZE) break;
+  }
+
+  return result;
 }
 
 // ═══════════════════════════════════════

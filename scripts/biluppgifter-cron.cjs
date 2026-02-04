@@ -41,25 +41,51 @@ function randomDelay(min = MIN_DELAY_MS, max = MAX_DELAY_MS) {
   return new Promise(r => setTimeout(r, ms));
 }
 
+function stripAccents(str) {
+  return str
+    .replace(/[éèêë]/g, 'e')
+    .replace(/[åä]/g, 'a')
+    .replace(/[ö]/g, 'o')
+    .replace(/[üú]/g, 'u')
+    .replace(/[ïí]/g, 'i')
+    .replace(/[ñ]/g, 'n');
+}
+
 function normalizeName(name) {
   if (!name) return '';
-  return name.toLowerCase().trim()
-    .replace(/\s+/g, ' ')
-    .replace(/[.,\-]/g, '');
+  return stripAccents(name.toLowerCase().trim().replace(/\s+/g, ' ').replace(/[.,\-&]/g, ' ').replace(/\s+/g, ' ').trim());
+}
+
+const STOP_WORDS = new Set(['ab', 'hb', 'kb', 'i', 'och', 'the', 'bil', 'bilar', 'motor', 'service']);
+
+function getSignificantWords(normalized) {
+  return normalized.split(' ').filter(w => w.length > 1 && !STOP_WORDS.has(w));
 }
 
 function namesMatch(name1, name2) {
   if (!name1 || !name2) return false;
   const n1 = normalizeName(name1);
   const n2 = normalizeName(name2);
-  // Exakt match
   if (n1 === n2) return true;
-  // En innehåller den andra (ex: "Hedin Bil" vs "Hedin Automotive Bavaria AB")
   if (n1.includes(n2) || n2.includes(n1)) return true;
-  // Första ordet matchar (ex: "Riddermark" i båda)
+
   const w1 = n1.split(' ')[0];
   const w2 = n2.split(' ')[0];
   if (w1.length > 3 && w1 === w2) return true;
+  if (w1.length > 3 && w2.length > 3) {
+    const lenDiff = Math.abs(w1.length - w2.length);
+    if (lenDiff <= 2 && (w1.startsWith(w2) || w2.startsWith(w1))) return true;
+  }
+
+  const sig1 = getSignificantWords(n1);
+  const sig2 = getSignificantWords(n2);
+  if (sig1.length >= 2 && sig2.length >= 2) {
+    const set2 = new Set(sig2);
+    const overlap = sig1.filter(w => set2.has(w)).length;
+    const minLen = Math.min(sig1.length, sig2.length);
+    if (overlap >= Math.ceil(minLen * 0.5) && overlap >= 2) return true;
+  }
+
   return false;
 }
 
