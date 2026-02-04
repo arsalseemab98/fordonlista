@@ -145,7 +145,38 @@ async function fetchBiluppgifter(regnr) {
   try {
     const response = await fetch(`${BILUPPGIFTER_API}/api/owner/${regnr}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.json();
+    const data = await response.json();
+
+    if (data.owner_profile && !data.error) return data;
+
+    // Fallback: /api/vehicle/ har data även när owner misslyckas (t.ex. "Okänd" ägare)
+    console.log(`  owner-endpoint saknar data, testar vehicle-endpoint...`);
+    await randomDelay(PROFILE_DELAY_MIN, PROFILE_DELAY_MAX);
+    const vehResponse = await fetch(`${BILUPPGIFTER_API}/api/vehicle/${regnr}`);
+    if (!vehResponse.ok) return data;
+    const vehData = await vehResponse.json();
+
+    if (!vehData?.owner?.history?.length) return data;
+
+    const ownerHistory = vehData.owner.history;
+    const result = {
+      regnummer: regnr,
+      owner_history: ownerHistory,
+      mileage_history: vehData.mileage_history || [],
+      owner_profile: null,
+      _from_vehicle: true
+    };
+
+    const firstWithProfile = ownerHistory.find(o => o.profile_id);
+    if (firstWithProfile) {
+      const profile = await fetchProfile(firstWithProfile.profile_id);
+      if (profile) {
+        result.owner_profile = profile;
+        result._profile_owner_index = ownerHistory.indexOf(firstWithProfile);
+      }
+    }
+
+    return result;
   } catch (error) {
     throw new Error(`API error: ${error.message}`);
   }
@@ -306,13 +337,15 @@ async function getAdsWithoutBiluppgifter(limit) {
 }
 
 async function saveBiluppgifter(ad, regnr, data) {
-  if (!data?.owner_profile) return false;
+  if (!data?.owner_profile && !data?.owner_history?.length) return false;
 
-  const profile = data.owner_profile;
+  const profile = data.owner_profile || {};
   const currentOwnerHistory = data.owner_history?.[0];
-  const isCompany = currentOwnerHistory?.owner_class === 'company';
+  const profileOwnerIdx = data._profile_owner_index || 0;
+  const profileOwner = data.owner_history?.[profileOwnerIdx];
+  const isCompany = (profileOwner || currentOwnerHistory)?.owner_class === 'company';
   const isDealer = profile.vehicles?.length >= 10;
-  const ownerName = profile.name || currentOwnerHistory?.name || null;
+  const ownerName = profile.name || profileOwner?.name || currentOwnerHistory?.name || null;
 
   // Bestäm owner_type
   const ownerType = determineOwnerType(

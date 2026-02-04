@@ -117,9 +117,45 @@ async function checkApiHealth() {
 }
 
 async function fetchBiluppgifter(regnr) {
+  // Försök /api/owner/ först
   const response = await fetch(`${BILUPPGIFTER_API}/api/owner/${regnr}`);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return await response.json();
+  const data = await response.json();
+
+  // Om owner-endpoint lyckades → returnera direkt
+  if (data.owner_profile && !data.error) return data;
+
+  // Fallback: /api/vehicle/ har ofta data även när owner misslyckas
+  console.log(`  owner-endpoint saknar data, testar vehicle-endpoint...`);
+  await randomDelay(PROFILE_DELAY_MIN, PROFILE_DELAY_MAX);
+  const vehResponse = await fetch(`${BILUPPGIFTER_API}/api/vehicle/${regnr}`);
+  if (!vehResponse.ok) return data; // ge upp
+  const vehData = await vehResponse.json();
+
+  if (!vehData?.owner?.history?.length) return data; // ingen ägarhistorik
+
+  // Bygg om data från vehicle-endpoint
+  const ownerHistory = vehData.owner.history;
+  const result = {
+    regnummer: regnr,
+    owner_history: ownerHistory,
+    mileage_history: vehData.mileage_history || [],
+    owner_profile: null,
+    _from_vehicle: true
+  };
+
+  // Hitta första ägare med profile_id (hoppa "Okänd")
+  const firstWithProfile = ownerHistory.find(o => o.profile_id);
+  if (firstWithProfile) {
+    console.log(`  Hämtar profil för ${firstWithProfile.name}...`);
+    const profile = await fetchProfile(firstWithProfile.profile_id);
+    if (profile) {
+      result.owner_profile = profile;
+      result._profile_owner_index = ownerHistory.indexOf(firstWithProfile);
+    }
+  }
+
+  return result;
 }
 
 async function fetchProfile(profileId) {
@@ -238,18 +274,35 @@ async function processAd(ad) {
   console.log(`  Publicerad: ${(ad.publicerad||'').substring(0, 10)}`);
 
   const data = await fetchBiluppgifter(regnr);
-  if (!data?.owner_profile) {
+  if (!data?.owner_profile && !data?.owner_history?.length) {
     console.log(`  INGEN ÄGARDATA\n`);
     return { saved: false, skipped: true };
   }
 
-  const profile = data.owner_profile;
+  const profile = data.owner_profile || {};
   const oh0 = data.owner_history?.[0];
-  const isCompany = oh0?.owner_class === 'company';
+
+  // Om data kom från vehicle-endpoint och profilen är för en handlare i kedjan (inte index 0)
+  const profileOwnerIdx = data._profile_owner_index || 0;
+  const profileOwner = data.owner_history?.[profileOwnerIdx];
+
+  const isCompany = (profileOwner || oh0)?.owner_class === 'company';
   const isDealer = profile.vehicles?.length >= 10;
-  const ownerName = profile.name || oh0?.name || '?';
-  const ownerType = determineOwnerType(ad.saljare_namn, ownerName, isCompany, isDealer);
-  const dealerSince = oh0?.date || null;
+  const ownerName = profile.name || profileOwner?.name || oh0?.name || '?';
+
+  // Om nuvarande ägare är "Okänd" men handlaren finns i kedjan
+  const currentOwnerUnknown = oh0?.owner_class === 'unknown' || oh0?.type === 'Okänd';
+  let ownerType, dealerSince;
+
+  if (currentOwnerUnknown && profileOwnerIdx > 0) {
+    // Profilen vi hämtade är handlaren (inte nuvarande ägare)
+    ownerType = determineOwnerType(ad.saljare_namn, ownerName, isCompany, isDealer);
+    dealerSince = profileOwner?.date || oh0?.date || null;
+    console.log(`  (Nuvarande ägare okänd - använder handlare från kedja: ${ownerName})`);
+  } else {
+    ownerType = determineOwnerType(ad.saljare_namn, ownerName, isCompany, isDealer);
+    dealerSince = oh0?.date || null;
+  }
 
   // ── HANDLARE INFO ──
   console.log(`\n  BILUPPGIFTER-ÄGARE:`);
