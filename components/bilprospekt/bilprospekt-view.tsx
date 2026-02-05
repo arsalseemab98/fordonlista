@@ -103,6 +103,7 @@ interface Prospect {
   owner_name: string | null
   owner_type: string | null
   owner_gender: string | null
+  owner_birth_year: number | null
   municipality: string | null
   region: string | null
   kaross: string | null
@@ -183,6 +184,8 @@ const ALL_COLUMNS = [
   { id: 'in_service', label: 'I trafik', group: 'vehicle', default: false },
   { id: 'chassis', label: 'Chassi', group: 'vehicle', default: false },
   { id: 'owner_name', label: 'Ägare', group: 'owner', default: false },
+  { id: 'owner_type', label: 'Typ', group: 'owner', default: true },
+  { id: 'owner_birth_year', label: 'Födelseår', group: 'owner', default: true },
   { id: 'bu_owner_age', label: 'Ålder', group: 'biluppgifter', default: true },
   { id: 'bu_owner_phone', label: 'Telefon', group: 'biluppgifter', default: true },
   { id: 'bu_owner_address', label: 'Adress', group: 'biluppgifter', default: true },
@@ -221,7 +224,7 @@ const REGIONS = [
 
 const STORAGE_KEY = 'bilprospektVisibleColumns'
 const STORAGE_VERSION_KEY = 'bilprospektColumnsVersion'
-const CURRENT_VERSION = 3 // Increment when changing default columns
+const CURRENT_VERSION = 4 // Increment when changing default columns
 
 // Helper to merge saved columns with new defaults (for new columns added after user saved)
 function getMergedColumns(): Set<string> {
@@ -672,6 +675,20 @@ export function BilprospektView({
         return (
           <span className="max-w-[120px] truncate block" title={prospect.owner_name || ''}>
             {prospect.owner_name?.split(',')[0] || '-'}
+          </span>
+        )
+      case 'owner_type':
+        return prospect.owner_type === 'company' ? (
+          <Badge variant="outline" className="bg-purple-50 text-purple-800">Företag</Badge>
+        ) : prospect.owner_type === 'private' ? (
+          <Badge variant="outline" className="bg-blue-50 text-blue-800">Privat</Badge>
+        ) : '-'
+      case 'owner_birth_year':
+        if (!prospect.owner_birth_year) return '-'
+        const age = new Date().getFullYear() - prospect.owner_birth_year
+        return (
+          <span title={`Född ${prospect.owner_birth_year}`}>
+            {prospect.owner_birth_year} <span className="text-muted-foreground text-xs">({age} år)</span>
           </span>
         )
       case 'bu_owner_age':
