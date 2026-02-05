@@ -103,8 +103,10 @@ export async function fetchBiluppgifterForProspects(
       }
 
       // Only update fields that have values
-      if (result.mileage !== undefined) {
+      if (result.mileage !== undefined && result.mileage > 0) {
         updateData.mileage = Math.round(result.mileage / 10)
+      } else {
+        updateData.mileage = null
       }
       if (result.owner_name) {
         updateData.bu_owner_name = result.owner_name

@@ -144,16 +144,26 @@ interface BilprospektViewProps {
   currentFilters: {
     region?: string
     brand?: string
+    model?: string
     fuel?: string
+    kaross?: string
+    municipality?: string
+    ownerType?: string
+    fwd?: string
+    color?: string
     yearFrom?: number
     yearTo?: number
     possessionFrom?: number
     possessionTo?: number
     search?: string
+    sort?: string
   }
   availableBrands: string[]
+  availableModels: string[]
   availableFuels: string[]
   availableMunicipalities: string[]
+  availableKarossTypes: string[]
+  availableColors: string[]
 }
 
 // Column definitions
@@ -258,7 +268,11 @@ export function BilprospektView({
   pageSize,
   currentFilters,
   availableBrands,
+  availableModels,
   availableFuels,
+  availableMunicipalities,
+  availableKarossTypes,
+  availableColors,
 }: BilprospektViewProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -282,6 +296,23 @@ export function BilprospektView({
   }, [visibleColumns])
 
   const totalPages = Math.ceil(totalCount / pageSize)
+
+  // Count active filters (excluding region which is always set)
+  const activeFilterCount = [
+    currentFilters.brand,
+    currentFilters.model,
+    currentFilters.fuel,
+    currentFilters.kaross,
+    currentFilters.municipality,
+    currentFilters.ownerType,
+    currentFilters.fwd,
+    currentFilters.color,
+    currentFilters.yearFrom,
+    currentFilters.yearTo,
+    currentFilters.possessionFrom,
+    currentFilters.possessionTo,
+    currentFilters.search,
+  ].filter(Boolean).length
 
   const toggleColumn = useCallback((columnId: string) => {
     setVisibleColumns(prev => {
@@ -550,7 +581,15 @@ export function BilprospektView({
           </Badge>
         )
       case 'mileage':
-        if (!prospect.mileage) return '-'
+        // No biluppgifter data fetched yet
+        if (!prospect.bu_fetched_at) {
+          return <span className="text-muted-foreground text-xs">Ej hämtad</span>
+        }
+
+        // Fetched but no mileage data available
+        if (prospect.mileage === null || prospect.mileage === undefined || prospect.mileage === 0) {
+          return <span className="text-muted-foreground">-</span>
+        }
 
         // If we have mileage history, show tooltip on hover
         if (prospect.bu_mileage_history && prospect.bu_mileage_history.length > 0) {
@@ -982,10 +1021,24 @@ export function BilprospektView({
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <Filter className="w-4 h-4" />
             Filter
+            {activeFilterCount > 0 && (
+              <Badge variant="secondary" className="ml-1">{activeFilterCount} aktiva</Badge>
+            )}
+            {activeFilterCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 text-xs text-muted-foreground hover:text-foreground ml-auto"
+                onClick={() => router.push('/bilprospekt?region=' + (currentFilters.region || '25'))}
+              >
+                Rensa filter
+              </Button>
+            )}
           </CardTitle>
         </CardHeader>
-        <CardContent className="pb-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+        <CardContent className="pb-4 space-y-3">
+          {/* Row 1: Main filters */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
             <Select
               value={currentFilters.region || '25'}
               onValueChange={(value) => updateFilters({ region: value })}
@@ -1002,7 +1055,7 @@ export function BilprospektView({
 
             <Select
               value={currentFilters.brand || 'all'}
-              onValueChange={(value) => updateFilters({ brand: value === 'all' ? undefined : value })}
+              onValueChange={(value) => updateFilters({ brand: value === 'all' ? undefined : value, model: undefined })}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Märke" />
@@ -1016,6 +1069,22 @@ export function BilprospektView({
             </Select>
 
             <Select
+              value={currentFilters.model || 'all'}
+              onValueChange={(value) => updateFilters({ model: value === 'all' ? undefined : value })}
+              disabled={!currentFilters.brand}
+            >
+              <SelectTrigger className={!currentFilters.brand ? 'opacity-50' : ''}>
+                <SelectValue placeholder={currentFilters.brand ? 'Modell' : 'Välj märke först'} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alla modeller</SelectItem>
+                {availableModels.map(m => (
+                  <SelectItem key={m} value={m}>{m}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
               value={currentFilters.fuel || 'all'}
               onValueChange={(value) => updateFilters({ fuel: value === 'all' ? undefined : value })}
             >
@@ -1023,13 +1092,46 @@ export function BilprospektView({
                 <SelectValue placeholder="Bränsle" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Alla</SelectItem>
+                <SelectItem value="all">Alla bränslen</SelectItem>
                 {availableFuels.map(f => (
                   <SelectItem key={f} value={f}>{f}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
 
+            <Select
+              value={currentFilters.kaross || 'all'}
+              onValueChange={(value) => updateFilters({ kaross: value === 'all' ? undefined : value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Karosstyp" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alla karosser</SelectItem>
+                {availableKarossTypes.map(k => (
+                  <SelectItem key={k} value={k}>{k}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={currentFilters.municipality || 'all'}
+              onValueChange={(value) => updateFilters({ municipality: value === 'all' ? undefined : value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Kommun" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alla kommuner</SelectItem>
+                {availableMunicipalities.map(m => (
+                  <SelectItem key={m} value={m}>{m}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Row 2: Year, possession, owner, color, 4wd */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
             <Input
               type="number"
               placeholder="År från"
@@ -1062,6 +1164,49 @@ export function BilprospektView({
               className="w-full"
             />
 
+            <Select
+              value={currentFilters.ownerType || 'all'}
+              onValueChange={(value) => updateFilters({ owner_type: value === 'all' ? undefined : value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Ägartyp" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alla ägare</SelectItem>
+                <SelectItem value="private">Privat</SelectItem>
+                <SelectItem value="company">Företag</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={currentFilters.fwd || 'all'}
+              onValueChange={(value) => updateFilters({ fwd: value === 'all' ? undefined : value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Drivning" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alla</SelectItem>
+                <SelectItem value="Ja">4WD</SelectItem>
+                <SelectItem value="Nej">2WD</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={currentFilters.color || 'all'}
+              onValueChange={(value) => updateFilters({ color: value === 'all' ? undefined : value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Färg" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alla färger</SelectItem>
+                {availableColors.map(c => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <div className="flex gap-2">
               <Input
                 placeholder="Sök reg.nr, namn..."
@@ -1075,23 +1220,83 @@ export function BilprospektView({
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2 mt-3">
-            {currentFilters.region && (
-              <Badge variant="outline">
-                {REGIONS.find(r => r.value === currentFilters.region)?.label || currentFilters.region}
-              </Badge>
-            )}
-            {currentFilters.brand && (
-              <Badge variant="outline" className="bg-green-50">{currentFilters.brand}</Badge>
-            )}
-            {currentFilters.fuel && (
-              <Badge variant="outline" className="bg-amber-50">{currentFilters.fuel}</Badge>
-            )}
-            {(currentFilters.possessionFrom || currentFilters.possessionTo) && (
-              <Badge variant="outline" className="bg-blue-50">
-                Innehav: {currentFilters.possessionFrom || 0}-{currentFilters.possessionTo || '∞'} mån
-              </Badge>
-            )}
+          {/* Row 3: Sorting + active filter badges */}
+          <div className="flex items-center justify-between">
+            <div className="flex flex-wrap gap-2">
+              {currentFilters.region && (
+                <Badge variant="outline">
+                  {REGIONS.find(r => r.value === currentFilters.region)?.label || currentFilters.region}
+                </Badge>
+              )}
+              {currentFilters.brand && (
+                <Badge variant="outline" className="bg-green-50 cursor-pointer" onClick={() => updateFilters({ brand: undefined, model: undefined })}>
+                  {currentFilters.brand} ×
+                </Badge>
+              )}
+              {currentFilters.model && (
+                <Badge variant="outline" className="bg-green-50/70 cursor-pointer" onClick={() => updateFilters({ model: undefined })}>
+                  {currentFilters.model} ×
+                </Badge>
+              )}
+              {currentFilters.fuel && (
+                <Badge variant="outline" className="bg-amber-50 cursor-pointer" onClick={() => updateFilters({ fuel: undefined })}>
+                  {currentFilters.fuel} ×
+                </Badge>
+              )}
+              {currentFilters.kaross && (
+                <Badge variant="outline" className="bg-purple-50 cursor-pointer" onClick={() => updateFilters({ kaross: undefined })}>
+                  {currentFilters.kaross} ×
+                </Badge>
+              )}
+              {currentFilters.municipality && (
+                <Badge variant="outline" className="bg-cyan-50 cursor-pointer" onClick={() => updateFilters({ municipality: undefined })}>
+                  {currentFilters.municipality} ×
+                </Badge>
+              )}
+              {currentFilters.ownerType && (
+                <Badge variant="outline" className="bg-blue-50 cursor-pointer" onClick={() => updateFilters({ owner_type: undefined })}>
+                  {currentFilters.ownerType === 'private' ? 'Privat' : 'Företag'} ×
+                </Badge>
+              )}
+              {currentFilters.fwd && (
+                <Badge variant="outline" className="bg-indigo-50 cursor-pointer" onClick={() => updateFilters({ fwd: undefined })}>
+                  {currentFilters.fwd === 'Ja' ? '4WD' : '2WD'} ×
+                </Badge>
+              )}
+              {currentFilters.color && (
+                <Badge variant="outline" className="bg-pink-50 cursor-pointer" onClick={() => updateFilters({ color: undefined })}>
+                  {currentFilters.color} ×
+                </Badge>
+              )}
+              {(currentFilters.possessionFrom || currentFilters.possessionTo) && (
+                <Badge variant="outline" className="bg-blue-50 cursor-pointer" onClick={() => updateFilters({ possession_from: undefined, possession_to: undefined })}>
+                  Innehav: {currentFilters.possessionFrom || 0}-{currentFilters.possessionTo || '∞'} mån ×
+                </Badge>
+              )}
+              {currentFilters.search && (
+                <Badge variant="outline" className="bg-yellow-50 cursor-pointer" onClick={() => { setSearchTerm(''); updateFilters({ search: undefined }) }}>
+                  &quot;{currentFilters.search}&quot; ×
+                </Badge>
+              )}
+            </div>
+
+            <Select
+              value={currentFilters.sort || 'car_year_desc'}
+              onValueChange={(value) => updateFilters({ sort: value })}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Sortering" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="car_year_desc">Nyaste först</SelectItem>
+                <SelectItem value="car_year_asc">Äldsta först</SelectItem>
+                <SelectItem value="date_acquired_desc">Senast köpta</SelectItem>
+                <SelectItem value="date_acquired_asc">Längst innehavda</SelectItem>
+                <SelectItem value="brand_asc">Märke A-Ö</SelectItem>
+                <SelectItem value="owner_name_asc">Ägare A-Ö</SelectItem>
+                <SelectItem value="municipality_asc">Kommun A-Ö</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>

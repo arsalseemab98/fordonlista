@@ -5,6 +5,41 @@ Swedish vehicle lead management system for car dealers.
 
 ---
 
+## 2026-02-04 - Bilprospekt Full Import (Norrbotten, alla 58 PB-märken)
+
+**Type:** Data Import & Script
+
+**Description:**
+Importerade alla 58 personbilsmärken från Bilprospekt till `bilprospekt_prospects` i Supabase för Norrbotten (region 250000). Totalt **110 076 rader** över **58 märken**.
+
+**Nytt script: `scripts/fetch-and-import.cjs`**
+- Loggar in direkt mot Bilprospekt API (https://www.bilprospekt.se)
+- Bygger samma sökbody som MCP-servern
+- Hanterar paginering automatiskt (pageSize 500)
+- Mappar prospekt → DB-schema med deduplicering (bp_id)
+- Upsert till Supabase i batchar om 100
+- Stöd för `--yearFrom`/`--yearTo` för att dela stora märken
+
+**Användning:**
+```bash
+node scripts/fetch-and-import.cjs VOLVO --yearFrom 2000 --yearTo 2010
+```
+
+**Stora märken (år-uppdelning):**
+- VOLVO: 28 032 (6 queries)
+- VOLKSWAGEN: 12 944 (3 queries)
+- TOYOTA: 9 070 (2 queries)
+- AUDI: 5 148 (2 queries)
+- MERCEDES-BENZ: 3 878 (2 queries)
+
+**Små märken (en query var):**
+FISKER, LAMBORGHINI, LOTUS, LYNK & CO, MASERATI, MCLAREN, ROLLS-ROYCE, ASTON-MARTIN, FERRARI + alla från tidigare sessioner.
+
+**Files Changed:**
+- `scripts/fetch-and-import.cjs` (NY) - Standalone import-script
+
+---
+
 ## 2026-01-29 - Biluppgifter Column Visibility Fix & Rate Limiting
 
 **Type:** Bug Fix & Enhancement
