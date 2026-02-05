@@ -15,11 +15,12 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const BILUPPGIFTER_API = process.env.BILUPPGIFTER_API_URL || 'http://localhost:3456';
 const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '5', 10);
 
-// Randomiserade delays
-const MIN_DELAY_MS = 3000;
-const MAX_DELAY_MS = 8000;
-const PROFILE_DELAY_MIN = 2000;
-const PROFILE_DELAY_MAX = 5000;
+// Randomiserade delays (turbo-läge)
+const MIN_DELAY_MS = 800;
+const MAX_DELAY_MS = 2000;
+const PROFILE_DELAY_MIN = 500;
+const PROFILE_DELAY_MAX = 1500;
+const PARALLEL = parseInt(process.env.PARALLEL || '2', 10);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let knownDealerNames = new Set();
@@ -547,21 +548,29 @@ async function main() {
   const stats = { handlare: 0, formedling: 0, sold: 0 };
   let withLead = 0;
 
-  for (const ad of ads) {
-    try {
+  // Kör PARALLEL bilar samtidigt för snabbare throughput
+  for (let i = 0; i < ads.length; i += PARALLEL) {
+    const chunk = ads.slice(i, i + PARALLEL);
+    const results = await Promise.allSettled(chunk.map(async (ad) => {
       const result = await processAd(ad);
-      if (result.saved) {
-        success++;
-        if (result.ownerType) stats[result.ownerType] = (stats[result.ownerType] || 0) + 1;
-        if (result.hasPrevOwner) withLead++;
-      } else if (result.skipped) {
-        skipped++;
+      return result;
+    }));
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        const result = r.value;
+        if (result.saved) {
+          success++;
+          if (result.ownerType) stats[result.ownerType] = (stats[result.ownerType] || 0) + 1;
+          if (result.hasPrevOwner) withLead++;
+        } else if (result.skipped) {
+          skipped++;
+        } else {
+          failed++;
+        }
       } else {
         failed++;
+        console.log(`  FEL: ${r.reason?.message}\n`);
       }
-    } catch (error) {
-      failed++;
-      console.log(`  FEL: ${error.message}\n`);
     }
     await randomDelay();
   }
