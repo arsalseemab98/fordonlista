@@ -15,12 +15,12 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const BILUPPGIFTER_API = process.env.BILUPPGIFTER_API_URL || 'http://localhost:3456';
 const BATCH_SIZE = parseInt(process.env.BATCH_SIZE || '5', 10);
 
-// Randomiserade delays (turbo-läge)
-const MIN_DELAY_MS = 800;
-const MAX_DELAY_MS = 2000;
-const PROFILE_DELAY_MIN = 500;
-const PROFILE_DELAY_MAX = 1500;
-const PARALLEL = parseInt(process.env.PARALLEL || '2', 10);
+// Randomiserade delays (max-speed)
+const MIN_DELAY_MS = 300;
+const MAX_DELAY_MS = 800;
+const PROFILE_DELAY_MIN = 200;
+const PROFILE_DELAY_MAX = 600;
+const PARALLEL = parseInt(process.env.PARALLEL || '5', 10);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let knownDealerNames = new Set();
