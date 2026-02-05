@@ -279,6 +279,10 @@ export function BilprospektView({
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [searchTerm, setSearchTerm] = useState(currentFilters.search || '')
+  const [yearFrom, setYearFrom] = useState(currentFilters.yearFrom?.toString() || '')
+  const [yearTo, setYearTo] = useState(currentFilters.yearTo?.toString() || '')
+  const [possessionFrom, setPossessionFrom] = useState(currentFilters.possessionFrom?.toString() || '')
+  const [possessionTo, setPossessionTo] = useState(currentFilters.possessionTo?.toString() || '')
   const [isFetchingData, setIsFetchingData] = useState(false)
   const [fetchProgress, setFetchProgress] = useState<{ current: number; total: number } | null>(null)
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null)
@@ -1135,32 +1139,40 @@ export function BilprospektView({
             <Input
               type="number"
               placeholder="År från"
-              value={currentFilters.yearFrom || ''}
-              onChange={(e) => updateFilters({ year_from: e.target.value || undefined })}
+              value={yearFrom}
+              onChange={(e) => setYearFrom(e.target.value)}
+              onBlur={() => updateFilters({ year_from: yearFrom || undefined })}
+              onKeyDown={(e) => e.key === 'Enter' && updateFilters({ year_from: yearFrom || undefined })}
               className="w-full"
             />
 
             <Input
               type="number"
               placeholder="År till"
-              value={currentFilters.yearTo || ''}
-              onChange={(e) => updateFilters({ year_to: e.target.value || undefined })}
+              value={yearTo}
+              onChange={(e) => setYearTo(e.target.value)}
+              onBlur={() => updateFilters({ year_to: yearTo || undefined })}
+              onKeyDown={(e) => e.key === 'Enter' && updateFilters({ year_to: yearTo || undefined })}
               className="w-full"
             />
 
             <Input
               type="number"
               placeholder="Innehav från (mån)"
-              value={currentFilters.possessionFrom || ''}
-              onChange={(e) => updateFilters({ possession_from: e.target.value || undefined })}
+              value={possessionFrom}
+              onChange={(e) => setPossessionFrom(e.target.value)}
+              onBlur={() => updateFilters({ possession_from: possessionFrom || undefined })}
+              onKeyDown={(e) => e.key === 'Enter' && updateFilters({ possession_from: possessionFrom || undefined })}
               className="w-full"
             />
 
             <Input
               type="number"
               placeholder="Innehav till (mån)"
-              value={currentFilters.possessionTo || ''}
-              onChange={(e) => updateFilters({ possession_to: e.target.value || undefined })}
+              value={possessionTo}
+              onChange={(e) => setPossessionTo(e.target.value)}
+              onBlur={() => updateFilters({ possession_to: possessionTo || undefined })}
+              onKeyDown={(e) => e.key === 'Enter' && updateFilters({ possession_to: possessionTo || undefined })}
               className="w-full"
             />
 
