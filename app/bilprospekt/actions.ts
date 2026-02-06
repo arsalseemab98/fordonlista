@@ -462,3 +462,25 @@ export async function sendProspectsToBrev(bpIds: number[]) {
   revalidatePath('/brev')
   return { success: true, count: successCount, errors: errorCount }
 }
+
+/**
+ * Trigger manual Bilprospekt data sync
+ */
+export async function triggerBilprospektSync() {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'http://localhost:3000'
+
+    const resp = await fetch(`${baseUrl}/api/cron/bilprospekt-sync?trigger=manual`, {
+      method: 'GET',
+      cache: 'no-store',
+    })
+
+    const result = await resp.json()
+    revalidatePath('/bilprospekt')
+    return result
+  } catch (error) {
+    return { success: false, error: String(error) }
+  }
+}

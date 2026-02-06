@@ -5,6 +5,18 @@ import { BilprospektView } from '@/components/bilprospekt/bilprospekt-view'
 // Revalidate every 60 seconds
 export const revalidate = 60
 
+interface SyncLogEntry {
+  id: string
+  started_at: string
+  finished_at: string | null
+  status: string
+  bilprospekt_date: string | null
+  records_fetched: number
+  records_upserted: number
+  error_message: string | null
+  trigger_type: string
+}
+
 export default async function BilprospektPage({
   searchParams,
 }: {
@@ -102,11 +114,29 @@ export default async function BilprospektPage({
     models = (modelResult || []) as string[]
   }
 
+  // Get bilprospekt date from preferences
+  const { data: preferences } = await supabase
+    .from('preferences')
+    .select('bilprospekt_updated_at')
+    .limit(1)
+    .maybeSingle()
+
+  const bilprospektDate = preferences?.bilprospekt_updated_at || null
+
+  // Get last sync log entry
+  const { data: lastSync } = await supabase
+    .from('bilprospekt_sync_log')
+    .select('*')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
   return (
     <div className="flex flex-col">
       <Header
         title="Bilprospekt"
         description="Sök och filtrera prospekt från Bilprospekt. Data uppdateras varje vecka."
+        bilprospektDate={bilprospektDate}
       />
 
       <div className="flex-1 p-6">
@@ -138,6 +168,8 @@ export default async function BilprospektPage({
           availableMunicipalities={municipalities.sort()}
           availableKarossTypes={karossTypes}
           availableColors={colors}
+          bilprospektDate={bilprospektDate}
+          lastSync={lastSync as SyncLogEntry | null}
         />
       </div>
     </div>

@@ -58,8 +58,13 @@ import {
   Users,
   TrendingDown,
   Calendar,
+  RefreshCw,
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  XCircle,
 } from 'lucide-react'
-import { fetchMileageForProspects, checkBiluppgifterStatus } from '@/app/bilprospekt/actions'
+import { fetchMileageForProspects, checkBiluppgifterStatus, triggerBilprospektSync } from '@/app/bilprospekt/actions'
 import { toast } from 'sonner'
 import { ProspectDetailModal } from './prospect-detail-modal'
 
@@ -137,6 +142,18 @@ interface Prospect {
   sent_to_brev_at: string | null
 }
 
+interface SyncLogEntry {
+  id: string
+  started_at: string
+  finished_at: string | null
+  status: string
+  bilprospekt_date: string | null
+  records_fetched: number
+  records_upserted: number
+  error_message: string | null
+  trigger_type: string
+}
+
 interface BilprospektViewProps {
   prospects: Prospect[]
   totalCount: number
@@ -165,6 +182,8 @@ interface BilprospektViewProps {
   availableMunicipalities: string[]
   availableKarossTypes: string[]
   availableColors: string[]
+  bilprospektDate?: string | null
+  lastSync?: SyncLogEntry | null
 }
 
 // Column definitions
@@ -276,6 +295,8 @@ export function BilprospektView({
   availableMunicipalities,
   availableKarossTypes,
   availableColors,
+  bilprospektDate,
+  lastSync,
 }: BilprospektViewProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -290,6 +311,7 @@ export function BilprospektView({
   const [fetchProgress, setFetchProgress] = useState<{ current: number; total: number } | null>(null)
   const [selectedProspect, setSelectedProspect] = useState<Prospect | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
 
   // Column visibility state - initialize from localStorage with version-aware merging
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(() => getMergedColumns())
@@ -511,6 +533,55 @@ export function BilprospektView({
       setFetchProgress(null)
     }
   }
+
+  const handleManualSync = async () => {
+    setIsSyncing(true)
+    const toastId = toast.loading('Synkroniserar med Bilprospekt...', {
+      description: 'Kontrollerar om ny data finns tillgänglig...',
+    })
+
+    try {
+      const result = await triggerBilprospektSync()
+      toast.dismiss(toastId)
+
+      if (result.success) {
+        if (result.status === 'skipped') {
+          toast.info('Data är redan uppdaterad', {
+            description: `Senaste data: ${result.bilprospekt_date || result.our_date}`,
+          })
+        } else {
+          toast.success('Synkronisering klar!', {
+            description: `${result.records_fetched} prospekt hämtade, ${result.records_upserted} uppdaterade. Ny data: ${result.bilprospekt_date}`,
+          })
+          router.refresh()
+        }
+      } else {
+        toast.error('Synkronisering misslyckades', {
+          description: result.error || 'Okänt fel',
+        })
+      }
+    } catch (error) {
+      toast.dismiss(toastId)
+      toast.error('Synkronisering misslyckades', {
+        description: String(error),
+      })
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
+  // Calculate data freshness
+  const getDataFreshness = () => {
+    if (!bilprospektDate) return 'unknown'
+    const date = new Date(bilprospektDate + 'T00:00:00')
+    const now = new Date()
+    const daysDiff = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
+    if (daysDiff <= 7) return 'fresh'
+    if (daysDiff <= 14) return 'stale'
+    return 'outdated'
+  }
+
+  const dataFreshness = getDataFreshness()
 
   const getFuelBadgeColor = (fuel: string | null) => {
     if (!fuel) return 'bg-gray-100 text-gray-600'
@@ -921,15 +992,68 @@ export function BilprospektView({
 
   return (
     <div className="space-y-4">
-      {/* Stats & Actions */}
+      {/* Stats & Data Freshness */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-            <Database className="w-5 h-5 text-blue-600" />
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+              <Database className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Totalt</p>
+              <p className="text-2xl font-bold">{totalCount.toLocaleString()}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Totalt</p>
-            <p className="text-2xl font-bold">{totalCount.toLocaleString()}</p>
+
+          {/* Data freshness indicator */}
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg border bg-card">
+            <div className={`w-2.5 h-2.5 rounded-full ${
+              dataFreshness === 'fresh' ? 'bg-green-500' :
+              dataFreshness === 'stale' ? 'bg-yellow-500' :
+              dataFreshness === 'outdated' ? 'bg-red-500' : 'bg-gray-400'
+            }`} />
+            <div>
+              <p className="text-xs text-muted-foreground">Senaste datauppdatering</p>
+              <p className="text-sm font-medium">
+                {bilprospektDate
+                  ? new Date(bilprospektDate + 'T00:00:00').toLocaleDateString('sv-SE', { year: 'numeric', month: 'short', day: 'numeric' })
+                  : 'Okänt'
+                }
+              </p>
+            </div>
+            {lastSync && (
+              <div className="ml-2 pl-2 border-l">
+                <p className="text-xs text-muted-foreground">Senaste sync</p>
+                <div className="flex items-center gap-1">
+                  {lastSync.status === 'success' && <CheckCircle className="w-3 h-3 text-green-600" />}
+                  {lastSync.status === 'partial' && <AlertCircle className="w-3 h-3 text-yellow-600" />}
+                  {lastSync.status === 'failed' && <XCircle className="w-3 h-3 text-red-600" />}
+                  {lastSync.status === 'skipped' && <Clock className="w-3 h-3 text-gray-500" />}
+                  {lastSync.status === 'running' && <Loader2 className="w-3 h-3 text-blue-600 animate-spin" />}
+                  <span className="text-xs font-medium">
+                    {lastSync.finished_at
+                      ? new Date(lastSync.finished_at).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                      : 'Pågår...'
+                    }
+                  </span>
+                </div>
+                {lastSync.status === 'failed' && lastSync.error_message && (
+                  <p className="text-xs text-red-600 max-w-[200px] truncate" title={lastSync.error_message}>
+                    {lastSync.error_message}
+                  </p>
+                )}
+              </div>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-1 h-7 w-7 p-0"
+              onClick={handleManualSync}
+              disabled={isSyncing}
+              title="Synkronisera nu"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+            </Button>
           </div>
         </div>
         <div className="flex items-center gap-2">
