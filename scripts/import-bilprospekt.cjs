@@ -68,7 +68,8 @@ function mapProspect(prospect, regNumber) {
     kaross: prospect.kaross || null,
     transmission: null,
     engine_power: prospect.engine_strength_hk || null,
-    mileage: null, // Skip aprox_mileage — real mileage comes from biluppgifter
+    mileage: null, // Real mileage comes from biluppgifter
+    bp_aprox_mileage: prospect.aprox_mileage ? parseInt(String(prospect.aprox_mileage), 10) || null : null,
     weight: prospect.service_weight || null,
     leasing: prospect.leasing ? true : false,
     credit: prospect.credit ? true : false,
