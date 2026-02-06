@@ -1,16 +1,17 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { fetchSegment } from '@/lib/bilprospekt/api-client'
+import { getUpdateDate, fetchSegment } from '@/lib/bilprospekt/api-client'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300 // 5 minutes
 
 /**
  * Backfill bp_aprox_mileage for existing bilprospekt_prospects.
- * Processes one year segment at a time.
  *
- * Usage: GET /api/backfill-mileage?yearFrom=2010&yearTo=2013
- * Or: GET /api/backfill-mileage?all=true (processes all segments sequentially)
+ * Usage:
+ *   GET /api/backfill-mileage?test=true             - Test auth only
+ *   GET /api/backfill-mileage?yearFrom=2010&yearTo=2013  - One segment
+ *   GET /api/backfill-mileage?all=true              - All segments
  */
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -18,9 +19,37 @@ export async function GET(request: Request) {
   const yearTo = url.searchParams.get('yearTo')
   const brand = url.searchParams.get('brand') || undefined
   const runAll = url.searchParams.get('all') === 'true'
+  const testOnly = url.searchParams.get('test') === 'true'
 
-  if (!process.env.BILPROSPEKT_EMAIL || !process.env.BILPROSPEKT_PASSWORD) {
-    return NextResponse.json({ error: 'Missing Bilprospekt credentials' }, { status: 500 })
+  const email = process.env.BILPROSPEKT_EMAIL
+  const password = process.env.BILPROSPEKT_PASSWORD
+
+  if (!email || !password) {
+    return NextResponse.json({
+      error: 'Missing Bilprospekt credentials',
+      hasEmail: !!email,
+      hasPassword: !!password,
+    }, { status: 500 })
+  }
+
+  // Test mode: just try to authenticate
+  if (testOnly) {
+    try {
+      const updateDate = await getUpdateDate()
+      return NextResponse.json({
+        success: true,
+        auth: 'OK',
+        updateDate,
+        emailPrefix: email.substring(0, 3) + '***',
+      })
+    } catch (error) {
+      return NextResponse.json({
+        success: false,
+        auth: 'FAILED',
+        error: String(error),
+        emailPrefix: email.substring(0, 3) + '***',
+      })
+    }
   }
 
   const supabase = await createClient()
@@ -44,7 +73,7 @@ export async function GET(request: Request) {
 
   if (segments.length === 0) {
     return NextResponse.json({
-      error: 'Provide ?yearFrom=X&yearTo=Y or ?all=true',
+      error: 'Provide ?yearFrom=X&yearTo=Y, ?all=true, or ?test=true',
       available_segments: YEAR_SEGMENTS.map(s => s.label),
     }, { status: 400 })
   }
@@ -71,31 +100,34 @@ export async function GET(request: Request) {
       // Filter to only those with mileage
       const withMileage = prospects.filter(p => p.bp_aprox_mileage !== null && p.bp_aprox_mileage > 0)
 
-      // Batch update
+      // Batch update using SQL for efficiency
       let segUpdated = 0
-      const batchSize = 100
 
-      for (let i = 0; i < withMileage.length; i += batchSize) {
-        const batch = withMileage.slice(i, i + batchSize)
+      // Process in chunks of 200 for efficient SQL
+      for (let i = 0; i < withMileage.length; i += 200) {
+        const chunk = withMileage.slice(i, i + 200)
 
-        // Build a bulk update using individual updates (Supabase doesn't support CASE WHEN via client)
-        for (const p of batch) {
-          const { error } = await supabase
-            .from('bilprospekt_prospects')
-            .update({ bp_aprox_mileage: p.bp_aprox_mileage })
-            .eq('bp_id', p.bp_id)
+        // Build VALUES list for bulk update
+        const values = chunk.map(p =>
+          `(${p.bp_id}, ${p.bp_aprox_mileage})`
+        ).join(',')
 
-          if (!error) {
-            segUpdated++
-          } else {
-            // Try by reg_number as fallback
-            const { error: err2 } = await supabase
+        const { error } = await supabase.rpc('exec_sql', {
+          sql: `UPDATE bilprospekt_prospects AS t SET bp_aprox_mileage = v.mileage FROM (VALUES ${values}) AS v(bp_id, mileage) WHERE t.bp_id = v.bp_id`
+        }).single()
+
+        if (error) {
+          // Fallback: individual updates
+          for (const p of chunk) {
+            const { error: upErr } = await supabase
               .from('bilprospekt_prospects')
               .update({ bp_aprox_mileage: p.bp_aprox_mileage })
-              .eq('reg_number', p.reg_number)
+              .eq('bp_id', p.bp_id)
 
-            if (!err2) segUpdated++
+            if (!upErr) segUpdated++
           }
+        } else {
+          segUpdated += chunk.length
         }
       }
 
