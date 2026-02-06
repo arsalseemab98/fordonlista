@@ -4,7 +4,18 @@ import { HandlareBiluppgifterView } from '@/components/handlare-biluppgifter/han
 
 export const dynamic = 'force-dynamic'
 
-export default async function HandlareBiluppgifterPage() {
+const PAGE_SIZE = 50
+
+export default async function HandlareBiluppgifterPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
+  const params = await searchParams
+  const ownerTypeFilter = typeof params.owner_type === 'string' ? params.owner_type : undefined
+  const searchFilter = typeof params.search === 'string' ? params.search : undefined
+  const currentPage = Math.max(1, parseInt(typeof params.page === 'string' ? params.page : '1', 10) || 1)
+
   const supabase = await createClient()
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -17,6 +28,7 @@ export default async function HandlareBiluppgifterPage() {
     { count: totalFormedling },
     { count: totalPrivat },
     { count: totalForetag },
+    { count: totalSold },
     { count: fetchedToday },
     { count: knownDealersCount },
   ] = await Promise.all([
@@ -26,12 +38,16 @@ export default async function HandlareBiluppgifterPage() {
     supabase.from('biluppgifter_data').select('*', { count: 'exact', head: true }).eq('owner_type', 'formedling'),
     supabase.from('biluppgifter_data').select('*', { count: 'exact', head: true }).eq('owner_type', 'privat'),
     supabase.from('biluppgifter_data').select('*', { count: 'exact', head: true }).eq('owner_type', 'foretag'),
+    supabase.from('biluppgifter_data').select('*', { count: 'exact', head: true }).eq('owner_type', 'sold'),
     supabase.from('biluppgifter_data').select('*', { count: 'exact', head: true }).gte('fetched_at', today.toISOString()),
     supabase.from('known_dealers').select('*', { count: 'exact', head: true }),
   ])
 
-  // --- Recent fetched (senaste 50) ---
-  const { data: recentFetches } = await supabase
+  // --- Filtered + paginated query ---
+  const from = (currentPage - 1) * PAGE_SIZE
+  const to = from + PAGE_SIZE - 1
+
+  let query = supabase
     .from('biluppgifter_data')
     .select(`
       id,
@@ -52,17 +68,29 @@ export default async function HandlareBiluppgifterPage() {
       mileage_history,
       owner_history,
       fetched_at
-    `)
-    .order('fetched_at', { ascending: false })
-    .limit(50)
+    `, { count: 'exact' })
 
-  // Hämta Blocket-data för dessa
+  if (ownerTypeFilter) {
+    query = query.eq('owner_type', ownerTypeFilter)
+  }
+
+  if (searchFilter) {
+    query = query.or(`regnummer.ilike.%${searchFilter}%,owner_name.ilike.%${searchFilter}%`)
+  }
+
+  const { data: recentFetches, count: totalCount } = await query
+    .order('fetched_at', { ascending: false })
+    .range(from, to)
+
+  const totalPages = Math.ceil((totalCount || 0) / PAGE_SIZE)
+
+  // Hamta Blocket-data for dessa
   const blocketIds = recentFetches?.map(f => f.regnummer).filter(Boolean) || []
   let blocketMap: Record<string, any> = {}
   if (blocketIds.length > 0) {
     const { data: blocketAds } = await supabase
       .from('blocket_annonser')
-      .select('regnummer, marke, modell, arsmodell, pris, saljare_namn, saljare_typ, publicerad, region, stad')
+      .select('regnummer, marke, modell, arsmodell, pris, saljare_namn, saljare_typ, publicerad, region, stad, url')
       .in('regnummer', blocketIds)
 
     if (blocketAds) {
@@ -94,8 +122,15 @@ export default async function HandlareBiluppgifterPage() {
     totalFormedling: totalFormedling || 0,
     totalPrivat: totalPrivat || 0,
     totalForetag: totalForetag || 0,
+    totalSold: totalSold || 0,
     fetchedToday: fetchedToday || 0,
     knownDealers: knownDealersCount || 0,
+  }
+
+  const currentFilters = {
+    owner_type: ownerTypeFilter,
+    search: searchFilter,
+    page: String(currentPage),
   }
 
   return (
@@ -111,6 +146,10 @@ export default async function HandlareBiluppgifterPage() {
           blocketMap={blocketMap}
           cronLogs={cronLogs || []}
           topDealers={topDealers || []}
+          currentFilters={currentFilters}
+          totalCount={totalCount || 0}
+          totalPages={totalPages}
+          currentPage={currentPage}
         />
       </div>
     </div>
