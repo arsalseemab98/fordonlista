@@ -28,13 +28,14 @@ import {
   Building2,
   Clock,
   CheckCircle,
-  Calendar,
   TrendingDown,
+  Hourglass,
 } from 'lucide-react'
 
 interface Stats {
   totalConfirmed: number
   totalPending: number
+  totalAwaiting: number
   privatSaljare: number
   handlareSaljare: number
   privatKopare: number
@@ -63,6 +64,12 @@ function formatDate(dateStr: string | null) {
   return new Date(dateStr).toLocaleDateString('sv-SE')
 }
 
+function daysSince(dateStr: string | null) {
+  if (!dateStr) return null
+  const diff = Date.now() - new Date(dateStr).getTime()
+  return Math.floor(diff / (1000 * 60 * 60 * 24))
+}
+
 function LiggtidBadge({ days }: { days: number | null }) {
   if (days === null || days === undefined) return <span className="text-gray-400">-</span>
   let color = 'bg-green-100 text-green-800' // < 30 days
@@ -73,6 +80,32 @@ function LiggtidBadge({ days }: { days: number | null }) {
     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${color}`}>
       {days}d
     </span>
+  )
+}
+
+function StatusBadge({ status }: { status: string }) {
+  if (status === 'confirmed') {
+    return (
+      <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">
+        <CheckCircle className="h-3 w-3 mr-1" />
+        Bekräftad
+      </Badge>
+    )
+  }
+  if (status === 'pending') {
+    return (
+      <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">
+        <Hourglass className="h-3 w-3 mr-1" />
+        Under verifiering
+      </Badge>
+    )
+  }
+  // awaiting
+  return (
+    <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200">
+      <Clock className="h-3 w-3 mr-1" />
+      Väntar på bekräftelse
+    </Badge>
   )
 }
 
@@ -119,34 +152,61 @@ function KopareTypBadge({ typ, isDealer }: { typ: string | null; isDealer: boole
   )
 }
 
-function ExpandableRow({ data }: { data: any }) {
+function AwaitingRow({ data }: { data: any }) {
+  const days = daysSince(data.sold_at)
+  const liggtid = data.forst_sedd && data.borttagen
+    ? Math.floor((new Date(data.borttagen).getTime() - new Date(data.forst_sedd).getTime()) / (1000 * 60 * 60 * 24))
+    : null
+
+  return (
+    <tr className="border-b hover:bg-yellow-50/50">
+      <td className="px-3 py-2 text-sm font-mono font-medium">{data.regnummer}</td>
+      <td className="px-3 py-2 text-sm">
+        {data.marke} {data.modell} {data.arsmodell}
+      </td>
+      <td className="px-3 py-2 text-sm">{data.pris?.toLocaleString() || '-'} kr</td>
+      <td className="px-3 py-2 text-sm">{formatDate(data.sold_at)}</td>
+      <td className="px-3 py-2 text-sm">
+        <LiggtidBadge days={liggtid} />
+      </td>
+      <td className="px-3 py-2 text-sm">
+        <SaljareTypBadge typ={data.saljare_typ} />
+      </td>
+      <td className="px-3 py-2 text-sm">
+        <StatusBadge status="awaiting" />
+      </td>
+      <td className="px-3 py-2 text-sm text-gray-500">
+        {days !== null ? `${days}d sedan` : '-'}
+      </td>
+      <td className="px-3 py-2"></td>
+    </tr>
+  )
+}
+
+function PendingRow({ data }: { data: any }) {
+  return (
+    <tr className="border-b hover:bg-blue-50/50">
+      <td className="px-3 py-2 text-sm font-mono font-medium">{data.regnummer}</td>
+      <td className="px-3 py-2 text-sm">
+        {data.marke} {data.modell} {data.arsmodell}
+      </td>
+      <td className="px-3 py-2 text-sm">{data.pris?.toLocaleString() || '-'} kr</td>
+      <td className="px-3 py-2 text-sm">{formatDate(data.sold_at)}</td>
+      <td className="px-3 py-2 text-sm">-</td>
+      <td className="px-3 py-2 text-sm text-gray-500">{data.original_owner || '-'}</td>
+      <td className="px-3 py-2 text-sm">
+        <StatusBadge status="pending" />
+      </td>
+      <td className="px-3 py-2 text-sm text-gray-400 text-xs">
+        Kollad {data.check_count || 0}x
+      </td>
+      <td className="px-3 py-2"></td>
+    </tr>
+  )
+}
+
+function ConfirmedRow({ data }: { data: any }) {
   const [expanded, setExpanded] = useState(false)
-
-  // Handle pending rows
-  if (data._isPending) {
-    return (
-      <tr className="border-b hover:bg-yellow-50 bg-yellow-50/30">
-        <td className="px-3 py-2 text-sm font-mono font-medium">{data.regnummer}</td>
-        <td className="px-3 py-2 text-sm">
-          {data.marke} {data.modell} {data.arsmodell}
-        </td>
-        <td className="px-3 py-2 text-sm">{data.pris?.toLocaleString() || '-'} kr</td>
-        <td className="px-3 py-2 text-sm">{formatDate(data.sold_at)}</td>
-        <td className="px-3 py-2 text-sm" colSpan={2}>
-          <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
-            <Clock className="h-3 w-3 mr-1" />
-            Väntar på ägarbyte
-          </Badge>
-        </td>
-        <td className="px-3 py-2 text-sm text-gray-500">{data.original_owner || '-'}</td>
-        <td className="px-3 py-2 text-sm text-gray-400 text-xs">
-          Kollad {data.check_count}x
-        </td>
-        <td className="px-3 py-2"></td>
-      </tr>
-    )
-  }
-
   const kopareFordon = data.kopare_fordon || []
   const adressFordon = data.adress_fordon || []
 
@@ -288,7 +348,7 @@ export function SaldaBilarView({
   const [isPending, startTransition] = useTransition()
   const [searchInput, setSearchInput] = useState(currentFilters.search || '')
 
-  const activeView = currentFilters.view || 'confirmed'
+  const activeView = currentFilters.view || 'awaiting'
 
   const handleSearch = () => {
     const params = new URLSearchParams(searchParams.toString())
@@ -305,7 +365,7 @@ export function SaldaBilarView({
 
   const handleViewChange = (view: string) => {
     const params = new URLSearchParams()
-    if (view !== 'confirmed') {
+    if (view !== 'awaiting') {
       params.set('view', view)
     }
     startTransition(() => {
@@ -358,85 +418,127 @@ export function SaldaBilarView({
     })
   }
 
+  // Dynamic table headers based on view
+  const getTableHeaders = () => {
+    if (activeView === 'confirmed') {
+      return ['Regnr', 'Bil', 'Pris', 'Såld', 'Liggtid', 'Säljare', 'Köpare', 'Köpartyp', '']
+    }
+    if (activeView === 'pending') {
+      return ['Regnr', 'Bil', 'Pris', 'Såld', 'Liggtid', 'Ägare', 'Status', 'Kontroller', '']
+    }
+    // awaiting
+    return ['Regnr', 'Bil', 'Pris', 'Borttagen', 'Liggtid', 'Säljare', 'Status', 'Tid', '']
+  }
+
   return (
     <div className="space-y-6">
-      {/* Stats cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+      {/* Stats cards — 3 main view cards */}
+      <div className="grid grid-cols-3 gap-3">
+        <Card
+          className={`cursor-pointer transition-all hover:shadow-md ${
+            activeView === 'awaiting' ? 'ring-2 ring-yellow-500 bg-yellow-50' : 'bg-yellow-50 border-yellow-200'
+          }`}
+          onClick={() => handleViewChange('awaiting')}
+        >
+          <CardContent className="pt-3 pb-2 px-3 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-yellow-600">Väntar på bekräftelse</p>
+              <p className="text-2xl font-bold text-yellow-800">{stats.totalAwaiting.toLocaleString()}</p>
+              <p className="text-xs text-yellow-600/70 mt-0.5">Borttagna från Blocket, markerade SÅLD</p>
+            </div>
+            <Clock className="h-5 w-5 text-yellow-400" />
+          </CardContent>
+        </Card>
+
+        <Card
+          className={`cursor-pointer transition-all hover:shadow-md ${
+            activeView === 'pending' ? 'ring-2 ring-blue-500 bg-blue-50' : 'bg-blue-50 border-blue-200'
+          }`}
+          onClick={() => handleViewChange('pending')}
+        >
+          <CardContent className="pt-3 pb-2 px-3 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-blue-600">Under verifiering</p>
+              <p className="text-2xl font-bold text-blue-800">{stats.totalPending.toLocaleString()}</p>
+              <p className="text-xs text-blue-600/70 mt-0.5">Kollar ägarbyte via biluppgifter</p>
+            </div>
+            <Hourglass className="h-5 w-5 text-blue-400" />
+          </CardContent>
+        </Card>
+
         <Card
           className={`cursor-pointer transition-all hover:shadow-md ${
             activeView === 'confirmed' ? 'ring-2 ring-green-500 bg-green-50' : 'bg-green-50 border-green-200'
           }`}
           onClick={() => handleViewChange('confirmed')}
         >
-          <CardContent className="pt-3 pb-2 px-3">
-            <p className="text-xs text-green-600">Bekräftade</p>
-            <p className="text-xl font-bold text-green-800">{stats.totalConfirmed.toLocaleString()}</p>
-          </CardContent>
-        </Card>
-
-        <Card
-          className={`cursor-pointer transition-all hover:shadow-md ${
-            activeView === 'pending' ? 'ring-2 ring-yellow-500 bg-yellow-50' : 'bg-yellow-50 border-yellow-200'
-          }`}
-          onClick={() => handleViewChange('pending')}
-        >
-          <CardContent className="pt-3 pb-2 px-3">
-            <p className="text-xs text-yellow-600">Väntar</p>
-            <p className="text-xl font-bold text-yellow-800">{stats.totalPending.toLocaleString()}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-blue-50 border-blue-200">
-          <CardContent className="pt-3 pb-2 px-3">
-            <p className="text-xs text-blue-600">Privat sälj</p>
-            <p className="text-xl font-bold text-blue-800">{stats.privatSaljare.toLocaleString()}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-purple-50 border-purple-200">
-          <CardContent className="pt-3 pb-2 px-3">
-            <p className="text-xs text-purple-600">Handlare sälj</p>
-            <p className="text-xl font-bold text-purple-800">{stats.handlareSaljare.toLocaleString()}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-emerald-50 border-emerald-200">
-          <CardContent className="pt-3 pb-2 px-3">
-            <p className="text-xs text-emerald-600">Privat köp</p>
-            <p className="text-xl font-bold text-emerald-800">{stats.privatKopare.toLocaleString()}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-amber-50 border-amber-200">
-          <CardContent className="pt-3 pb-2 px-3">
-            <p className="text-xs text-amber-600">Företag köp</p>
-            <p className="text-xl font-bold text-amber-800">{stats.foretagKopare.toLocaleString()}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-fuchsia-50 border-fuchsia-200">
-          <CardContent className="pt-3 pb-2 px-3">
-            <p className="text-xs text-fuchsia-600">Handlare köp</p>
-            <p className="text-xl font-bold text-fuchsia-800">{stats.handlareKopare.toLocaleString()}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-teal-50 border-teal-200">
           <CardContent className="pt-3 pb-2 px-3 flex items-center justify-between">
             <div>
-              <p className="text-xs text-teal-600">Med telefon</p>
-              <p className="text-xl font-bold text-teal-800">{stats.withPhone.toLocaleString()}</p>
+              <p className="text-xs text-green-600">Bekräftade</p>
+              <p className="text-2xl font-bold text-green-800">{stats.totalConfirmed.toLocaleString()}</p>
+              <p className="text-xs text-green-600/70 mt-0.5">Ägarbyte bekräftat med köpardata</p>
             </div>
-            <Phone className="h-4 w-4 text-teal-400" />
+            <CheckCircle className="h-5 w-5 text-green-400" />
           </CardContent>
         </Card>
       </div>
 
-      {/* View description */}
-      {activeView === 'pending' && (
+      {/* Detailed stats for confirmed view */}
+      {activeView === 'confirmed' && stats.totalConfirmed > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <Card className="bg-blue-50 border-blue-200">
+            <CardContent className="pt-3 pb-2 px-3">
+              <p className="text-xs text-blue-600">Privat sälj</p>
+              <p className="text-xl font-bold text-blue-800">{stats.privatSaljare.toLocaleString()}</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-purple-50 border-purple-200">
+            <CardContent className="pt-3 pb-2 px-3">
+              <p className="text-xs text-purple-600">Handlare sälj</p>
+              <p className="text-xl font-bold text-purple-800">{stats.handlareSaljare.toLocaleString()}</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-emerald-50 border-emerald-200">
+            <CardContent className="pt-3 pb-2 px-3">
+              <p className="text-xs text-emerald-600">Privat köp</p>
+              <p className="text-xl font-bold text-emerald-800">{stats.privatKopare.toLocaleString()}</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-amber-50 border-amber-200">
+            <CardContent className="pt-3 pb-2 px-3">
+              <p className="text-xs text-amber-600">Företag köp</p>
+              <p className="text-xl font-bold text-amber-800">{stats.foretagKopare.toLocaleString()}</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-teal-50 border-teal-200">
+            <CardContent className="pt-3 pb-2 px-3 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-teal-600">Med telefon</p>
+                <p className="text-xl font-bold text-teal-800">{stats.withPhone.toLocaleString()}</p>
+              </div>
+              <Phone className="h-4 w-4 text-teal-400" />
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* View description banners */}
+      {activeView === 'awaiting' && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
           <Clock className="h-4 w-4 inline mr-2" />
-          <strong>Väntar på ägarbyte:</strong> Dessa bilar har försvunnit från Blocket men ägarbytet har inte bekräftats ännu på biluppgifter.se.
+          <strong>Väntar på bekräftelse:</strong> Dessa annonser har tagits bort från Blocket med anledning &quot;SÅLD&quot;. Cronen kollar ägarbyte efter 7 dagar via biluppgifter.se och flyttar dem till &quot;Bekräftade&quot; när ägarbytet är bekräftat.
+        </div>
+      )}
+      {activeView === 'pending' && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+          <Hourglass className="h-4 w-4 inline mr-2" />
+          <strong>Under verifiering:</strong> Dessa bilar har kollats mot biluppgifter.se men ägaren har inte bytt ännu. Kontrolleras var 14:e dag i upp till 90 dagar.
+        </div>
+      )}
+      {activeView === 'confirmed' && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
+          <CheckCircle className="h-4 w-4 inline mr-2" />
+          <strong>Bekräftade försäljningar:</strong> Ägarbyte bekräftat via biluppgifter.se. Köpardata (namn, adress, telefon, fordon) har hämtats.
         </div>
       )}
 
@@ -454,40 +556,40 @@ export function SaldaBilarView({
           </Button>
         </div>
 
-        {activeView === 'confirmed' && (
-          <>
-            <Select
-              value={currentFilters.saljare || 'all'}
-              onValueChange={handleSaljareFilter}
-            >
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Säljare" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Alla säljare</SelectItem>
-                <SelectItem value="privat">Privat</SelectItem>
-                <SelectItem value="handlare">Handlare</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={currentFilters.kopare || 'all'}
-              onValueChange={handleKopareFilter}
-            >
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Köpare" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Alla köpare</SelectItem>
-                <SelectItem value="privatperson">Privatperson</SelectItem>
-                <SelectItem value="företag">Företag</SelectItem>
-                <SelectItem value="handlare">Handlare</SelectItem>
-              </SelectContent>
-            </Select>
-          </>
+        {(activeView === 'confirmed' || activeView === 'awaiting') && (
+          <Select
+            value={currentFilters.saljare || 'all'}
+            onValueChange={handleSaljareFilter}
+          >
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Säljare" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alla säljare</SelectItem>
+              <SelectItem value="privat">Privat</SelectItem>
+              <SelectItem value="handlare">Handlare</SelectItem>
+            </SelectContent>
+          </Select>
         )}
 
-        {(currentFilters.search || currentFilters.saljare || currentFilters.kopare || activeView !== 'confirmed') && (
+        {activeView === 'confirmed' && (
+          <Select
+            value={currentFilters.kopare || 'all'}
+            onValueChange={handleKopareFilter}
+          >
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Köpare" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alla köpare</SelectItem>
+              <SelectItem value="privatperson">Privatperson</SelectItem>
+              <SelectItem value="företag">Företag</SelectItem>
+              <SelectItem value="handlare">Handlare</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+
+        {(currentFilters.search || currentFilters.saljare || currentFilters.kopare) && (
           <Button variant="ghost" onClick={clearFilters}>
             Rensa filter
           </Button>
@@ -501,28 +603,24 @@ export function SaldaBilarView({
             <table className="w-full text-left">
               <thead className="bg-gray-50 border-b">
                 <tr>
-                  <th className="px-3 py-2 text-xs font-medium text-gray-500">Regnr</th>
-                  <th className="px-3 py-2 text-xs font-medium text-gray-500">Bil</th>
-                  <th className="px-3 py-2 text-xs font-medium text-gray-500">Pris</th>
-                  <th className="px-3 py-2 text-xs font-medium text-gray-500">Såld</th>
-                  <th className="px-3 py-2 text-xs font-medium text-gray-500">Liggtid</th>
-                  <th className="px-3 py-2 text-xs font-medium text-gray-500">Säljare</th>
-                  <th className="px-3 py-2 text-xs font-medium text-gray-500">Köpare</th>
-                  <th className="px-3 py-2 text-xs font-medium text-gray-500">Köpartyp</th>
-                  <th className="px-3 py-2 text-xs font-medium text-gray-500"></th>
+                  {getTableHeaders().map((header, i) => (
+                    <th key={i} className="px-3 py-2 text-xs font-medium text-gray-500">{header}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {data.map((item) => (
-                  <ExpandableRow
-                    key={item.id}
-                    data={item}
-                  />
-                ))}
+                {data.map((item) => {
+                  const status = item._status || 'confirmed'
+                  if (status === 'awaiting') return <AwaitingRow key={item.id} data={item} />
+                  if (status === 'pending') return <PendingRow key={item.id} data={item} />
+                  return <ConfirmedRow key={item.id} data={item} />
+                })}
                 {data.length === 0 && (
                   <tr>
                     <td colSpan={9} className="px-3 py-8 text-center text-gray-400 text-sm">
-                      Inga sålda bilar hittades
+                      {activeView === 'awaiting' && 'Inga bilar väntar på bekräftelse'}
+                      {activeView === 'pending' && 'Inga bilar under verifiering'}
+                      {activeView === 'confirmed' && 'Inga bekräftade försäljningar ännu'}
                     </td>
                   </tr>
                 )}

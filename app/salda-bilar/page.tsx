@@ -15,7 +15,7 @@ export default async function SaldaBilarPage({
   const searchFilter = typeof params.search === 'string' ? params.search : undefined
   const saljareFilter = typeof params.saljare === 'string' ? params.saljare : undefined
   const kopareFilter = typeof params.kopare === 'string' ? params.kopare : undefined
-  const viewFilter = typeof params.view === 'string' ? params.view : 'confirmed' // confirmed, pending
+  const viewFilter = typeof params.view === 'string' ? params.view : 'awaiting' // awaiting, confirmed, pending
   const currentPage = Math.max(1, parseInt(typeof params.page === 'string' ? params.page : '1', 10) || 1)
 
   const supabase = await createClient()
@@ -24,6 +24,7 @@ export default async function SaldaBilarPage({
   const [
     { count: totalConfirmed },
     { count: totalPending },
+    { count: totalAwaiting },
     { count: privatSaljare },
     { count: handlareSaljare },
     { count: privatKopare },
@@ -33,6 +34,7 @@ export default async function SaldaBilarPage({
   ] = await Promise.all([
     supabase.from('blocket_salda').select('*', { count: 'exact', head: true }),
     supabase.from('blocket_salda_pending').select('*', { count: 'exact', head: true }),
+    supabase.from('blocket_annonser').select('*', { count: 'exact', head: true }).eq('borttagen_anledning', 'SÅLD').not('regnummer', 'is', null),
     supabase.from('blocket_salda').select('*', { count: 'exact', head: true }).eq('saljare_typ', 'privat'),
     supabase.from('blocket_salda').select('*', { count: 'exact', head: true }).eq('saljare_typ', 'handlare'),
     supabase.from('blocket_salda').select('*', { count: 'exact', head: true }).eq('kopare_typ', 'privatperson'),
@@ -44,6 +46,7 @@ export default async function SaldaBilarPage({
   const stats = {
     totalConfirmed: totalConfirmed || 0,
     totalPending: totalPending || 0,
+    totalAwaiting: totalAwaiting || 0,
     privatSaljare: privatSaljare || 0,
     handlareSaljare: handlareSaljare || 0,
     privatKopare: privatKopare || 0,
@@ -58,8 +61,48 @@ export default async function SaldaBilarPage({
   let data: any[] = []
   let totalCount = 0
 
-  if (viewFilter === 'pending') {
-    // Pending sales awaiting verification
+  if (viewFilter === 'awaiting') {
+    // Sold ads from blocket_annonser awaiting buyer verification
+    let query = supabase
+      .from('blocket_annonser')
+      .select(`
+        id,
+        regnummer,
+        marke,
+        modell,
+        arsmodell,
+        miltal,
+        pris,
+        saljare_typ,
+        saljare_namn,
+        borttagen,
+        forst_sedd,
+        region,
+        kommun
+      `, { count: 'exact' })
+      .eq('borttagen_anledning', 'SÅLD')
+      .not('regnummer', 'is', null)
+
+    if (searchFilter) {
+      query = query.or(`regnummer.ilike.%${searchFilter}%,saljare_namn.ilike.%${searchFilter}%,marke.ilike.%${searchFilter}%`)
+    }
+
+    if (saljareFilter && saljareFilter !== 'all') {
+      query = query.eq('saljare_typ', saljareFilter)
+    }
+
+    const { data: awaitingData, count } = await query
+      .order('borttagen', { ascending: false })
+      .range(from, to)
+
+    data = (awaitingData || []).map(d => ({
+      ...d,
+      _status: 'awaiting' as const,
+      sold_at: d.borttagen,
+    }))
+    totalCount = count || 0
+  } else if (viewFilter === 'pending') {
+    // Pending sales under verification (ownership change check in progress)
     let query = supabase
       .from('blocket_salda_pending')
       .select(`
@@ -85,7 +128,7 @@ export default async function SaldaBilarPage({
       .order('sold_at', { ascending: false })
       .range(from, to)
 
-    data = (pendingData || []).map(d => ({ ...d, _isPending: true }))
+    data = (pendingData || []).map(d => ({ ...d, _status: 'pending' as const }))
     totalCount = count || 0
   } else {
     // Confirmed sales with buyer data
@@ -138,7 +181,7 @@ export default async function SaldaBilarPage({
       .order('sold_at', { ascending: false })
       .range(from, to)
 
-    data = confirmedData || []
+    data = (confirmedData || []).map(d => ({ ...d, _status: 'confirmed' as const }))
     totalCount = count || 0
   }
 
