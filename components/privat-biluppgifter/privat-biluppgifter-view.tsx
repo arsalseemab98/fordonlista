@@ -74,6 +74,7 @@ function ExpandableRow({ data, blocket }: { data: any; blocket: any }) {
           {ad ? `${ad.marke} ${ad.modell} ${ad.arsmodell}` : '-'}
         </td>
         <td className="px-3 py-2 text-sm">{ad?.pris?.toLocaleString() || '-'} kr</td>
+        <td className="px-3 py-2 text-sm">{ad?.miltal ? `${ad.miltal.toLocaleString()} mil` : '-'}</td>
         <td className="px-3 py-2 text-sm">
           {ad?.url ? (
             <a
@@ -106,6 +107,7 @@ function ExpandableRow({ data, blocket }: { data: any; blocket: any }) {
           {blocket ? `${blocket.marke} ${blocket.modell} ${blocket.arsmodell}` : '-'}
         </td>
         <td className="px-3 py-2 text-sm">{blocket?.pris?.toLocaleString() || '-'} kr</td>
+        <td className="px-3 py-2 text-sm">{blocket?.miltal ? `${blocket.miltal.toLocaleString()} mil` : '-'}</td>
         <td className="px-3 py-2 text-sm">
           {blocket?.url ? (
             <a
@@ -146,6 +148,7 @@ function ExpandableRow({ data, blocket }: { data: any; blocket: any }) {
           {blocket ? `${blocket.marke} ${blocket.modell} ${blocket.arsmodell}` : '-'}
         </td>
         <td className="px-3 py-2 text-sm">{blocket?.pris?.toLocaleString() || '-'} kr</td>
+        <td className="px-3 py-2 text-sm">{blocket?.miltal ? `${blocket.miltal.toLocaleString()} mil` : '-'}</td>
         <td className="px-3 py-2 text-sm">
           {blocket?.url ? (
             <a
@@ -183,7 +186,7 @@ function ExpandableRow({ data, blocket }: { data: any; blocket: any }) {
 
       {expanded && (
         <tr className="bg-gray-50 border-b">
-          <td colSpan={10} className="px-4 py-4">
+          <td colSpan={11} className="px-4 py-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Ägare info */}
               <div className="space-y-2">
@@ -521,6 +524,7 @@ export function PrivatBiluppgifterView({
                   <th className="px-3 py-2 text-xs font-medium text-gray-500">Regnr</th>
                   <th className="px-3 py-2 text-xs font-medium text-gray-500">Bil</th>
                   <th className="px-3 py-2 text-xs font-medium text-gray-500">Pris</th>
+                  <th className="px-3 py-2 text-xs font-medium text-gray-500">Miltal</th>
                   <th className="px-3 py-2 text-xs font-medium text-gray-500">Blocket</th>
                   <th className="px-3 py-2 text-xs font-medium text-gray-500">Ägare</th>
                   <th className="px-3 py-2 text-xs font-medium text-gray-500">Ålder</th>
@@ -540,7 +544,7 @@ export function PrivatBiluppgifterView({
                 ))}
                 {privatData.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="px-3 py-8 text-center text-gray-400 text-sm">
+                    <td colSpan={11} className="px-3 py-8 text-center text-gray-400 text-sm">
                       Inga resultat hittades
                     </td>
                   </tr>

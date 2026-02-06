@@ -86,7 +86,7 @@ export default async function PrivatBiluppgifterPage({
     if (pageRegnr.length > 0) {
       const { data: ads } = await supabase
         .from('blocket_annonser')
-        .select('id, regnummer, marke, modell, arsmodell, pris, saljare_namn, publicerad, region, stad, url')
+        .select('id, regnummer, marke, modell, arsmodell, miltal, pris, saljare_namn, publicerad, region, stad, url')
         .in('regnummer', pageRegnr)
 
       privatData = (ads || []).map(ad => ({
@@ -126,7 +126,7 @@ export default async function PrivatBiluppgifterPage({
     if (regnrs.length > 0) {
       const { data: blocketAds } = await supabase
         .from('blocket_annonser')
-        .select('regnummer, marke, modell, arsmodell, pris, saljare_namn, publicerad, region, stad, url')
+        .select('regnummer, marke, modell, arsmodell, miltal, pris, saljare_namn, publicerad, region, stad, url')
         .in('regnummer', regnrs)
 
       for (const ad of blocketAds || []) {
@@ -181,7 +181,7 @@ export default async function PrivatBiluppgifterPage({
     if (regnrs.length > 0) {
       const { data: blocketAds } = await supabase
         .from('blocket_annonser')
-        .select('regnummer, marke, modell, arsmodell, pris, saljare_namn, publicerad, region, stad, url')
+        .select('regnummer, marke, modell, arsmodell, miltal, pris, saljare_namn, publicerad, region, stad, url')
         .in('regnummer', regnrs)
 
       for (const ad of blocketAds || []) {
