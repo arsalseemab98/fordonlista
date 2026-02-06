@@ -73,12 +73,28 @@ export default async function SaldaBilarPage({
         arsmodell,
         miltal,
         pris,
+        bransle,
+        vaxellada,
+        kaross,
+        farg,
+        effekt,
         saljare_typ,
         saljare_namn,
         borttagen,
         forst_sedd,
         region,
-        kommun
+        kommun,
+        stad,
+        url,
+        bu_owner_name,
+        bu_owner_age,
+        bu_owner_city,
+        bu_num_owners,
+        bu_annual_tax,
+        bu_inspection_until,
+        bu_owner_vehicles,
+        bu_address_vehicles,
+        bu_fetched_at
       `, { count: 'exact' })
       .eq('borttagen_anledning', 'SÅLD')
       .not('regnummer', 'is', null)

@@ -153,33 +153,154 @@ function KopareTypBadge({ typ, isDealer }: { typ: string | null; isDealer: boole
 }
 
 function AwaitingRow({ data }: { data: any }) {
+  const [expanded, setExpanded] = useState(false)
   const days = daysSince(data.sold_at)
   const liggtid = data.forst_sedd && data.borttagen
     ? Math.floor((new Date(data.borttagen).getTime() - new Date(data.forst_sedd).getTime()) / (1000 * 60 * 60 * 24))
     : null
+  const ownerVehicles = data.bu_owner_vehicles || []
+  const addressVehicles = data.bu_address_vehicles || []
+  const hasBuData = !!data.bu_fetched_at
 
   return (
-    <tr className="border-b hover:bg-yellow-50/50">
-      <td className="px-3 py-2 text-sm font-mono font-medium">{data.regnummer}</td>
-      <td className="px-3 py-2 text-sm">
-        {data.marke} {data.modell} {data.arsmodell}
-      </td>
-      <td className="px-3 py-2 text-sm">{data.pris?.toLocaleString() || '-'} kr</td>
-      <td className="px-3 py-2 text-sm">{formatDate(data.sold_at)}</td>
-      <td className="px-3 py-2 text-sm">
-        <LiggtidBadge days={liggtid} />
-      </td>
-      <td className="px-3 py-2 text-sm">
-        <SaljareTypBadge typ={data.saljare_typ} />
-      </td>
-      <td className="px-3 py-2 text-sm">
-        <StatusBadge status="awaiting" />
-      </td>
-      <td className="px-3 py-2 text-sm text-gray-500">
-        {days !== null ? `${days}d sedan` : '-'}
-      </td>
-      <td className="px-3 py-2"></td>
-    </tr>
+    <>
+      <tr
+        className="border-b hover:bg-yellow-50/50 cursor-pointer"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <td className="px-3 py-2 text-sm font-mono font-medium">{data.regnummer}</td>
+        <td className="px-3 py-2 text-sm">
+          {data.marke} {data.modell} {data.arsmodell}
+        </td>
+        <td className="px-3 py-2 text-sm">{data.pris?.toLocaleString() || '-'} kr</td>
+        <td className="px-3 py-2 text-sm">{formatDate(data.sold_at)}</td>
+        <td className="px-3 py-2 text-sm">
+          <LiggtidBadge days={liggtid} />
+        </td>
+        <td className="px-3 py-2 text-sm">
+          <SaljareTypBadge typ={data.saljare_typ} />
+        </td>
+        <td className="px-3 py-2 text-sm">
+          <StatusBadge status="awaiting" />
+        </td>
+        <td className="px-3 py-2 text-sm text-gray-500">
+          {days !== null ? `${days}d sedan` : '-'}
+        </td>
+        <td className="px-3 py-2">
+          {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </td>
+      </tr>
+
+      {expanded && (
+        <tr className="bg-yellow-50/30 border-b">
+          <td colSpan={9} className="px-4 py-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {/* Bil-detaljer */}
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold flex items-center gap-1">
+                  <Car className="h-4 w-4" />
+                  Fordon
+                </h4>
+                <div className="text-sm space-y-1">
+                  <p><span className="text-gray-500">Regnr:</span> <span className="font-mono">{data.regnummer}</span></p>
+                  <p><span className="text-gray-500">Märke/Modell:</span> {data.marke} {data.modell}</p>
+                  <p><span className="text-gray-500">Årsmodell:</span> {data.arsmodell || '-'}</p>
+                  <p><span className="text-gray-500">Miltal:</span> {data.miltal ? `${data.miltal.toLocaleString()} mil` : '-'}</p>
+                  <p><span className="text-gray-500">Bränsle:</span> {data.bransle || '-'}</p>
+                  <p><span className="text-gray-500">Växellåda:</span> {data.vaxellada || '-'}</p>
+                  <p><span className="text-gray-500">Kaross:</span> {data.kaross || '-'}</p>
+                  <p><span className="text-gray-500">Färg:</span> {data.farg || '-'}</p>
+                  {data.effekt && <p><span className="text-gray-500">Effekt:</span> {data.effekt} hk</p>}
+                </div>
+              </div>
+
+              {/* Säljare / Annons */}
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold flex items-center gap-1">
+                  <TrendingDown className="h-4 w-4" />
+                  Säljare & Annons
+                </h4>
+                <div className="text-sm space-y-1">
+                  <p><span className="text-gray-500">Typ:</span> {data.saljare_typ || '-'}</p>
+                  {data.saljare_namn && <p><span className="text-gray-500">Namn:</span> {data.saljare_namn}</p>}
+                  <p><span className="text-gray-500">Pris:</span> {data.pris?.toLocaleString() || '-'} kr</p>
+                  <p><span className="text-gray-500">Region:</span> {data.region || '-'}</p>
+                  {data.kommun && <p><span className="text-gray-500">Kommun:</span> {data.kommun}</p>}
+                  {data.stad && <p><span className="text-gray-500">Stad:</span> {data.stad}</p>}
+                  <p><span className="text-gray-500">Publicerad:</span> {formatDate(data.forst_sedd)}</p>
+                  <p><span className="text-gray-500">Borttagen:</span> {formatDate(data.borttagen)}</p>
+                  {liggtid !== null && <p><span className="text-gray-500">Liggtid:</span> {liggtid} dagar</p>}
+                </div>
+              </div>
+
+              {/* Ägare (biluppgifter) */}
+              <div className="space-y-2">
+                <h4 className="text-sm font-semibold flex items-center gap-1">
+                  <User className="h-4 w-4" />
+                  Ägare (biluppgifter)
+                </h4>
+                {hasBuData ? (
+                  <div className="text-sm space-y-1">
+                    <p><span className="text-gray-500">Namn:</span> {data.bu_owner_name || '-'}</p>
+                    {data.bu_owner_age && <p><span className="text-gray-500">Ålder:</span> {data.bu_owner_age} år</p>}
+                    {data.bu_owner_city && <p><span className="text-gray-500">Ort:</span> {data.bu_owner_city}</p>}
+                    {data.bu_num_owners && <p><span className="text-gray-500">Antal ägare:</span> {data.bu_num_owners}</p>}
+                    {data.bu_annual_tax && <p><span className="text-gray-500">Årsskatt:</span> {data.bu_annual_tax.toLocaleString()} kr</p>}
+                    {data.bu_inspection_until && <p><span className="text-gray-500">Besiktning:</span> {data.bu_inspection_until}</p>}
+                    <p className="text-xs text-gray-400 mt-1">Hämtad: {formatDate(data.bu_fetched_at)}</p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400">Biluppgifter ej hämtad ännu</p>
+                )}
+              </div>
+
+              {/* Ägarens fordon */}
+              {hasBuData && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold flex items-center gap-1">
+                    <MapPin className="h-4 w-4" />
+                    Fordon ({ownerVehicles.length} äg / {addressVehicles.length} adr)
+                  </h4>
+                  <div className="text-sm space-y-1 max-h-40 overflow-y-auto">
+                    {ownerVehicles.length > 0 && (
+                      <>
+                        <p className="text-xs text-gray-500 font-medium">Ägarens fordon:</p>
+                        {ownerVehicles.slice(0, 5).map((v: any, i: number) => (
+                          <div key={`o${i}`} className="flex items-center gap-2 text-xs">
+                            <span className="font-mono text-gray-600">{v.regnr || '?'}</span>
+                            <span className="flex-1 truncate">{v.model || v.description || '?'}</span>
+                          </div>
+                        ))}
+                        {ownerVehicles.length > 5 && (
+                          <p className="text-gray-400 text-xs">+{ownerVehicles.length - 5} till...</p>
+                        )}
+                      </>
+                    )}
+                    {addressVehicles.length > 0 && (
+                      <>
+                        <p className="text-xs text-gray-500 font-medium mt-1">Adressfordon:</p>
+                        {addressVehicles.slice(0, 5).map((v: any, i: number) => (
+                          <div key={`a${i}`} className="flex items-center gap-2 text-xs">
+                            <span className="font-mono text-gray-600">{v.regnr || '?'}</span>
+                            <span className="flex-1 truncate">{v.model || v.description || '?'}</span>
+                          </div>
+                        ))}
+                        {addressVehicles.length > 5 && (
+                          <p className="text-gray-400 text-xs">+{addressVehicles.length - 5} till...</p>
+                        )}
+                      </>
+                    )}
+                    {ownerVehicles.length === 0 && addressVehicles.length === 0 && (
+                      <p className="text-gray-400 text-xs">Inga fordon</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   )
 }
 
