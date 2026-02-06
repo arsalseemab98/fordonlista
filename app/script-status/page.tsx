@@ -9,33 +9,33 @@ const SCRIPTS = [
   {
     id: 'blocket-scraper',
     name: 'Blocket Scraper',
-    description: 'Hämtar annonser från Blocket varje timme',
+    description: 'Hämtar annonser från Blocket (extern server)',
     schedule: 'Full 06:00 & 18:00, Light var 15 min (07-22)',
     logTable: 'blocket_scraper_log',
+    type: 'external',
+  },
+  {
+    id: 'biluppgifter-cron',
+    name: 'Biluppgifter Cron',
+    description: 'Hämtar ägardata från biluppgifter.se (Vercel cron)',
+    schedule: 'Var 30 min (07-18)',
+    logTable: 'biluppgifter_log',
     type: 'cron',
   },
   {
-    id: 'biluppgifter-continuous',
-    name: 'Biluppgifter Continuous',
-    description: 'Hämtar ägardata för handlare och privat från biluppgifter.se',
-    schedule: 'Kontinuerlig (background)',
-    logTable: 'biluppgifter_log',
-    type: 'background',
+    id: 'sold-cars-checker',
+    name: 'Sold Cars Checker',
+    description: 'Kontrollerar ägarbyte för sålda bilar, hämtar köpardata',
+    schedule: '3x dagligen (09:17, 12:37, 16:53)',
+    logTable: 'blocket_salda',
+    type: 'cron',
   },
   {
     id: 'bilprospekt-sync',
     name: 'Bilprospekt Sync',
     description: 'Synkar prospektdata från Bilprospekt API',
-    schedule: 'Veckovis (manuell)',
+    schedule: 'Var 5 min (14-17 mån-tor)',
     logTable: 'bilprospekt_sync_log',
-    type: 'manual',
-  },
-  {
-    id: 'sold-cars-checker',
-    name: 'Sold Cars Checker',
-    description: 'Kontrollerar ägarbyte för sålda bilar',
-    schedule: 'Var 14:e dag',
-    logTable: 'biluppgifter_log',
     type: 'cron',
   },
 ]
@@ -123,10 +123,32 @@ export default async function ScriptStatusPage() {
     .from('bilprospekt_prospects')
     .select('*', { count: 'exact', head: true })
 
+  // Sold cars stats
+  const { count: totalConfirmedSales } = await supabase
+    .from('blocket_salda')
+    .select('*', { count: 'exact', head: true })
+
+  const { count: totalPendingSales } = await supabase
+    .from('blocket_salda_pending')
+    .select('*', { count: 'exact', head: true })
+
+  const { count: totalAwaitingSales } = await supabase
+    .from('blocket_annonser')
+    .select('*', { count: 'exact', head: true })
+    .eq('borttagen_anledning', 'SÅLD')
+    .not('regnummer', 'is', null)
+
+  // Last confirmed sale
+  const { data: lastConfirmedSale } = await supabase
+    .from('blocket_salda')
+    .select('buyer_fetched_at')
+    .order('buyer_fetched_at', { ascending: false })
+    .limit(1)
+
   // Build script status objects
   const scriptStatuses = [
     {
-      ...SCRIPTS[0],
+      ...SCRIPTS[0], // Blocket Scraper
       status: lastBlocketRun?.status === 'running' ? 'running' :
               lastBlocketRun?.status === 'completed' ? 'ok' :
               lastBlocketRun?.status === 'failed' ? 'error' : 'unknown',
@@ -142,7 +164,7 @@ export default async function ScriptStatusPage() {
       logs: blocketLogs?.slice(0, 10) || [],
     },
     {
-      ...SCRIPTS[1],
+      ...SCRIPTS[1], // Biluppgifter Cron
       status: lastBiluppgifterError && (!lastBiluppgifterInfo ||
         new Date(lastBiluppgifterError.created_at) > new Date(lastBiluppgifterInfo.created_at))
         ? 'error' : lastBiluppgifterInfo ? 'ok' : 'unknown',
@@ -156,7 +178,18 @@ export default async function ScriptStatusPage() {
       logs: biluppgifterLogs?.slice(0, 10) || [],
     },
     {
-      ...SCRIPTS[2],
+      ...SCRIPTS[2], // Sold Cars Checker
+      status: lastConfirmedSale?.[0]?.buyer_fetched_at ? 'ok' : 'unknown',
+      lastRun: lastConfirmedSale?.[0]?.buyer_fetched_at,
+      stats: {
+        awaiting: totalAwaitingSales || 0,
+        pending: totalPendingSales || 0,
+        confirmed: totalConfirmedSales || 0,
+      },
+      logs: [],
+    },
+    {
+      ...SCRIPTS[3], // Bilprospekt Sync
       status: runningBilprospektSync ? 'running' :
               lastBilprospektSync?.status === 'success' ? 'ok' :
               lastBilprospektSync?.status === 'failed' ? 'error' : 'unknown',
@@ -170,13 +203,6 @@ export default async function ScriptStatusPage() {
         lastDataDate: lastBilprospektSync?.bilprospekt_date || null,
       },
       logs: bilprospektLogs?.slice(0, 10) || [],
-    },
-    {
-      ...SCRIPTS[3],
-      status: 'unknown',
-      lastRun: null,
-      stats: {},
-      logs: [],
     },
   ]
 

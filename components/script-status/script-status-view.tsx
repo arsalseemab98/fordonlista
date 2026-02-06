@@ -131,6 +131,13 @@ function TypeBadge({ type }: { type: string }) {
           Manuell
         </Badge>
       )
+    case 'external':
+      return (
+        <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700">
+          <Activity className="h-3 w-3 mr-1" />
+          Extern
+        </Badge>
+      )
     default:
       return <Badge variant="outline" className="text-xs">{type}</Badge>
   }
