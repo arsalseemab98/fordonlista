@@ -97,6 +97,21 @@ function daysSince(dateStr: string | null) {
   return Math.round((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24))
 }
 
+function LagertidBadge({ days }: { days: number | null }) {
+  if (days === null) return <span className="text-gray-400">-</span>
+
+  let color = 'bg-green-100 text-green-800'  // < 30 dagar
+  if (days >= 180) color = 'bg-red-100 text-red-800'
+  else if (days >= 90) color = 'bg-orange-100 text-orange-800'
+  else if (days >= 30) color = 'bg-yellow-100 text-yellow-800'
+
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${color}`}>
+      {days}d
+    </span>
+  )
+}
+
 function formatDate(dateStr: string | null) {
   if (!dateStr) return '-'
   return new Date(dateStr).toLocaleDateString('sv-SE')
@@ -161,7 +176,7 @@ function ExpandableRow({ fetch: f, blocket }: { fetch: any; blocket: any }) {
         <td className="px-3 py-2 text-sm">{f.owner_name || '-'}</td>
         <td className="px-3 py-2"><OwnerTypeBadge type={f.owner_type} /></td>
         <td className="px-3 py-2 text-sm">
-          {f.dealer_since ? `${formatDate(f.dealer_since)} (${days}d)` : '-'}
+          <LagertidBadge days={days} />
         </td>
         <td className="px-3 py-2 text-sm">
           {prevOwner ? (
@@ -547,7 +562,7 @@ export function HandlareBiluppgifterView({
                       <th className="px-3 py-2 text-xs font-medium text-gray-500">Blocket-saljare</th>
                       <th className="px-3 py-2 text-xs font-medium text-gray-500">Biluppg-agare</th>
                       <th className="px-3 py-2 text-xs font-medium text-gray-500">Typ</th>
-                      <th className="px-3 py-2 text-xs font-medium text-gray-500">Handlare sedan</th>
+                      <th className="px-3 py-2 text-xs font-medium text-gray-500">Lagertid</th>
                       <th className="px-3 py-2 text-xs font-medium text-gray-500">Lead</th>
                       <th className="px-3 py-2 text-xs font-medium text-gray-500">Hamtad</th>
                       <th className="px-3 py-2 text-xs font-medium text-gray-500"></th>
