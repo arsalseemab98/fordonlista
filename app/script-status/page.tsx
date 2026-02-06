@@ -146,12 +146,14 @@ export default async function ScriptStatusPage() {
     .limit(1)
 
   // Build script status objects
+  type Status = 'running' | 'ok' | 'error' | 'unknown'
+
   const scriptStatuses = [
     {
       ...SCRIPTS[0], // Blocket Scraper
-      status: lastBlocketRun?.status === 'running' ? 'running' :
+      status: (lastBlocketRun?.status === 'running' ? 'running' :
               lastBlocketRun?.status === 'completed' ? 'ok' :
-              lastBlocketRun?.status === 'failed' ? 'error' : 'unknown',
+              lastBlocketRun?.status === 'failed' ? 'error' : 'unknown') as Status,
       lastRun: lastBlocketRun?.started_at,
       lastRunDuration: lastBlocketRun?.duration_seconds,
       runsToday: blocketRunsToday,
@@ -165,9 +167,9 @@ export default async function ScriptStatusPage() {
     },
     {
       ...SCRIPTS[1], // Biluppgifter Cron
-      status: lastBiluppgifterError && (!lastBiluppgifterInfo ||
+      status: (lastBiluppgifterError && (!lastBiluppgifterInfo ||
         new Date(lastBiluppgifterError.created_at) > new Date(lastBiluppgifterInfo.created_at))
-        ? 'error' : lastBiluppgifterInfo ? 'ok' : 'unknown',
+        ? 'error' : lastBiluppgifterInfo ? 'ok' : 'unknown') as Status,
       lastRun: lastBiluppgifterInfo?.created_at,
       errorsToday: biluppgifterErrorsToday,
       stats: {
@@ -179,7 +181,7 @@ export default async function ScriptStatusPage() {
     },
     {
       ...SCRIPTS[2], // Sold Cars Checker
-      status: lastConfirmedSale?.[0]?.buyer_fetched_at ? 'ok' : 'unknown',
+      status: (lastConfirmedSale?.[0]?.buyer_fetched_at ? 'ok' : 'unknown') as Status,
       lastRun: lastConfirmedSale?.[0]?.buyer_fetched_at,
       stats: {
         awaiting: totalAwaitingSales || 0,
@@ -190,9 +192,9 @@ export default async function ScriptStatusPage() {
     },
     {
       ...SCRIPTS[3], // Bilprospekt Sync
-      status: runningBilprospektSync ? 'running' :
+      status: (runningBilprospektSync ? 'running' :
               lastBilprospektSync?.status === 'success' ? 'ok' :
-              lastBilprospektSync?.status === 'failed' ? 'error' : 'unknown',
+              lastBilprospektSync?.status === 'failed' ? 'error' : 'unknown') as Status,
       lastRun: lastBilprospektSync?.started_at,
       lastRunDuration: lastBilprospektSync?.finished_at && lastBilprospektSync?.started_at
         ? Math.round((new Date(lastBilprospektSync.finished_at).getTime() - new Date(lastBilprospektSync.started_at).getTime()) / 1000)
