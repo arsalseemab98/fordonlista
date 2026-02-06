@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 import {
   Select,
   SelectContent,
@@ -24,13 +25,18 @@ import {
   Search,
   PhoneOff,
   ExternalLink,
+  AlertCircle,
+  Clock,
+  CheckCircle,
 } from 'lucide-react'
 
 interface Stats {
   totalPrivatAds: number
-  totalPrivatBiluppgifter: number
+  fetched: number
   withPhone: number
   withoutPhone: number
+  noData: number
+  notFetched: number
 }
 
 interface PrivatBiluppgifterViewProps {
@@ -41,6 +47,8 @@ interface PrivatBiluppgifterViewProps {
   currentFilters: {
     search?: string
     lan?: string
+    phone?: string
+    view?: string
     page?: string
   }
   totalCount: number
@@ -55,6 +63,75 @@ function formatDate(dateStr: string | null) {
 
 function ExpandableRow({ data, blocket }: { data: any; blocket: any }) {
   const [expanded, setExpanded] = useState(false)
+
+  // Handle different data types
+  if (data._isBlocketOnly) {
+    const ad = data._blocket || blocket
+    return (
+      <tr className="border-b hover:bg-yellow-50 bg-yellow-50/30">
+        <td className="px-3 py-2 text-sm font-mono font-medium">{data.regnummer}</td>
+        <td className="px-3 py-2 text-sm">
+          {ad ? `${ad.marke} ${ad.modell} ${ad.arsmodell}` : '-'}
+        </td>
+        <td className="px-3 py-2 text-sm">{ad?.pris?.toLocaleString() || '-'} kr</td>
+        <td className="px-3 py-2 text-sm">
+          {ad?.url ? (
+            <a
+              href={ad.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline inline-flex items-center gap-1"
+            >
+              Se annons <ExternalLink className="h-3 w-3" />
+            </a>
+          ) : '-'}
+        </td>
+        <td className="px-3 py-2 text-sm" colSpan={4}>
+          <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
+            <Clock className="h-3 w-3 mr-1" />
+            Ej hämtad ännu
+          </Badge>
+        </td>
+        <td className="px-3 py-2 text-sm">-</td>
+        <td className="px-3 py-2"></td>
+      </tr>
+    )
+  }
+
+  if (data._isNoData) {
+    return (
+      <tr className="border-b hover:bg-gray-50 bg-gray-50/50">
+        <td className="px-3 py-2 text-sm font-mono font-medium">{data.regnummer}</td>
+        <td className="px-3 py-2 text-sm">
+          {blocket ? `${blocket.marke} ${blocket.modell} ${blocket.arsmodell}` : '-'}
+        </td>
+        <td className="px-3 py-2 text-sm">{blocket?.pris?.toLocaleString() || '-'} kr</td>
+        <td className="px-3 py-2 text-sm">
+          {blocket?.url ? (
+            <a
+              href={blocket.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline inline-flex items-center gap-1"
+            >
+              Se annons <ExternalLink className="h-3 w-3" />
+            </a>
+          ) : '-'}
+        </td>
+        <td className="px-3 py-2 text-sm" colSpan={4}>
+          <Badge variant="outline" className="bg-gray-200 text-gray-700">
+            <AlertCircle className="h-3 w-3 mr-1" />
+            Ingen ägardata på biluppgifter.se
+          </Badge>
+        </td>
+        <td className="px-3 py-2 text-sm text-gray-400 text-xs">
+          {formatDate(data.fetched_at)}
+        </td>
+        <td className="px-3 py-2"></td>
+      </tr>
+    )
+  }
+
   const vehicles = data.owner_vehicles || []
   const addressVehicles = data.address_vehicles || []
 
@@ -207,12 +284,37 @@ export function PrivatBiluppgifterView({
   const [isPending, startTransition] = useTransition()
   const [searchInput, setSearchInput] = useState(currentFilters.search || '')
 
+  const activeView = currentFilters.view || 'fetched'
+
   const handleSearch = () => {
     const params = new URLSearchParams(searchParams.toString())
     if (searchInput) {
       params.set('search', searchInput)
     } else {
       params.delete('search')
+    }
+    params.delete('page')
+    startTransition(() => {
+      router.push(`/privat-biluppgifter?${params.toString()}`)
+    })
+  }
+
+  const handleViewChange = (view: string) => {
+    const params = new URLSearchParams()
+    if (view !== 'fetched') {
+      params.set('view', view)
+    }
+    startTransition(() => {
+      router.push(`/privat-biluppgifter?${params.toString()}`)
+    })
+  }
+
+  const handlePhoneFilter = (value: string) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (value && value !== 'all') {
+      params.set('phone', value)
+    } else {
+      params.delete('phone')
     }
     params.delete('page')
     startTransition(() => {
@@ -245,23 +347,45 @@ export function PrivatBiluppgifterView({
     })
   }
 
+  const clearFilters = () => {
+    setSearchInput('')
+    startTransition(() => {
+      router.push('/privat-biluppgifter')
+    })
+  }
+
   return (
     <div className="space-y-6">
-      {/* Stats cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* Stats cards - clickable */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card className="bg-blue-50 border-blue-200">
           <CardContent className="pt-4 pb-3 px-4">
-            <p className="text-xs text-blue-600">Privat-annonser (Blocket)</p>
+            <p className="text-xs text-blue-600">Blocket-annonser</p>
             <p className="text-2xl font-bold text-blue-800">{stats.totalPrivatAds.toLocaleString()}</p>
           </CardContent>
         </Card>
-        <Card className="bg-green-50 border-green-200">
-          <CardContent className="pt-4 pb-3 px-4">
-            <p className="text-xs text-green-600">Hämtade (Biluppgifter)</p>
-            <p className="text-2xl font-bold text-green-800">{stats.totalPrivatBiluppgifter.toLocaleString()}</p>
+
+        <Card
+          className={`cursor-pointer transition-all hover:shadow-md ${
+            activeView === 'fetched' ? 'ring-2 ring-green-500 bg-green-50' : 'bg-green-50 border-green-200'
+          }`}
+          onClick={() => handleViewChange('fetched')}
+        >
+          <CardContent className="pt-4 pb-3 px-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-green-600">Hämtade</p>
+              <p className="text-2xl font-bold text-green-800">{stats.fetched.toLocaleString()}</p>
+            </div>
+            <CheckCircle className="h-5 w-5 text-green-400" />
           </CardContent>
         </Card>
-        <Card className="bg-emerald-50 border-emerald-200">
+
+        <Card
+          className={`cursor-pointer transition-all hover:shadow-md ${
+            currentFilters.phone === 'with' ? 'ring-2 ring-emerald-500 bg-emerald-50' : 'bg-emerald-50 border-emerald-200'
+          }`}
+          onClick={() => handlePhoneFilter(currentFilters.phone === 'with' ? 'all' : 'with')}
+        >
           <CardContent className="pt-4 pb-3 px-4 flex items-center justify-between">
             <div>
               <p className="text-xs text-emerald-600">Med telefon</p>
@@ -270,7 +394,13 @@ export function PrivatBiluppgifterView({
             <Phone className="h-5 w-5 text-emerald-400" />
           </CardContent>
         </Card>
-        <Card className="bg-gray-50 border-gray-200">
+
+        <Card
+          className={`cursor-pointer transition-all hover:shadow-md ${
+            currentFilters.phone === 'without' ? 'ring-2 ring-gray-500 bg-gray-100' : 'bg-gray-50 border-gray-200'
+          }`}
+          onClick={() => handlePhoneFilter(currentFilters.phone === 'without' ? 'all' : 'without')}
+        >
           <CardContent className="pt-4 pb-3 px-4 flex items-center justify-between">
             <div>
               <p className="text-xs text-gray-600">Utan telefon</p>
@@ -279,10 +409,54 @@ export function PrivatBiluppgifterView({
             <PhoneOff className="h-5 w-5 text-gray-400" />
           </CardContent>
         </Card>
+
+        <Card
+          className={`cursor-pointer transition-all hover:shadow-md ${
+            activeView === 'not_fetched' ? 'ring-2 ring-yellow-500 bg-yellow-50' : 'bg-yellow-50 border-yellow-200'
+          }`}
+          onClick={() => handleViewChange('not_fetched')}
+        >
+          <CardContent className="pt-4 pb-3 px-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-yellow-600">Ej hämtade</p>
+              <p className="text-2xl font-bold text-yellow-800">{stats.notFetched.toLocaleString()}</p>
+            </div>
+            <Clock className="h-5 w-5 text-yellow-400" />
+          </CardContent>
+        </Card>
+
+        <Card
+          className={`cursor-pointer transition-all hover:shadow-md ${
+            activeView === 'no_data' ? 'ring-2 ring-red-500 bg-red-50' : 'bg-red-50 border-red-200'
+          }`}
+          onClick={() => handleViewChange('no_data')}
+        >
+          <CardContent className="pt-4 pb-3 px-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs text-red-600">Ingen data</p>
+              <p className="text-2xl font-bold text-red-800">{stats.noData.toLocaleString()}</p>
+            </div>
+            <AlertCircle className="h-5 w-5 text-red-400" />
+          </CardContent>
+        </Card>
       </div>
 
+      {/* View description */}
+      {activeView === 'not_fetched' && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+          <Clock className="h-4 w-4 inline mr-2" />
+          <strong>Ej hämtade:</strong> Nya annonser som inte har hämtats från biluppgifter.se ännu. Kör scriptet för att hämta dessa.
+        </div>
+      )}
+      {activeView === 'no_data' && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
+          <AlertCircle className="h-4 w-4 inline mr-2" />
+          <strong>Ingen data:</strong> Dessa bilar finns inte i biluppgifter.se databas. Kan vara nya bilar, utländska regnr, eller avregistrerade fordon.
+        </div>
+      )}
+
       {/* Filters */}
-      <div className="flex gap-4 items-center">
+      <div className="flex flex-wrap gap-4 items-center">
         <div className="flex gap-2 flex-1 max-w-md">
           <Input
             placeholder="Sök regnr, namn, stad..."
@@ -295,31 +469,43 @@ export function PrivatBiluppgifterView({
           </Button>
         </div>
 
-        <Select
-          value={currentFilters.lan || 'all'}
-          onValueChange={handleCityFilter}
-        >
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Filtrera på stad" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Alla städer</SelectItem>
-            {cities.slice(0, 50).map((city) => (
-              <SelectItem key={city} value={city}>
-                {city}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {activeView === 'fetched' && (
+          <>
+            <Select
+              value={currentFilters.phone || 'all'}
+              onValueChange={handlePhoneFilter}
+            >
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Telefon" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alla</SelectItem>
+                <SelectItem value="with">Med telefon</SelectItem>
+                <SelectItem value="without">Utan telefon</SelectItem>
+              </SelectContent>
+            </Select>
 
-        {(currentFilters.search || currentFilters.lan) && (
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setSearchInput('')
-              router.push('/privat-biluppgifter')
-            }}
-          >
+            <Select
+              value={currentFilters.lan || 'all'}
+              onValueChange={handleCityFilter}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filtrera på stad" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alla städer</SelectItem>
+                {cities.slice(0, 50).map((city) => (
+                  <SelectItem key={city} value={city}>
+                    {city}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </>
+        )}
+
+        {(currentFilters.search || currentFilters.lan || currentFilters.phone || activeView !== 'fetched') && (
+          <Button variant="ghost" onClick={clearFilters}>
             Rensa filter
           </Button>
         )}
@@ -347,7 +533,7 @@ export function PrivatBiluppgifterView({
               <tbody>
                 {privatData.map((p) => (
                   <ExpandableRow
-                    key={p.id}
+                    key={p.id || p.regnummer}
                     data={p}
                     blocket={blocketMap[p.regnummer?.toUpperCase()] || null}
                   />
