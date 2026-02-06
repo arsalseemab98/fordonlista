@@ -24,6 +24,7 @@ import {
   Store,
   User,
   BadgeCheck,
+  Terminal,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -47,6 +48,7 @@ const secondaryNav = [
   { name: 'Handlare Data', href: '/handlare-biluppgifter', icon: Store, description: 'Biluppgifter handlarbilar' },
   { name: 'Privat Data', href: '/privat-biluppgifter', icon: User, description: 'Privatpersoner på Blocket' },
   { name: 'Sålda Bilar', href: '/salda-bilar', icon: BadgeCheck, description: 'Sålda med köpardata' },
+  { name: 'Script Status', href: '/script-status', icon: Terminal, description: 'Alla scripts och loggar' },
   { name: 'Blocket Logs', href: '/blocket-logs', icon: Activity, description: 'Scraper-övervakning' },
   { name: 'Blocket Marknad', href: '/blocket-marknad', icon: TrendingUp, description: 'Marknadsanalys' },
   { name: 'Papperskorg', href: '/papperskorg', icon: Trash2, description: 'Raderade leads (30 dagar)' },
