@@ -261,6 +261,7 @@ export interface ProspectRecord {
   cylinder_volume: number | null
   fwd: string | null
   new_or_old: string | null
+  bp_aprox_mileage: number | null
 }
 
 function parseProspect(item: Record<string, unknown>, regNumbers: string[], index: number): ProspectRecord | null {
@@ -304,6 +305,7 @@ function parseProspect(item: Record<string, unknown>, regNumbers: string[], inde
     cylinder_volume: car.cylinderVolume ? Number(car.cylinderVolume) : (item.cylinder_volume ? Number(item.cylinder_volume) : null),
     fwd: car.fourWheel ? String(car.fourWheel) : (item.fwd ? String(item.fwd) : null),
     new_or_old: car.newOrOld ? String(car.newOrOld) : (item.new_or_old ? String(item.new_or_old) : null),
+    bp_aprox_mileage: item.aprox_mileage ? parseInt(String(item.aprox_mileage), 10) || null : (car.aproxMileage ? parseInt(String(car.aproxMileage), 10) || null : null),
   }
 }
 

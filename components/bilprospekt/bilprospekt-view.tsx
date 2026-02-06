@@ -115,6 +115,7 @@ interface Prospect {
   transmission: string | null
   engine_power: number | null
   mileage: number | null
+  bp_aprox_mileage: number | null
   leasing: boolean
   credit: boolean
   seller_name: string | null
@@ -193,7 +194,8 @@ const ALL_COLUMNS = [
   { id: 'model', label: 'Modell', group: 'basic', default: true },
   { id: 'car_year', label: 'År', group: 'basic', default: true },
   { id: 'fuel', label: 'Bränsle', group: 'basic', default: true },
-  { id: 'mileage', label: 'Mil', group: 'basic', default: true },
+  { id: 'bp_aprox_mileage', label: 'Ca mil', group: 'basic', default: true },
+  { id: 'mileage', label: 'Mil (BU)', group: 'biluppgifter', default: false },
   { id: 'color', label: 'Färg', group: 'vehicle', default: false },
   { id: 'kaross', label: 'Kaross', group: 'vehicle', default: false },
   { id: 'transmission', label: 'Växel', group: 'vehicle', default: false },
@@ -243,7 +245,7 @@ const REGIONS = [
 
 const STORAGE_KEY = 'bilprospektVisibleColumns'
 const STORAGE_VERSION_KEY = 'bilprospektColumnsVersion'
-const CURRENT_VERSION = 4 // Increment when changing default columns
+const CURRENT_VERSION = 5 // Increment when changing default columns
 
 // Helper to merge saved columns with new defaults (for new columns added after user saved)
 function getMergedColumns(): Set<string> {
@@ -657,6 +659,13 @@ export function BilprospektView({
           <Badge variant="secondary" className={getFuelBadgeColor(prospect.fuel)}>
             {prospect.fuel || '-'}
           </Badge>
+        )
+      case 'bp_aprox_mileage':
+        if (!prospect.bp_aprox_mileage) return <span className="text-muted-foreground">-</span>
+        return (
+          <span className="text-muted-foreground" title="Ungefärlig mätarställning från Bilprospekt">
+            ~{prospect.bp_aprox_mileage.toLocaleString()} mil
+          </span>
         )
       case 'mileage':
         // No biluppgifter data fetched yet

@@ -80,6 +80,7 @@ interface Prospect {
   transmission: string | null
   engine_power: number | null
   mileage: number | null
+  bp_aprox_mileage: number | null
   leasing: boolean
   credit: boolean
   seller_name: string | null
@@ -339,9 +340,15 @@ export function ProspectDetailModal({
                       <Badge variant="secondary" className="text-xs">{prospect.fuel}</Badge>
                     </div>
                   )}
+                  {prospect.bp_aprox_mileage && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Ca mil (BP):</span>
+                      <span className="text-muted-foreground">~{prospect.bp_aprox_mileage.toLocaleString()} mil</span>
+                    </div>
+                  )}
                   {prospect.mileage && (
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">Mätarställning:</span>
+                      <span className="text-muted-foreground">Mätarställning (BU):</span>
                       <span className="font-medium">{prospect.mileage.toLocaleString()} mil</span>
                     </div>
                   )}
