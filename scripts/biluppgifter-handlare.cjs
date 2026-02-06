@@ -87,6 +87,22 @@ function namesMatch(name1, name2) {
   return false;
 }
 
+// Importörer & finansbolag = ALLTID förmedling, aldrig handlare/lead
+const IMPORTER_PATTERNS = [
+  'finans sverige', 'northern europe', 'motor sweden',
+  'sweden ab', 'nordic ab', 'group sverige',
+  'kia sweden', 'hyundai motor', 'subaru nordic',
+  'bmw northern', 'volkswagen finans', 'mercedes-benz finans',
+  'volkswagen group', 'nissan nordic', 'toyota sweden',
+  'volvo car', 'polestar', 'ford motor'
+];
+
+function isImporter(name) {
+  if (!name) return false;
+  const n = name.toLowerCase();
+  return IMPORTER_PATTERNS.some(p => n.includes(p));
+}
+
 function isKnownDealer(name) {
   if (!name) return false;
   const normalized = normalizeName(name);
@@ -243,8 +259,8 @@ function findLeadInChain(ownerHistory) {
   if (!ownerHistory || !Array.isArray(ownerHistory)) return null;
   for (let i = 1; i < ownerHistory.length; i++) {
     const owner = ownerHistory[i];
-    if (isKnownDealer(owner.name || '')) {
-      console.log(`     Hoppar handlare: ${owner.name}`);
+    if (isKnownDealer(owner.name || '') || isImporter(owner.name || '')) {
+      console.log(`     Hoppar ${isImporter(owner.name) ? 'importör' : 'handlare'}: ${owner.name}`);
       continue;
     }
     if (owner.owner_class === 'company') {
@@ -258,6 +274,10 @@ function findLeadInChain(ownerHistory) {
 }
 
 function determineOwnerType(blocketSellerName, biluppgifterOwnerName, isCompany, isDealer) {
+  // Importörer/finansbolag = alltid förmedling
+  if (isImporter(biluppgifterOwnerName)) {
+    return 'formedling';
+  }
   if (biluppgifterOwnerName && blocketSellerName) {
     const match = namesMatch(blocketSellerName, biluppgifterOwnerName);
     if (!match && !isKnownDealer(biluppgifterOwnerName)) {
@@ -521,28 +541,21 @@ async function processAd(ad) {
 }
 
 // ═══════════════════════════════════════
-// MAIN
+// MAIN (KONTINUERLIG)
 // ═══════════════════════════════════════
 
-async function main() {
+const LOOP_DELAY_MS = 5000; // 5 sekunder mellan batchar
+const IDLE_DELAY_MS = 60000; // 1 minut om inga annonser finns
+
+async function runBatch() {
   const startTime = Date.now();
-  console.log('🏪 BILUPPGIFTER HANDLARE-CRON\n');
-
-  const health = await checkApiHealth();
-  if (!health.ok) {
-    console.log('API ej tillgänglig: ' + health.error);
-    process.exit(1);
-  }
-
-  await loadKnownDealers();
 
   const ads = await getDealerAdsWithoutBiluppgifter(BATCH_SIZE);
   if (ads.length === 0) {
-    console.log('Inga handlar-annonser utan biluppgifter');
-    process.exit(0);
+    return { done: true };
   }
 
-  await log('info', `Handlare-cron: ${ads.length} annonser`, { batch_size: BATCH_SIZE });
+  console.log(`\n🏪 Batch: ${ads.length} annonser`);
 
   let success = 0, failed = 0, skipped = 0;
   const stats = { handlare: 0, formedling: 0, sold: 0 };
@@ -577,12 +590,61 @@ async function main() {
 
   const duration = Math.round((Date.now() - startTime) / 1000);
   console.log('━'.repeat(60));
-  console.log(`\nRESULTAT: ${success} sparade, ${skipped} utan data, ${failed} fel`);
+  console.log(`BATCH KLAR: ${success} sparade, ${skipped} utan data, ${failed} fel`);
   console.log(`  🏪 ${stats.handlare || 0} handlare | 🔄 ${stats.formedling || 0} förmedling | 🔴 ${stats.sold || 0} sålda`);
-  console.log(`  ${withLead} med lead från ägarkedja`);
-  console.log(`  ${duration}s totalt (snitt ${Math.round(duration / (ads.length || 1))}s/bil)`);
+  console.log(`  ${withLead} med lead | ${duration}s`);
 
-  await log('info', 'Handlare-cron klar', { success, failed, skipped, stats, withLead, duration });
+  await log('info', 'Batch klar', { success, failed, skipped, stats, withLead, duration });
+
+  return { done: false, success, failed };
+}
+
+async function main() {
+  console.log('🏪 BILUPPGIFTER HANDLARE - KONTINUERLIG MODE\n');
+  console.log(`   Batch size: ${BATCH_SIZE}`);
+  console.log(`   Parallel: ${PARALLEL}`);
+  console.log(`   Loop delay: ${LOOP_DELAY_MS}ms`);
+  console.log(`   Idle delay: ${IDLE_DELAY_MS}ms`);
+  console.log('');
+
+  // Check API health
+  const health = await checkApiHealth();
+  if (!health.ok) {
+    console.log('❌ API ej tillgänglig: ' + health.error);
+    console.log('   Startar om om 30 sekunder...');
+    await new Promise(r => setTimeout(r, 30000));
+    return main(); // Retry
+  }
+  console.log('✅ API online\n');
+
+  // Load known dealers once
+  await loadKnownDealers();
+
+  let totalProcessed = 0;
+  let batchCount = 0;
+
+  // Continuous loop
+  while (true) {
+    try {
+      const result = await runBatch();
+      batchCount++;
+
+      if (result.done) {
+        console.log(`\n✅ ALLT KLART! ${totalProcessed} totalt processade i ${batchCount} batchar`);
+        console.log(`   Väntar ${IDLE_DELAY_MS / 1000}s på nya annonser...`);
+        await new Promise(r => setTimeout(r, IDLE_DELAY_MS));
+      } else {
+        totalProcessed += (result.success || 0);
+        console.log(`   Totalt: ${totalProcessed} | Nästa batch om ${LOOP_DELAY_MS / 1000}s...\n`);
+        await new Promise(r => setTimeout(r, LOOP_DELAY_MS));
+      }
+    } catch (err) {
+      console.error('❌ Batch-fel:', err.message);
+      await log('error', 'Batch kraschade', { error: err.message });
+      console.log('   Försöker igen om 30s...');
+      await new Promise(r => setTimeout(r, 30000));
+    }
+  }
 }
 
 main().catch(async (err) => {
